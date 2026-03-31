@@ -51,6 +51,7 @@ export default function CompanySettings() {
     setSyncing(true)
     try {
       const ledgers = await fetchTallyLedgers(getTallyUrl())
+      console.log(">>>>>>. fetching ledgerssss ", ledgers, companyId)
       await saveLedgersToDb(companyId, ledgers)
       toast.success(`${ledgers.length} ledgers synced and saved`)
     } catch (err) {
