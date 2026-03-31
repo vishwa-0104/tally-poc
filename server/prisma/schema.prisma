@@ -33,15 +33,30 @@ model User {
 }
 
 model Company {
-  id        String   @id @default(cuid())
-  name      String
-  gstin     String?
-  email     String   @unique
-  port      Int      @default(9000)
-  mapping   Json?
-  bills     Bill[]
-  users     User[]
-  createdAt DateTime @default(now())
+  id           String         @id @default(cuid())
+  name         String
+  gstin        String?
+  email        String         @unique
+  port         Int            @default(9000)
+  mapping      Json?
+  bills        Bill[]
+  users        User[]
+  ledgerCache  LedgerCache[]
+  createdAt    DateTime       @default(now())
+}
+
+model LedgerCache {
+  id                  String  @id @default(cuid())
+  company             Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId           String
+  name                String
+  group               String  @default("")
+  gstin               String?
+  state               String?
+  openingBalance      String?
+  gstRegistrationType String?
+
+  @@unique([companyId, name])
 }
 
 model Bill {

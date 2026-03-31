@@ -12,6 +12,8 @@ interface CompanyStore {
   getCompany: (id: string) => Company | undefined
   setLedgers: (companyId: string, ledgers: TallyLedger[]) => void
   getLedgers: (companyId: string) => TallyLedger[]
+  fetchLedgersFromDb: (companyId: string) => Promise<void>
+  saveLedgersToDb: (companyId: string, ledgers: TallyLedger[]) => Promise<void>
   incrementBillCount: (companyId: string) => void
   incrementPending: (companyId: string) => void
   incrementSynced: (companyId: string) => void
@@ -56,6 +58,16 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
     set((s) => ({ ledgers: { ...s.ledgers, [companyId]: ledgers } })),
 
   getLedgers: (companyId) => get().ledgers[companyId] ?? [],
+
+  fetchLedgersFromDb: async (companyId) => {
+    const { data } = await api.get<TallyLedger[]>(`/companies/${companyId}/ledgers`)
+    set((s) => ({ ledgers: { ...s.ledgers, [companyId]: data } }))
+  },
+
+  saveLedgersToDb: async (companyId, ledgers) => {
+    await api.put(`/companies/${companyId}/ledgers`, ledgers)
+    set((s) => ({ ledgers: { ...s.ledgers, [companyId]: ledgers } }))
+  },
 
   // Local-only counter helpers (optimistic, synced counts come from fetchCompanies)
   incrementBillCount: (companyId) =>

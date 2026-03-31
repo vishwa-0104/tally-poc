@@ -67,6 +67,54 @@ companiesRouter.post('/', requireAdmin, async (req, res) => {
   res.status(201).json(company)
 })
 
+// GET /api/companies/:id/ledgers
+companiesRouter.get('/:id/ledgers', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const ledgers = await prisma.ledgerCache.findMany({
+    where: { companyId: req.params.id },
+    orderBy: { name: 'asc' },
+  })
+  res.json(ledgers)
+})
+
+// PUT /api/companies/:id/ledgers — replace all cached ledgers
+companiesRouter.put('/:id/ledgers', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.array(z.object({
+    name:                z.string(),
+    group:               z.string().default(''),
+    gstin:               z.string().optional(),
+    state:               z.string().optional(),
+    openingBalance:      z.string().optional(),
+    gstRegistrationType: z.string().optional(),
+  }))
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const companyId = req.params.id
+  const incoming  = result.data
+
+  await prisma.$transaction([
+    // Upsert each ledger — update fields if name already exists, create if new
+    ...incoming.map((l) =>
+      prisma.ledgerCache.upsert({
+        where:  { companyId_name: { companyId, name: l.name } },
+        update: { group: l.group ?? '', gstin: l.gstin, state: l.state, openingBalance: l.openingBalance, gstRegistrationType: l.gstRegistrationType },
+        create: { companyId, name: l.name, group: l.group ?? '', gstin: l.gstin, state: l.state, openingBalance: l.openingBalance, gstRegistrationType: l.gstRegistrationType },
+      })
+    ),
+    // Remove ledgers that no longer exist in Tally
+    prisma.ledgerCache.deleteMany({
+      where: { companyId, name: { notIn: incoming.map((l) => l.name) } },
+    }),
+  ])
+  res.json({ saved: incoming.length })
+})
+
 // PUT /api/companies/:id/mapping
 companiesRouter.put('/:id/mapping', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {

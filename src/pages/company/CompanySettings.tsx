@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { RefreshCw, CheckCircle } from 'lucide-react'
 import { PageHeader } from '@/components/shared'
@@ -15,15 +15,15 @@ export function getTallyUrl(): string {
 }
 
 export default function CompanySettings() {
-  const { user }                                               = useAuthStore()
-  const { getCompany, setLedgers, getLedgers, updateMapping }  = useCompanyStore()
-  const company                                                = user?.companyId ? getCompany(user.companyId) : null
+  const { user }     = useAuthStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping } = useCompanyStore()
+  const company      = user?.companyId ? getCompany(user.companyId) : null
+  const companyId    = user?.companyId ?? ''
 
   const [syncing, setSyncing]     = useState(false)
   const [savingMap, setSavingMap] = useState(false)
   const [tallyUrl, setTallyUrl]   = useState(getTallyUrl)
 
-  const companyId     = user?.companyId ?? ''
   const storedLedgers = companyId ? getLedgers(companyId) : []
   const ledgerOptions = storedLedgers.map((l) => l.name)
 
@@ -33,6 +33,13 @@ export default function CompanySettings() {
     sgst:     company?.mapping?.sgst     ?? '',
     igst:     company?.mapping?.igst     ?? '',
   })
+
+  // Load ledgers from DB on mount if not already in memory
+  useEffect(() => {
+    if (companyId && storedLedgers.length === 0) {
+      fetchLedgersFromDb(companyId).catch(() => {})
+    }
+  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveTallyUrl = () => {
     localStorage.setItem(TALLY_URL_KEY, tallyUrl.trim() || DEFAULT_TALLY_URL)
@@ -44,8 +51,8 @@ export default function CompanySettings() {
     setSyncing(true)
     try {
       const ledgers = await fetchTallyLedgers(getTallyUrl())
-      setLedgers(companyId, ledgers)
-      toast.success(`${ledgers.length} ledgers synced from Tally`)
+      await saveLedgersToDb(companyId, ledgers)
+      toast.success(`${ledgers.length} ledgers synced and saved`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch ledgers. Is Tally running?')
     } finally {
@@ -120,7 +127,7 @@ export default function CompanySettings() {
             </Button>
             {storedLedgers.length === 0 && (
               <p className="text-xs text-gray-400 mt-1.5">
-                Sync ledgers once — they'll be available in all bill mapping dropdowns without needing Tally open.
+                Sync ledgers once — they'll be saved to the database and available without Tally open.
               </p>
             )}
           </div>
