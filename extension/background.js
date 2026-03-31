@@ -43,22 +43,38 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // ── Fetch ledger names from Tally ────────────────────────────────────────────
 
 async function handleFetchLedgers(tallyUrl) {
-  const xml = `<COLLECTION NAME="List of Ledgers" ISMODIFY="No">
-  <TYPE>Ledger</TYPE>
-  <NATIVEMETHOD>Name</NATIVEMETHOD>
-  <NATIVEMETHOD>Parent</NATIVEMETHOD>
-  <!-- add any of these: -->
-  <NATIVEMETHOD>PartyGSTIN</NATIVEMETHOD>
-  <NATIVEMETHOD>LedgerAddress</NATIVEMETHOD>
-  <NATIVEMETHOD>StateName</NATIVEMETHOD>
-  <NATIVEMETHOD>OpeningBalance</NATIVEMETHOD>
-  <NATIVEMETHOD>GSTRegistrationType</NATIVEMETHOD>
-  <NATIVEMETHOD>LedgerPhone</NATIVEMETHOD>
-  <NATIVEMETHOD>LedgerMobile</NATIVEMETHOD>
-  <NATIVEMETHOD>LedgerEmail</NATIVEMETHOD>
-</COLLECTION>`
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>List of Ledgers</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="List of Ledgers" ISMODIFY="No">
+            <TYPE>Ledger</TYPE>
+            <NATIVEMETHOD>Name</NATIVEMETHOD>
+            <NATIVEMETHOD>Parent</NATIVEMETHOD>
+            <NATIVEMETHOD>PartyGSTIN</NATIVEMETHOD>
+            <NATIVEMETHOD>LedgerAddress</NATIVEMETHOD>
+            <NATIVEMETHOD>StateName</NATIVEMETHOD>
+            <NATIVEMETHOD>OpeningBalance</NATIVEMETHOD>
+            <NATIVEMETHOD>GSTRegistrationType</NATIVEMETHOD>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
+  console.log('[Tally ledgers raw]', responseText.slice(0, 5000))
   const ledgers = parseLedgers(responseText)
   return { ledgers }
 }
