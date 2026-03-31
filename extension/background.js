@@ -113,11 +113,12 @@ function parseLedgers(xml) {
       ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
       ?? ''
     )
-    const gstin   = decode(block.match(/<PARTYGSTIN[^>]*>([^<]*)<\/PARTYGSTIN>/i)?.[1]) || undefined
-    const address = decode(block.match(/<LEDGERADDRESS[^>]*>([^<]+)<\/LEDGERADDRESS>/i)?.[1]) || undefined
-    const state   = decode(block.match(/<STATENAME[^>]*>([^<]+)<\/STATENAME>/i)?.[1]) || undefined
+    const gstin               = decode(block.match(/<PARTYGSTIN[^>]*>([^<]+)<\/PARTYGSTIN>/i)?.[1]) || undefined
+    const state               = decode(block.match(/<STATENAME[^>]*>([^<]+)<\/STATENAME>/i)?.[1]) || undefined
+    const openingBalance      = decode(block.match(/<OPENINGBALANCE[^>]*>([^<]+)<\/OPENINGBALANCE>/i)?.[1]) || undefined
+    const gstRegistrationType = decode(block.match(/<GSTREGISTRATIONTYPE[^>]*>([^<]+)<\/GSTREGISTRATIONTYPE>/i)?.[1]) || undefined
 
-    ledgers.push({ name, group, gstin, address, state })
+    ledgers.push({ name, group, gstin, state, openingBalance, gstRegistrationType })
 
   }
 

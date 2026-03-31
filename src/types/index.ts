@@ -107,6 +107,10 @@ export interface Bill {
 export interface TallyLedger {
   name: string
   group: string
+  gstin?: string
+  state?: string
+  openingBalance?: string
+  gstRegistrationType?: string
 }
 
 export interface TallySyncResult {

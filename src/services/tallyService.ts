@@ -41,7 +41,7 @@ async function sendToExtension<T>(type: string, payload: Record<string, unknown>
 // ── Public API ─────────────────────────────────────────────
 
 export async function fetchTallyLedgers(tallyUrl: string): Promise<TallyLedger[]> {
-  const result = await sendToExtension<{ ledgers: Array<{ name: string; group: string }> }>('FETCH_LEDGERS', { tallyUrl })
+  const result = await sendToExtension<{ ledgers: TallyLedger[] }>('FETCH_LEDGERS', { tallyUrl })
   return result.ledgers
 }
 
