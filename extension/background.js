@@ -150,7 +150,7 @@ function parseSyncResponse(xml) {
 // ── HTTP helper ──────────────────────────────────────────────────────────────
 
 async function postToTally(xml, tallyUrl) {
-  const url = tallyUrl || 'https://baz.ngrok.dev'
+  const url = tallyUrl || 'http://localhost:9000'
 
   const response = await fetch(url, {
     method: 'POST',

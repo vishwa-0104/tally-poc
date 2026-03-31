@@ -38,7 +38,7 @@ btn.addEventListener('click', async () => {
 </ENVELOPE>`
 
   // try {
-    const response = await fetch(`https://baz.ngrok.dev`, {
+    const response = await fetch(`http://localhost:9000`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/xml;charset=UTF-8' },
       body: testXml,
