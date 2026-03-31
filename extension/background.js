@@ -43,12 +43,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // ── Fetch ledger names from Tally ────────────────────────────────────────────
 
 async function handleFetchLedgers(tallyUrl) {
+  // IMPORTANT: the collection name in <ID> and <COLLECTION NAME> must be the same
+  // custom name — if it matches a Tally built-in (e.g. "List of Ledgers"), Tally
+  // uses its own definition and ignores our NATIVEMETHODs.
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
     <TYPE>Collection</TYPE>
-    <ID>List of Ledgers</ID>
+    <ID>TBSLedgers</ID>
   </HEADER>
   <BODY>
     <DESC>
@@ -57,7 +60,7 @@ async function handleFetchLedgers(tallyUrl) {
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="List of Ledgers" ISMODIFY="No">
+          <COLLECTION NAME="TBSLedgers" ISMODIFY="No">
             <TYPE>Ledger</TYPE>
             <NATIVEMETHOD>Name</NATIVEMETHOD>
             <NATIVEMETHOD>Parent</NATIVEMETHOD>
@@ -102,13 +105,17 @@ function parseLedgers(xml) {
     if (!name || seen.has(name)) continue
     seen.add(name)
 
-    // Parent group
-    let group = block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]?.trim() ?? ''
-    // Decode common XML entities
-    group = group.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    const gstin = block.match(/<PARTYGSTIN[^>]*>([^<]*)<\/PARTYGSTIN>/i)?.[1]?.trim() || undefined
-    const address = block.match(/<LEDGERADDRESS[^>]*>([^<]+)<\/LEDGERADDRESS>/i)?.[1]?.trim() || undefined
-    const state = block.match(/<STATENAME[^>]*>([^<]+)<\/STATENAME>/i)?.[1]?.trim() || undefined
+    const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+
+    // Parent group — TallyPrime wraps in PARENT.LIST, older Tally uses bare <PARENT>
+    const group = decode(
+      block.match(/<PARENT\.LIST[^>]*>[\s\S]*?<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
+      ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
+      ?? ''
+    )
+    const gstin   = decode(block.match(/<PARTYGSTIN[^>]*>([^<]*)<\/PARTYGSTIN>/i)?.[1]) || undefined
+    const address = decode(block.match(/<LEDGERADDRESS[^>]*>([^<]+)<\/LEDGERADDRESS>/i)?.[1]) || undefined
+    const state   = decode(block.match(/<STATENAME[^>]*>([^<]+)<\/STATENAME>/i)?.[1]) || undefined
 
     ledgers.push({ name, group, gstin, address, state })
 
