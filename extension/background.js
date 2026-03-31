@@ -43,30 +43,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // ── Fetch ledger names from Tally ────────────────────────────────────────────
 
 async function handleFetchLedgers(tallyUrl) {
-  const xml = `<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>List of Ledgers</ID>
-  </HEADER>
-  <BODY>
-    <DESC>
-      <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-      </STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="List of Ledgers" ISMODIFY="No">
-            <TYPE>Ledger</TYPE>
-            <NATIVEMETHOD>Name</NATIVEMETHOD>
-            <NATIVEMETHOD>Parent</NATIVEMETHOD>
-          </COLLECTION>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
-  </BODY>
-</ENVELOPE>`
+  const xml = `<COLLECTION NAME="List of Ledgers" ISMODIFY="No">
+  <TYPE>Ledger</TYPE>
+  <NATIVEMETHOD>Name</NATIVEMETHOD>
+  <NATIVEMETHOD>Parent</NATIVEMETHOD>
+  <!-- add any of these: -->
+  <NATIVEMETHOD>PartyGSTIN</NATIVEMETHOD>
+  <NATIVEMETHOD>LedgerAddress</NATIVEMETHOD>
+  <NATIVEMETHOD>StateName</NATIVEMETHOD>
+  <NATIVEMETHOD>OpeningBalance</NATIVEMETHOD>
+  <NATIVEMETHOD>GSTRegistrationType</NATIVEMETHOD>
+  <NATIVEMETHOD>LedgerPhone</NATIVEMETHOD>
+  <NATIVEMETHOD>LedgerMobile</NATIVEMETHOD>
+  <NATIVEMETHOD>LedgerEmail</NATIVEMETHOD>
+</COLLECTION>`
 
   const responseText = await postToTally(xml, tallyUrl)
   const ledgers = parseLedgers(responseText)
@@ -100,8 +90,12 @@ function parseLedgers(xml) {
     let group = block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]?.trim() ?? ''
     // Decode common XML entities
     group = group.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    const gstin = block.match(/<PARTYGSTIN[^>]*>([^<]*)<\/PARTYGSTIN>/i)?.[1]?.trim() || undefined
+    const address = block.match(/<LEDGERADDRESS[^>]*>([^<]+)<\/LEDGERADDRESS>/i)?.[1]?.trim() || undefined
+    const state = block.match(/<STATENAME[^>]*>([^<]+)<\/STATENAME>/i)?.[1]?.trim() || undefined
 
-    ledgers.push({ name, group })
+    ledgers.push({ name, group, gstin, address, state })
+
   }
 
   return ledgers
@@ -111,7 +105,8 @@ function parseLedgers(xml) {
 
 async function handleSyncToTally(xml, tallyUrl) {
   const responseText = await postToTally(xml, tallyUrl)
-  return parseSyncResponse(responseText)
+  console.log('[Tally raw]', responseText.slice(0, 3000))  // first 3000 chars
+  const ledgers = parseLedgers(responseText)
 }
 
 /**
