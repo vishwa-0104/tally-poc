@@ -81,7 +81,6 @@ companiesRouter.get('/:id/ledgers', async (req, res) => {
 
 // PUT /api/companies/:id/ledgers — replace all cached ledgers
 companiesRouter.put('/:id/ledgers', async (req, res) => {
-  console.log("Stroingggg ledgerss ", req.auth, req)
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
@@ -94,15 +93,16 @@ companiesRouter.put('/:id/ledgers', async (req, res) => {
     gstRegistrationType: z.string().optional(),
   }))
   const result = schema.safeParse(req.body)
-
-  console.log("Stroingggg ledgerss resullttttt ", result)
-  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+  if (!result.success) {
+    console.error('[Ledgers] Invalid payload:', result.error.flatten())
+    res.status(400).json({ error: 'Invalid input' }); return
+  }
 
   const companyId = req.params.id
   const incoming  = result.data
+  console.log(`[Ledgers] PUT /${companyId}/ledgers — received ${incoming.length} ledgers`)
 
   await prisma.$transaction([
-    // Upsert each ledger — update fields if name already exists, create if new
     ...incoming.map((l) =>
       prisma.ledgerCache.upsert({
         where:  { companyId_name: { companyId, name: l.name } },
@@ -110,11 +110,11 @@ companiesRouter.put('/:id/ledgers', async (req, res) => {
         create: { companyId, name: l.name, group: l.group ?? '', gstin: l.gstin, state: l.state, openingBalance: l.openingBalance, gstRegistrationType: l.gstRegistrationType },
       })
     ),
-    // Remove ledgers that no longer exist in Tally
     prisma.ledgerCache.deleteMany({
       where: { companyId, name: { notIn: incoming.map((l) => l.name) } },
     }),
   ])
+  console.log(`[Ledgers] Upserted ${incoming.length} ledgers for company ${companyId}`)
   res.json({ saved: incoming.length })
 })
 
