@@ -68,7 +68,7 @@ companiesRouter.post('/', requireAdmin, async (req, res) => {
 })
 
 // GET /api/companies/:id/ledgers
-companiesRouter.get('/:id/ledgers', async (req, res) => {
+companiesRouter.get('/companies/:id/ledgers', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
@@ -80,7 +80,7 @@ companiesRouter.get('/:id/ledgers', async (req, res) => {
 })
 
 // PUT /api/companies/:id/ledgers — replace all cached ledgers
-companiesRouter.put('/:id/ledgers', async (req, res) => {
+companiesRouter.put('/companies/:id/ledgers', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
