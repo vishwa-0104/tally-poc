@@ -1,0 +1,86 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  COMPANY
+}
+
+enum BillStatus {
+  PENDING
+  PARSED
+  MAPPED
+  SYNCED
+  ERROR
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(COMPANY)
+  company      Company? @relation(fields: [companyId], references: [id])
+  companyId    String?
+  createdAt    DateTime @default(now())
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  gstin     String?
+  email     String   @unique
+  port      Int      @default(9000)
+  mapping   Json?
+  bills     Bill[]
+  users     User[]
+  createdAt DateTime @default(now())
+}
+
+model Bill {
+  id           String     @id @default(cuid())
+  company      Company    @relation(fields: [companyId], references: [id])
+  companyId    String
+  billNumber   String
+  vendorName   String
+  vendorGstin  String?
+  billDate     String
+  subtotal     Float
+  cgstAmount   Float      @default(0)
+  sgstAmount   Float      @default(0)
+  igstAmount   Float      @default(0)
+  totalAmount  Float
+  status       BillStatus @default(PARSED)
+  imageUrl     String?
+  originalData Json?
+  isEdited     Boolean    @default(false)
+  rawAiJson    Json?
+  tallyXml     String?
+  tallyMapping Json?
+  syncedAt     DateTime?
+  syncError    String?
+  lineItems    LineItem[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model LineItem {
+  id          String  @id @default(cuid())
+  bill        Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+  billId      String
+  description String
+  hsnCode     String?
+  quantity    Float
+  unit        String
+  unitPrice   Float
+  gstRate     Float
+  amount      Float
+  tallyLedger String?
+}

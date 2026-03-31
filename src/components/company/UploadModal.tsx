@@ -1,0 +1,151 @@
+import { useState, useCallback } from 'react'
+import { useDropzone } from 'react-dropzone'
+import { Upload, CheckCircle, Circle, Loader } from 'lucide-react'
+import { toast } from 'react-hot-toast'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { parseBillWithAI, parsedDataToBill } from '@/services'
+import { useBillStore, useCompanyStore, useAuthStore } from '@/store'
+import { cn } from '@/lib/utils'
+
+const STEPS = [
+  { label: 'Uploading your bill',       sub: 'Preparing your file…' },
+  { label: 'Reading the bill',          sub: 'Scanning vendor details, dates and amounts…' },
+  { label: 'Extracting line items',     sub: 'Picking up item names, quantities and tax rates…' },
+  { label: 'Almost done',               sub: 'Saving your bill…' },
+]
+
+interface UploadModalProps {
+  open: boolean
+  onClose: () => void
+  onParsed: (billId: string) => void
+}
+
+export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
+  const [file, setFile]         = useState<File | null>(null)
+  const [parsing, setParsing]   = useState(false)
+  const [step, setStep]         = useState(-1)
+
+  const { user } = useAuthStore()
+  const addBill  = useBillStore((s) => s.addBill)
+  const { incrementBillCount } = useCompanyStore()
+
+  const onDrop = useCallback((accepted: File[]) => {
+    if (accepted[0]) setFile(accepted[0])
+  }, [])
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [], 'application/pdf': [] },
+    maxFiles: 1,
+    maxSize: 10 * 1024 * 1024,
+    onDropRejected: () => toast.error('File too large or unsupported format'),
+  })
+
+  const handleParse = async () => {
+    if (!file || !user?.companyId) return
+    setParsing(true)
+    setStep(0)
+    try {
+      const parsed = await parseBillWithAI(file, (s) => setStep(s))
+      console.log('parsed', parsed)
+      const bill   = parsedDataToBill(parsed, user.companyId)
+      addBill(bill)
+      incrementBillCount(user.companyId)
+      toast.success('Bill parsed successfully!')
+      onParsed(bill.id)
+      handleClose()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Parsing failed')
+    } finally {
+      setParsing(false)
+      setStep(-1)
+    }
+  }
+
+  const handleClose = () => {
+    if (parsing) return
+    setFile(null)
+    setStep(-1)
+    onClose()
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title="Upload Bill"
+      subtitle="Upload a photo or PDF of your purchase bill and we'll read it for you"
+      footer={
+        parsing ? undefined : (
+          <>
+            <Button variant="outline" onClick={handleClose}>Cancel</Button>
+            <Button variant="teal" onClick={handleParse} disabled={!file}>
+              Read Bill
+            </Button>
+          </>
+        )
+      }
+    >
+      {!parsing ? (
+        <>
+          {/* Dropzone */}
+          <div
+            {...getRootProps()}
+            className={cn(
+              'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all',
+              isDragActive
+                ? 'border-teal-500 bg-teal-50'
+                : 'border-gray-200 bg-gray-50 hover:border-teal-400 hover:bg-teal-50/50',
+            )}
+          >
+            <input {...getInputProps()} aria-label="Upload bill file" />
+            <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+              <Upload className="w-5 h-5 text-teal-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700 mb-1">
+              {isDragActive ? 'Drop it here…' : 'Drop file here or click to browse'}
+            </p>
+            <p className="text-xs text-gray-400">JPG, PNG, PDF — max 10 MB</p>
+          </div>
+
+          {/* Selected file */}
+          {file && (
+            <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
+              <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0" />
+              <span className="text-sm font-medium text-gray-800 flex-1 truncate">{file.name}</span>
+              <span className="text-xs text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
+            </div>
+          )}
+        </>
+      ) : (
+        /* Parsing steps */
+        <div className="py-2">
+          {STEPS.map((s, i) => {
+            const done   = i < step
+            const active = i === step
+            const idle   = i > step
+            return (
+              <div key={i} className="flex items-start gap-3 py-3 border-b border-gray-100 last:border-0">
+                <div className={cn(
+                  'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
+                  done   && 'bg-emerald-50',
+                  active && 'bg-teal-50',
+                  idle   && 'bg-gray-100',
+                )}>
+                  {done   && <CheckCircle className="w-4 h-4 text-emerald-500" />}
+                  {active && <Loader className="w-4 h-4 text-teal-500 animate-spin" />}
+                  {idle   && <Circle className="w-4 h-4 text-gray-300" />}
+                </div>
+                <div>
+                  <p className={cn('text-sm font-semibold', idle ? 'text-gray-400' : 'text-gray-800')}>{s.label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{s.sub}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Modal>
+  )
+}

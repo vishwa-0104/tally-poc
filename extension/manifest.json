@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Tally Bill Sync",
+  "version": "1.0.0",
+  "description": "Connects Tally Bill Sync web app to your local Tally ERP server.",
+
+  "permissions": [],
+  "host_permissions": [
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "https://*.ngrok.io/*",
+    "https://*.ngrok-free.app/*",
+    "https://*.ngrok.dev/*",
+    "https://*.ngrok.app/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Tally Bill Sync"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+
+  "externally_connectable": {
+    "matches": [
+      "http://localhost/*",
+      "http://127.0.0.1/*",
+      "https://localhost/*",
+      "https://127.0.0.1/*"
+    ]
+  }
+}

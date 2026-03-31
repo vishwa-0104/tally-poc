@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    background-color: #F9FAFB;
+    color: #1F2937;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  input, select, textarea, button {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #F3F4F6; }
+  ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+  /* Form inputs */
+  .input-base {
+    @apply w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-800
+           outline-none transition-all duration-200 bg-white
+           focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10;
+  }
+
+  .input-teal {
+    @apply focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10;
+  }
+
+  .input-error {
+    @apply border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-500/10;
+  }
+
+  /* Buttons */
+  .btn-base {
+    @apply inline-flex items-center justify-center gap-1.5 px-4 py-2.5
+           rounded-lg text-sm font-semibold transition-all duration-200
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn-base bg-brand-500 text-white hover:bg-brand-700
+           hover:shadow-lg hover:shadow-brand-500/25 active:translate-y-px;
+  }
+
+  .btn-teal {
+    @apply btn-base bg-teal-500 text-white hover:bg-teal-600
+           hover:shadow-lg hover:shadow-teal-500/25 active:translate-y-px;
+  }
+
+  .btn-outline {
+    @apply btn-base border border-gray-200 bg-white text-gray-700
+           hover:border-gray-300 hover:bg-gray-50;
+  }
+
+  .btn-danger {
+    @apply btn-base bg-red-600 text-white hover:bg-red-700;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply w-full py-3 text-base;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  .badge-green  { @apply bg-emerald-50 text-emerald-800; }
+  .badge-amber  { @apply bg-amber-50 text-amber-800; }
+  .badge-red    { @apply bg-red-50 text-red-800; }
+  .badge-blue   { @apply bg-brand-50 text-brand-700; }
+  .badge-teal   { @apply bg-teal-50 text-teal-700; }
+  .badge-gray   { @apply bg-gray-100 text-gray-600; }
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-up  { animation: fadeInUp 0.25s ease forwards; }
+.animate-modal    { animation: modalIn  0.2s  ease forwards; }
+.animate-spin-sm  { animation: spin 0.7s linear infinite; }
+
+/* Syntax highlight for XML */
+.xml-tag   { color: #79C0FF; }
+.xml-val   { color: #7EE787; }
+.xml-attr  { color: #FFA657; }
+.xml-comment { color: #6E7681; }
