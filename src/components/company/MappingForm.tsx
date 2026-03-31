@@ -1,6 +1,7 @@
+import { useEffect } from 'react'
 import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertTriangle, CheckCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
 import type { Bill, TallyLedger } from '@/types'
@@ -13,6 +14,7 @@ function LedgerInput({
   ledgerOptions,
   error,
   disabled,
+  autoMatched,
   value,
   onChange,
   onBlur,
@@ -23,6 +25,7 @@ function LedgerInput({
   ledgerOptions: { value: string; label: string }[]
   error?: string
   disabled?: boolean
+  autoMatched?: boolean
   value: string | undefined
   onChange: (v: string) => void
   onBlur: () => void
@@ -30,9 +33,16 @@ function LedgerInput({
 }) {
   return (
     <div className="mb-4">
-      <label htmlFor={listId} className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-        {label}
-      </label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label htmlFor={listId} className="block text-xs font-semibold text-gray-700 tracking-wide">
+          {label}
+        </label>
+        {autoMatched && (
+          <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
+            <Zap className="w-3 h-3" /> GSTIN matched
+          </span>
+        )}
+      </div>
       <input
         id={listId}
         name={name}
@@ -46,6 +56,7 @@ function LedgerInput({
         className={cn(
           'input-base',
           error && 'input-error',
+          disabled && 'bg-gray-50 text-gray-500 cursor-not-allowed',
         )}
         aria-invalid={!!error}
       />
@@ -88,28 +99,34 @@ export function MappingForm({
   const byName = (keywords: string[]) =>
     toOptions(ledgers.filter((l) => keywords.some((kw) => l.name.toLowerCase().includes(kw.toLowerCase()))))
 
-  // Filtered option lists per field
   const vendorOptions   = byGroup(['sundry creditor', 'sundry debtor'])
   const purchaseOptions = byGroup(['purchase'])
   const cgstOptions     = byName(['cgst'])
   const sgstOptions     = byName(['sgst'])
   const igstOptions     = byName(['igst'])
 
-  // Fall back to all ledgers if a category returns nothing (e.g. Tally not connected, custom naming)
   const opts = (filtered: ReturnType<typeof toOptions>) =>
     filtered.length > 0 ? filtered : toOptions(ledgers)
 
-  const vendorExists = ledgers.some((l) => l.name === bill.vendorName)
+  // GSTIN-based auto-match — takes priority over name match
+  const gstinMatch = bill.vendorGstin
+    ? ledgers.find((l) => l.gstin && l.gstin.trim().toUpperCase() === bill.vendorGstin!.trim().toUpperCase())
+    : null
+
+  const vendorNameMatch = !gstinMatch && ledgers.some((l) => l.name === bill.vendorName)
+
+  const resolvedVendor = gstinMatch?.name ?? (vendorNameMatch ? bill.vendorName : '')
 
   const {
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<MappingInput>({
     resolver: zodResolver(mappingSchema),
     defaultValues: {
-      vendorLedger:   vendorExists ? bill.vendorName : '',
+      vendorLedger:   resolvedVendor,
       purchaseLedger: defaultMapping?.purchase ?? '',
       cgstLedger:     defaultMapping?.cgst     ?? '',
       sgstLedger:     defaultMapping?.sgst     ?? '',
@@ -121,30 +138,46 @@ export function MappingForm({
     },
   })
 
+  // Re-apply GSTIN match if ledgers load after mount
+  useEffect(() => {
+    if (gstinMatch) setValue('vendorLedger', gstinMatch.name)
+  }, [gstinMatch?.name]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const { fields } = useFieldArray({ control, name: 'lineItems' })
 
   const hasIgst = bill.igstAmount > 0
 
   return (
     <form onSubmit={handleSubmit(onSaveMapping)} noValidate>
-      {/* Vendor warning */}
-      {!vendorExists && !ledgersLoading && (
-        <div className="flex gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl mb-5">
-          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+      {/* Vendor status banner */}
+      {gstinMatch && (
+        <div className="flex gap-3 p-4 bg-teal-50 border border-teal-200 rounded-xl mb-5">
+          <Zap className="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-amber-800">Vendor ledger not found in Tally</p>
-            <p className="text-xs text-amber-700 mt-0.5">
-              "{bill.vendorName}" has no ledger in Tally. Select a matching ledger below or create it in Tally first
-              (Accounts Info → Ledgers → Create).
+            <p className="text-sm font-semibold text-teal-800">Vendor auto-matched by GSTIN</p>
+            <p className="text-xs text-teal-700 mt-0.5">
+              GSTIN <span className="font-mono">{bill.vendorGstin}</span> matched ledger <span className="font-medium">"{gstinMatch.name}"</span>
             </p>
           </div>
         </div>
       )}
 
-      {vendorExists && (
+      {!gstinMatch && vendorNameMatch && (
         <div className="flex gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-5">
           <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm font-medium text-emerald-800">Vendor ledger found in Tally</p>
+          <p className="text-sm font-medium text-emerald-800">Vendor ledger found by name in Tally</p>
+        </div>
+      )}
+
+      {!gstinMatch && !vendorNameMatch && !ledgersLoading && (
+        <div className="flex gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl mb-5">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Vendor ledger not found in Tally</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              "{bill.vendorName}" has no matching ledger. Select one below or create it in Tally first.
+            </p>
+          </div>
         </div>
       )}
 
@@ -159,7 +192,8 @@ export function MappingForm({
               listId="vendor-ledger"
               ledgerOptions={opts(vendorOptions)}
               error={errors.vendorLedger?.message}
-              disabled={ledgersLoading}
+              disabled={ledgersLoading || !!gstinMatch}
+              autoMatched={!!gstinMatch}
               {...field}
               onChange={field.onChange}
             />
@@ -174,7 +208,7 @@ export function MappingForm({
               listId="purchase-ledger"
               ledgerOptions={opts(purchaseOptions)}
               error={errors.purchaseLedger?.message}
-              disabled={ledgersLoading}
+              disabled={ledgersLoading || !!defaultMapping?.purchase}
               {...field}
               onChange={field.onChange}
             />
@@ -189,7 +223,7 @@ export function MappingForm({
               listId="cgst-ledger"
               ledgerOptions={opts(cgstOptions)}
               error={errors.cgstLedger?.message}
-              disabled={ledgersLoading}
+              disabled={ledgersLoading || !!defaultMapping?.cgst}
               {...field}
               onChange={field.onChange}
             />
@@ -204,7 +238,7 @@ export function MappingForm({
               listId="sgst-ledger"
               ledgerOptions={opts(sgstOptions)}
               error={errors.sgstLedger?.message}
-              disabled={ledgersLoading}
+              disabled={ledgersLoading || !!defaultMapping?.sgst}
               {...field}
               onChange={field.onChange}
             />
@@ -219,7 +253,7 @@ export function MappingForm({
                 label="IGST Ledger"
                 listId="igst-ledger"
                 ledgerOptions={opts(igstOptions)}
-                disabled={ledgersLoading}
+                disabled={ledgersLoading || !!defaultMapping?.igst}
                 {...field}
                 onChange={field.onChange}
               />
@@ -304,13 +338,7 @@ export function MappingForm({
       {/* Submit */}
       <div className="flex justify-end mt-6">
         <div className="flex items-center gap-3">
-          <Button
-            type="submit"
-            variant="outline"
-            size="lg"
-            loading={saving}
-            disabled={syncing}
-          >
+          <Button type="submit" variant="outline" size="lg" loading={saving} disabled={syncing}>
             {saving ? 'Saving…' : 'Save mapping'}
           </Button>
           <Button
