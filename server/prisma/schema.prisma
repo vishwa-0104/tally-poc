@@ -66,6 +66,7 @@ model Bill {
   billNumber   String
   vendorName   String
   vendorGstin  String?
+  buyerGstin   String?
   billDate     String
   subtotal     Float
   cgstAmount   Float      @default(0)

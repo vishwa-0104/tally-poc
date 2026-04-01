@@ -42,15 +42,15 @@ const lineItemEditSchema = z.object({
 })
 
 export const mappingSchema = z.object({
-  vendorLedger: z.string().min(1, 'Select a vendor ledger'),
-  purchaseLedger: z.string().min(1, 'Select a purchase ledger'),
-  cgstLedger: z.string().min(1, 'Select CGST ledger'),
-  sgstLedger: z.string().min(1, 'Select SGST ledger'),
-  igstLedger: z.string().optional(),
-  billDate: z.string().min(1, 'Date is required'),
-  billNumber: z.string().min(1, 'Bill number is required'),
+  vendorLedger:   z.string().optional(),
+  purchaseLedger: z.string().optional(),
+  cgstLedger:     z.string().optional(),
+  sgstLedger:     z.string().optional(),
+  igstLedger:     z.string().optional(),
+  billDate:    z.string().min(1, 'Date is required'),
+  billNumber:  z.string().min(1, 'Bill number is required'),
   totalAmount: z.number().positive('Amount must be positive'),
-  lineItems: z.array(lineItemEditSchema).optional(),
+  lineItems:   z.array(lineItemEditSchema).optional(),
 })
 
 export type LoginInput      = z.infer<typeof loginSchema>

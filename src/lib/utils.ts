@@ -35,10 +35,10 @@ export function buildTallyDate(dateStr: string): string {
 }
 
 export function buildTallyXml(params: {
-  vendorLedger: string
-  purchaseLedger: string
-  cgstLedger: string
-  sgstLedger: string
+  vendorLedger?: string
+  purchaseLedger?: string
+  cgstLedger?: string
+  sgstLedger?: string
   igstLedger?: string
   billNumber: string
   billDate: string
@@ -47,34 +47,54 @@ export function buildTallyXml(params: {
   cgstAmount: number
   sgstAmount: number
   igstAmount: number
+  tallyCompany?: string
 }): string {
   const d = buildTallyDate(params.billDate)
 
-  const cgstEntry = params.cgstAmount !== 0
+  const vendorEntry = params.vendorLedger
     ? `
-              <ALLLEDGERENTRIES.LIST>
-                <LEDGERNAME>${params.cgstLedger}</LEDGERNAME>
-                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                <AMOUNT>-${params.cgstAmount}</AMOUNT>
-              </ALLLEDGERENTRIES.LIST>`
+            <PARTYLEDGERNAME>${params.vendorLedger}</PARTYLEDGERNAME>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${params.vendorLedger}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${params.totalAmount}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>`
     : ''
 
-  const sgstEntry = params.sgstAmount !== 0
+  const purchaseEntry = params.purchaseLedger
     ? `
-              <ALLLEDGERENTRIES.LIST>
-                <LEDGERNAME>${params.sgstLedger}</LEDGERNAME>
-                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                <AMOUNT>-${params.sgstAmount}</AMOUNT>
-              </ALLLEDGERENTRIES.LIST>`
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${params.purchaseLedger}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${params.subtotal}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>`
+    : ''
+
+  const cgstEntry = params.cgstLedger && params.cgstAmount !== 0
+    ? `
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${params.cgstLedger}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${params.cgstAmount}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>`
+    : ''
+
+  const sgstEntry = params.sgstLedger && params.sgstAmount !== 0
+    ? `
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${params.sgstLedger}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${params.sgstAmount}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>`
     : ''
 
   const igstEntry = params.igstLedger && params.igstAmount !== 0
     ? `
-              <ALLLEDGERENTRIES.LIST>
-                <LEDGERNAME>${params.igstLedger}</LEDGERNAME>
-                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                <AMOUNT>-${params.igstAmount}</AMOUNT>
-              </ALLLEDGERENTRIES.LIST>`
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${params.igstLedger}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${params.igstAmount}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>`
     : ''
 
   return `<ENVELOPE>
@@ -84,25 +104,19 @@ export function buildTallyXml(params: {
   <BODY>
     <IMPORTDATA>
       <REQUESTDESC>
-        <REPORTNAME>Vouchers</REPORTNAME>
+        <REPORTNAME>Vouchers</REPORTNAME>${params.tallyCompany ? `
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY>${params.tallyCompany}</SVCURRENTCOMPANY>
+        </STATICVARIABLES>` : ''}
       </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
           <VOUCHER VCHTYPE="Purchase" ACTION="Create">
             <DATE>${d}</DATE>
             <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
-            <PARTYLEDGERNAME>${params.vendorLedger}</PARTYLEDGERNAME>
             <NARRATION>${params.billNumber}</NARRATION>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${params.vendorLedger}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${params.totalAmount}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${params.purchaseLedger}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${params.subtotal}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>
+            ${vendorEntry}
+            ${purchaseEntry}
             ${cgstEntry}
             ${sgstEntry}
             ${igstEntry}

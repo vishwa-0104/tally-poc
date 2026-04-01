@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, CheckCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -24,12 +24,20 @@ export default function BillMapping() {
 
   const { user }     = useAuthStore()
   const { getBill, updateBillStatus } = useBillStore()
-  const { getCompany, getLedgers, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
+  const { getCompany, fetchLedgersFromDb, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
+  const ledgersState = useCompanyStore((s) => s.ledgers)
 
   const company = user?.companyId ? getCompany(user.companyId) : null
   const bill    = user?.companyId && billId ? getBill(user.companyId, billId) : null
 
-  const storedLedgers = company ? getLedgers(company.id) : []
+  const storedLedgers = user?.companyId ? (ledgersState[user.companyId] ?? []) : []
+console.log("EFFECT === ", user)
+  useEffect(() => {
+    
+    if (user?.companyId && storedLedgers.length === 0) {
+      fetchLedgersFromDb(user.companyId).catch((err) => console.error('[BillMapping] Failed to load ledgers from DB:', err))
+    }
+  }, [user?.companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const tallyUrl = getTallyUrl()
 
@@ -220,6 +228,7 @@ export default function BillMapping() {
               ledgersLoading={ledgersLoading}
               saving={saving}
               syncing={syncing}
+              defaultMapping={company?.mapping}
               onSaveMapping={handleSaveMapping}
               onSyncToTally={handleSync}
             />

@@ -150,20 +150,31 @@ function normalizeBill(bill: Record<string, unknown> & { status: string; lineIte
 
 const PARSE_PROMPT = `You are extracting data from a purchase bill (may be handwritten or printed).
 
-STEP 1 — Locate and read these values verbatim from the bill, character by character:
+STEP 1 — Identify the parties on the bill:
+- VENDOR / SELLER / SUPPLIER: the business that ISSUED the bill. Look for headings like "From", "Sold by", "Supplier", "Issued by", or the company name/logo at the TOP of the bill.
+- BUYER / BILL TO / SHIP TO: the business that RECEIVED the bill (our company). Look for "Bill to", "Sold to", "Buyer", "Consignee".
+
+GSTIN rules — a bill may contain multiple GSTINs. Identify each by its label and position:
+- vendorGstin: the GSTIN belonging to the VENDOR/SELLER (the one who raised the bill). It usually appears near the vendor name/address at the top, or under labels like "GSTIN", "GST No", "Supplier GSTIN", "Our GSTIN".
+- buyerGstin: the GSTIN belonging to the BUYER (our company). It usually appears in the "Bill to" / "Ship to" section, or under labels like "Buyer GSTIN", "Your GSTIN", "Recipient GSTIN".
+- If a GSTIN's role is ambiguous (no clear label), assign it to vendorGstin.
+- A valid Indian GSTIN is 15 characters: 2-digit state code + 10-char PAN + 1 entity + 1 Z + 1 check digit.
+
+STEP 2 — Locate and read these values verbatim from the bill, character by character:
 - Each line item: description, HSN code, quantity, unit, unit price, GST rate, line total
 - Subtotal (taxable value / amount before tax)
-- CGST amount (Central GST) — look for labels like "CGST", "C.GST", "Central Tax"
-- SGST amount (State GST) — look for labels like "SGST", "S.GST", "State Tax"
-- IGST amount (Integrated GST) — look for label "IGST"; use 0 if not present
+- CGST amount — look for labels like "CGST", "C.GST", "Central Tax"
+- SGST amount — look for labels like "SGST", "S.GST", "State Tax"
+- IGST amount — look for label "IGST"; use 0 if not present
 - Grand total / Total amount payable — the final bottom-line number on the bill
 
-STEP 2 — Output ONLY a valid JSON object using the schema below. Use the verbatim values from step 1 for all numeric fields.
+STEP 3 — Output ONLY a valid JSON object using the schema below.
 
 Schema:
 {
   "vendorName": string,
   "vendorGstin": string | null,
+  "buyerGstin": string | null,
   "billNumber": string,
   "billDate": "YYYY-MM-DD",
   "lineItems": [

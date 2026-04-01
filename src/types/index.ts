@@ -26,10 +26,10 @@ export interface LedgerMapping {
 
 // Ledger mapping chosen for a single bill before syncing to Tally.
 export interface TallyBillMapping {
-  vendorLedger: string
-  purchaseLedger: string
-  cgstLedger: string
-  sgstLedger: string
+  vendorLedger?: string
+  purchaseLedger?: string
+  cgstLedger?: string
+  sgstLedger?: string
   igstLedger?: string
 }
 
@@ -54,6 +54,7 @@ export type BillStatus = 'pending' | 'parsed' | 'mapped' | 'synced' | 'error'
 export interface ParsedBillData {
   vendorName: string
   vendorGstin: string
+  buyerGstin: string | null
   billNumber: string
   billDate: string
   subtotal: number
@@ -82,6 +83,7 @@ export interface Bill {
   billNumber: string
   vendorName: string
   vendorGstin?: string
+  buyerGstin?: string
   billDate: string
   subtotal: number
   cgstAmount: number
