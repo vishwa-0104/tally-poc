@@ -229,6 +229,64 @@ If a ledger does not exist in Tally, create it first:
 
 ---
 
+## Database Management
+
+### Connect to the database
+
+```bash
+docker-compose exec postgres psql -U postgres tally_bill_sync
+```
+
+Useful commands inside the PostgreSQL shell:
+
+```sql
+\dt                              -- list all tables
+SELECT * FROM "LedgerCache" LIMIT 10;
+SELECT * FROM "Bill" LIMIT 10;
+SELECT COUNT(*) FROM "LedgerCache";
+\q                               -- quit
+```
+
+---
+
+### Export (backup)
+
+**Mac / Linux:**
+```bash
+docker-compose exec postgres pg_dump -U postgres tally_bill_sync > backup.sql
+```
+
+**Windows (PowerShell):**
+```powershell
+docker-compose exec postgres pg_dump -U postgres tally_bill_sync | Out-File -Encoding utf8 backup.sql
+```
+
+---
+
+### Import (restore)
+
+**Mac / Linux:**
+```bash
+cat backup.sql | docker-compose exec -T postgres psql -U postgres tally_bill_sync
+```
+
+**Windows (PowerShell):**
+```powershell
+Get-Content backup.sql | docker-compose exec -T postgres psql -U postgres tally_bill_sync
+```
+
+> If you see `invalid byte sequence for encoding "UTF8"` on import, the backup file has wrong encoding. Fix it first:
+>
+> **Mac / Linux:**
+> ```bash
+> iconv -f UTF-16 -t UTF-8 backup.sql > backup_utf8.sql
+> cat backup_utf8.sql | docker-compose exec -T postgres psql -U postgres tally_bill_sync
+> ```
+>
+> **Windows:** Always use PowerShell (not Command Prompt) for export to avoid encoding issues.
+
+---
+
 ## Troubleshooting
 
 **App not opening at http://localhost**
@@ -252,3 +310,6 @@ If a ledger does not exist in Tally, create it first:
 **Bills always show the same mock data (not parsing real bills)**
 - Check that `ANTHROPIC_API_KEY` is set correctly in `.env`
 - Make sure you have API credits at [console.anthropic.com](https://console.anthropic.com)
+
+
+
