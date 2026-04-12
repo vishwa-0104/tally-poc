@@ -48,5 +48,9 @@ export async function fetchTallyLedgers(tallyUrl: string): Promise<TallyLedger[]
 }
 
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
-  return sendToExtension<TallySyncResult>('SYNC_TO_TALLY', { xml, tallyUrl })
+  console.log('[Sync] Posting XML to Tally at:', tallyUrl)
+  console.log('[Sync] XML payload:\n', xml)
+  const result = await sendToExtension<TallySyncResult>('SYNC_TO_TALLY', { xml, tallyUrl })
+  console.log('[Sync] Tally response:', result)
+  return result
 }

@@ -24,20 +24,24 @@ export default function BillMapping() {
 
   const { user }     = useAuthStore()
   const { getBill, updateBillStatus } = useBillStore()
-  const { getCompany, fetchLedgersFromDb, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
+  const { getCompany, fetchCompanies, fetchLedgersFromDb, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
   const ledgersState = useCompanyStore((s) => s.ledgers)
+  const companies    = useCompanyStore((s) => s.companies)
 
-  const company = user?.companyId ? getCompany(user.companyId) : null
-  const bill    = user?.companyId && billId ? getBill(user.companyId, billId) : null
+  const companyId = user?.companyId ?? ''
+  const company   = companyId ? getCompany(companyId) : null
+  const bill      = companyId && billId ? getBill(companyId, billId) : null
 
-  const storedLedgers = user?.companyId ? (ledgersState[user.companyId] ?? []) : []
-console.log("EFFECT === ", user)
+  const storedLedgers = companyId ? (ledgersState[companyId] ?? []) : []
+
   useEffect(() => {
-    
-    if (user?.companyId && storedLedgers.length === 0) {
-      fetchLedgersFromDb(user.companyId).catch((err) => console.error('[BillMapping] Failed to load ledgers from DB:', err))
+    if (companyId && companies.length === 0) {
+      fetchCompanies().catch((err) => console.error('[BillMapping] Failed to load companies:', err))
     }
-  }, [user?.companyId]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (companyId && storedLedgers.length === 0) {
+      fetchLedgersFromDb(companyId).catch((err) => console.error('[BillMapping] Failed to load ledgers from DB:', err))
+    }
+  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const tallyUrl = getTallyUrl()
 
@@ -91,7 +95,7 @@ console.log("EFFECT === ", user)
   }
 
   const handleSaveMapping = async (data: MappingInput) => {
-    if (!company) return
+    if (!companyId) return
     setSaving(true)
 
     const fromStatus = bill.status
@@ -99,7 +103,7 @@ console.log("EFFECT === ", user)
     setXml(generatedXml)
     setSyncDone(false)
 
-    updateBillStatus(company.id, bill.id, 'mapped', {
+    updateBillStatus(companyId, bill.id, 'mapped', {
       billDate: data.billDate,
       billNumber: data.billNumber,
       totalAmount: data.totalAmount,
@@ -114,8 +118,8 @@ console.log("EFFECT === ", user)
 
     // Moving error -> mapped means the bill is now pending again.
     if (fromStatus === 'error') {
-      decrementError(company.id)
-      incrementPending(company.id)
+      decrementError(companyId)
+      incrementPending(companyId)
     }
 
     toast.success('Mapping saved. Ready to sync.')
@@ -123,8 +127,8 @@ console.log("EFFECT === ", user)
   }
 
   const handleSync = async (data: MappingInput) => {
-    console.log(">>>>>> calling handlde sync ", company, user?.companyId)
-    if (!company) return
+    console.log(">>>>>>>> claiinggg ", companyId, user?.companyId)
+    if (!companyId) return
     setSyncing(true)
 
     const fromStatus = bill.status
@@ -133,7 +137,7 @@ console.log("EFFECT === ", user)
     setSyncDone(false)
 
     // Always persist mapping before attempting sync.
-    updateBillStatus(company.id, bill.id, 'mapped', {
+    updateBillStatus(companyId, bill.id, 'mapped', {
       billDate: data.billDate,
       billNumber: data.billNumber,
       totalAmount: data.totalAmount,
@@ -146,15 +150,10 @@ console.log("EFFECT === ", user)
         : bill.isEdited,
     })
 
-    console.log(">>>>>> updating bill status ", bill.status, fromStatus)
-    console.log("?>>> XML. -------")
-    console.log(generatedXml)
-    console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-
     // Moving error -> mapped means the bill is now pending again.
     if (fromStatus === 'error') {
-      decrementError(company.id)
-      incrementPending(company.id)
+      decrementError(companyId)
+      incrementPending(companyId)
     }
 
     try {
@@ -162,13 +161,13 @@ console.log("EFFECT === ", user)
 
       if (result.success && result.created > 0) {
         // mapped -> synced
-        updateBillStatus(company.id, bill.id, 'synced', {
+        updateBillStatus(companyId, bill.id, 'synced', {
           tallyXml: generatedXml,
           syncedAt: new Date().toISOString(),
           syncError: undefined,
         })
-        incrementSynced(company.id)
-        decrementPending(company.id)
+        incrementSynced(companyId)
+        decrementPending(companyId)
         setSyncDone(true)
         toast.success('Bill synced to Tally successfully!')
       } else {
@@ -178,14 +177,14 @@ console.log("EFFECT === ", user)
       const msg = err instanceof Error ? err.message : 'Sync failed'
 
       // mapped -> error
-      updateBillStatus(company.id, bill.id, 'error', {
+      updateBillStatus(companyId, bill.id, 'error', {
         tallyXml: generatedXml,
         tallyMapping,
         syncError: msg,
       })
 
-      decrementPending(company.id)
-      incrementError(company.id)
+      decrementPending(companyId)
+      incrementError(companyId)
       toast.error(msg)
     } finally {
       setSyncing(false)

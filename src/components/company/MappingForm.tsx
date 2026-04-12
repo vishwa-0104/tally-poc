@@ -230,7 +230,7 @@ export function MappingForm({
             size="lg"
             loading={syncing}
             disabled={saving || !anyMatched}
-            onClick={handleSubmit(onSyncToTally)}
+            onClick={handleSubmit(onSyncToTally, (errors) => console.error('[MappingForm] Sync validation failed:', errors))}
           >
             {syncing ? 'Syncing to Tally…' : 'Sync to Tally'}
           </Button>

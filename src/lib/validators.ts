@@ -38,7 +38,7 @@ const lineItemEditSchema = z.object({
   unitPrice: z.coerce.number(),
   gstRate: z.coerce.number(),
   amount: z.coerce.number(),
-  tallyLedger: z.string().optional(),
+  tallyLedger: z.string().nullish(),
 })
 
 export const mappingSchema = z.object({
@@ -49,7 +49,7 @@ export const mappingSchema = z.object({
   igstLedger:     z.string().optional(),
   billDate:    z.string().min(1, 'Date is required'),
   billNumber:  z.string().min(1, 'Bill number is required'),
-  totalAmount: z.number().positive('Amount must be positive'),
+  totalAmount: z.coerce.number().positive('Amount must be positive'),
   lineItems:   z.array(lineItemEditSchema).optional(),
 })
 

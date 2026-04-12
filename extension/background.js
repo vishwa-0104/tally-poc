@@ -129,8 +129,8 @@ function parseLedgers(xml) {
 
 async function handleSyncToTally(xml, tallyUrl) {
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[Tally raw]', responseText.slice(0, 3000))  // first 3000 chars
-  const ledgers = parseLedgers(responseText)
+  console.log('[Sync] Tally raw response:', responseText.slice(0, 3000))
+  return parseSyncResponse(responseText)
 }
 
 /**
