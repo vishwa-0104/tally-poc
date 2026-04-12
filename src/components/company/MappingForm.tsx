@@ -83,11 +83,21 @@ export function MappingForm({
 
   const vendorNameMatch = !gstinMatch && ledgers.some((l) => l.name === bill.vendorName)
 
+  // Auto-detect from ledger group/name when defaultMapping not set
+  const autoDetect = (filter: (l: TallyLedger) => boolean) => {
+    const matches = ledgers.filter(filter)
+    return matches.length === 1 ? matches[0].name : ''
+  }
+
   const resolvedVendor   = gstinMatch?.name ?? (vendorNameMatch ? bill.vendorName : '')
-  const resolvedPurchase = defaultMapping?.purchase ?? ''
-  const resolvedCgst     = defaultMapping?.cgst ?? ''
-  const resolvedSgst     = defaultMapping?.sgst ?? ''
-  const resolvedIgst     = defaultMapping?.igst ?? ''
+  const resolvedPurchase = defaultMapping?.purchase
+    || autoDetect((l) => l.group.toLowerCase().includes('purchase'))
+  const resolvedCgst     = defaultMapping?.cgst
+    || autoDetect((l) => l.name.toLowerCase().includes('cgst'))
+  const resolvedSgst     = defaultMapping?.sgst
+    || autoDetect((l) => l.name.toLowerCase().includes('sgst'))
+  const resolvedIgst     = defaultMapping?.igst
+    || autoDetect((l) => l.name.toLowerCase().includes('igst'))
 
   const {
     register,
