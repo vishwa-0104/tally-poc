@@ -139,6 +139,7 @@ export function buildTallyXml(params: {
           <VOUCHER VCHTYPE="Purchase" ACTION="Create">
             <DATE>${d}</DATE>
             <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
+            <VOUCHERNUMBER>${esc(params.billNumber)}</VOUCHERNUMBER>
             <NARRATION>${buildNarration(params.billNumber, params.lineItems)}</NARRATION>
             ${vendorEntry}
             ${purchaseEntry}

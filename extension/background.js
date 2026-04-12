@@ -128,6 +128,8 @@ function parseLedgers(xml) {
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────
 
 async function handleSyncToTally(xml, tallyUrl) {
+  console.log('[Sync] XML being posted (first 500 chars):', xml.slice(0, 500))
+  console.log('[Sync] XML length:', xml.length, '| has newlines:', xml.includes('\n'))
   const responseText = await postToTally(xml, tallyUrl)
   console.log('[Sync] Tally raw response:', responseText.slice(0, 3000))
   return parseSyncResponse(responseText)
@@ -144,22 +146,30 @@ function parseSyncResponse(xml) {
     return m ? parseInt(m[1], 10) : 0
   }
 
-  const created = get('CREATED')
-  const altered = get('ALTERED')
-  const errors  = get('ERRORS')
+  const created     = get('CREATED')
+  const altered     = get('ALTERED')
+  const errors      = get('ERRORS')
+  const exceptions  = get('EXCEPTIONS')
 
-  // Tally sometimes returns an error description
-  const errDesc = xml.match(/<LINEERROR>([^<]+)<\/LINEERROR>/i)?.[1]
-    ?? xml.match(/<ERROR>([^<]+)<\/ERROR>/i)?.[1]
-    ?? null
+  // Extract any descriptive error/exception tags Tally may include
+  const allErrors = [...xml.matchAll(/<(?:LINEERROR|IMPORTERROR|TALERROR|EXCEPTIONMSG|ERROR)>([^<]+)<\/(?:LINEERROR|IMPORTERROR|TALERROR|EXCEPTIONMSG|ERROR)>/gi)]
+    .map((m) => m[1].trim())
+    .filter(Boolean)
+  console.log('[Sync] Parsed — created:', created, 'errors:', errors, 'exceptions:', exceptions, 'messages:', allErrors)
 
-  if (errors > 0 || created === 0) {
+  if (errors > 0 || exceptions > 0 || created === 0) {
+    let message = allErrors.length > 0 ? allErrors.join('; ') : null
+
+    if (!message && exceptions > 0) {
+      message = `Tally exception: a ledger name may not exist in Tally, or the voucher type "Purchase" is not configured. Check ledger names in Tally and retry.`
+    }
+
     return {
       success: false,
       created,
       altered,
       errors,
-      message: errDesc ?? 'Tally returned 0 created vouchers. Check ledger names and try again.',
+      message: message ?? 'Tally returned 0 created vouchers. Check ledger names and try again.',
     }
   }
 

@@ -10,7 +10,7 @@ import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { useTallyLedgers } from '@/hooks'
 import { syncToTally } from '@/services'
 import { buildTallyXml } from '@/lib/utils'
-import { getTallyUrl } from './CompanySettings'
+import { getTallyUrl, getTallyCompanyName } from './CompanySettings'
 import type { MappingInput } from '@/lib/validators'
 import type { Bill } from '@/types'
 
@@ -43,7 +43,8 @@ export default function BillMapping() {
     }
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const tallyUrl = getTallyUrl()
+  const tallyUrl     = getTallyUrl()
+  const tallyCompany = getTallyCompanyName()
 
   // Only live-fetch from Tally if no ledgers are stored yet
   const { ledgers: liveLedgers, loading: ledgersLoading } = useTallyLedgers(
@@ -75,6 +76,8 @@ export default function BillMapping() {
       igstLedger,
     }
 
+    console.log('[buildArtifacts] amounts — subtotal:', bill.subtotal, 'cgst:', bill.cgstAmount, 'sgst:', bill.sgstAmount, 'igst:', bill.igstAmount)
+
     const generatedXml = buildTallyXml({
       vendorLedger:   data.vendorLedger,
       purchaseLedger: data.purchaseLedger,
@@ -88,6 +91,7 @@ export default function BillMapping() {
       cgstAmount:  bill.cgstAmount,
       sgstAmount:  bill.sgstAmount,
       igstAmount:  bill.igstAmount,
+      tallyCompany: tallyCompany || undefined,
       lineItems:   data.lineItems ?? bill.lineItems,
     })
 
@@ -127,7 +131,7 @@ export default function BillMapping() {
   }
 
   const handleSync = async (data: MappingInput) => {
-    console.log(">>>>>>>> claiinggg ", companyId, user?.companyId)
+    console.log('[handleSync] form data:', JSON.stringify(data, null, 2))
     if (!companyId) return
     setSyncing(true)
 
