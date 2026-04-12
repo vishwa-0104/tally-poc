@@ -72,18 +72,19 @@ console.log("EFFECT === ", user)
     }
 
     const generatedXml = buildTallyXml({
-      vendorLedger: data.vendorLedger,
+      vendorLedger:   data.vendorLedger,
       purchaseLedger: data.purchaseLedger,
-      cgstLedger: data.cgstLedger,
-      sgstLedger: data.sgstLedger,
+      cgstLedger:     data.cgstLedger,
+      sgstLedger:     data.sgstLedger,
       igstLedger,
-      billNumber: data.billNumber,
-      billDate: data.billDate,
+      billNumber:  data.billNumber,
+      billDate:    data.billDate,
       totalAmount: data.totalAmount,
-      subtotal: bill.subtotal,
-      cgstAmount: bill.cgstAmount,
-      sgstAmount: bill.sgstAmount,
-      igstAmount: bill.igstAmount,
+      subtotal:    bill.subtotal,
+      cgstAmount:  bill.cgstAmount,
+      sgstAmount:  bill.sgstAmount,
+      igstAmount:  bill.igstAmount,
+      lineItems:   data.lineItems ?? bill.lineItems,
     })
 
     return { generatedXml, tallyMapping }
@@ -122,6 +123,7 @@ console.log("EFFECT === ", user)
   }
 
   const handleSync = async (data: MappingInput) => {
+    console.log(">>>>>> calling handlde sync ", company, user?.companyId)
     if (!company) return
     setSyncing(true)
 
@@ -143,6 +145,11 @@ console.log("EFFECT === ", user)
         ? JSON.stringify(data.lineItems) !== JSON.stringify(bill.originalData?.lineItems)
         : bill.isEdited,
     })
+
+    console.log(">>>>>> updating bill status ", bill.status, fromStatus)
+    console.log("?>>> XML. -------")
+    console.log(generatedXml)
+    console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
     // Moving error -> mapped means the bill is now pending again.
     if (fromStatus === 'error') {

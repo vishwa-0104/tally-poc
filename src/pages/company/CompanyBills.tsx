@@ -67,6 +67,7 @@ export default function CompanyBills() {
       cgstAmount: bill.cgstAmount,
       sgstAmount: bill.sgstAmount,
       igstAmount: bill.igstAmount,
+      lineItems:  bill.lineItems,
     })
     return { xml, mappingUsed }
   }

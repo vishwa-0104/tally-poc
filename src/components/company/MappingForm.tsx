@@ -82,10 +82,14 @@ export function MappingForm({
     },
   })
 
-  // Re-apply GSTIN match if ledgers load after mount
+  // Sync resolved values into form whenever they change (ledgers may load after mount)
   useEffect(() => {
-    if (gstinMatch) setValue('vendorLedger', gstinMatch.name)
-  }, [gstinMatch?.name]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (resolvedVendor)   setValue('vendorLedger',   resolvedVendor)
+    if (resolvedPurchase) setValue('purchaseLedger', resolvedPurchase)
+    if (resolvedCgst)     setValue('cgstLedger',     resolvedCgst)
+    if (resolvedSgst)     setValue('sgstLedger',     resolvedSgst)
+    if (resolvedIgst)     setValue('igstLedger',     resolvedIgst)
+  }, [resolvedVendor, resolvedPurchase, resolvedCgst, resolvedSgst, resolvedIgst]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const anyMatched = resolvedVendor || resolvedPurchase || resolvedCgst || resolvedSgst || (hasIgst && resolvedIgst)
 

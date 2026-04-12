@@ -10,8 +10,14 @@ import { fetchTallyLedgers } from '@/services/tallyService'
 export const TALLY_URL_KEY = 'tally-server-url'
 export const DEFAULT_TALLY_URL = 'http://localhost:9000'
 
+export const TALLY_COMPANY_KEY = 'tally-company-name'
+
 export function getTallyUrl(): string {
   return localStorage.getItem(TALLY_URL_KEY) || DEFAULT_TALLY_URL
+}
+
+export function getTallyCompanyName(): string {
+  return localStorage.getItem(TALLY_COMPANY_KEY) ?? ''
 }
 
 export default function CompanySettings() {

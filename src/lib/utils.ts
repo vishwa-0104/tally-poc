@@ -34,6 +34,25 @@ export function buildTallyDate(dateStr: string): string {
   return dateStr.replace(/-/g, '')
 }
 
+interface LineItemParam {
+  description: string
+  hsnCode?: string | null
+  quantity: number
+  unit: string
+  unitPrice: number
+  gstRate: number
+  amount: number
+}
+
+function buildNarration(billNumber: string, lineItems?: LineItemParam[]): string {
+  if (!lineItems || lineItems.length === 0) return billNumber
+  const lines = lineItems.map((item) => {
+    const hsn = item.hsnCode ? ` (HSN: ${item.hsnCode})` : ''
+    return `${item.description}${hsn} | Qty: ${item.quantity} ${item.unit} @ ${item.unitPrice} | GST: ${item.gstRate}% | Amt: ${item.amount}`
+  })
+  return `Bill: ${billNumber}\n${lines.join('\n')}`
+}
+
 export function buildTallyXml(params: {
   vendorLedger?: string
   purchaseLedger?: string
@@ -48,6 +67,7 @@ export function buildTallyXml(params: {
   sgstAmount: number
   igstAmount: number
   tallyCompany?: string
+  lineItems?: LineItemParam[]
 }): string {
   const d = buildTallyDate(params.billDate)
 
@@ -114,7 +134,7 @@ export function buildTallyXml(params: {
           <VOUCHER VCHTYPE="Purchase" ACTION="Create">
             <DATE>${d}</DATE>
             <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
-            <NARRATION>${params.billNumber}</NARRATION>
+            <NARRATION>${buildNarration(params.billNumber, params.lineItems)}</NARRATION>
             ${vendorEntry}
             ${purchaseEntry}
             ${cgstEntry}
