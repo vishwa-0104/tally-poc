@@ -44,13 +44,17 @@ interface LineItemParam {
   amount: number
 }
 
+function escapeXml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function buildNarration(billNumber: string, lineItems?: LineItemParam[]): string {
-  if (!lineItems || lineItems.length === 0) return billNumber
+  if (!lineItems || lineItems.length === 0) return escapeXml(billNumber)
   const lines = lineItems.map((item) => {
     const hsn = item.hsnCode ? ` (HSN: ${item.hsnCode})` : ''
-    return `${item.description}${hsn} | Qty: ${item.quantity} ${item.unit} @ ${item.unitPrice} | GST: ${item.gstRate}% | Amt: ${item.amount}`
+    return `${escapeXml(item.description)}${hsn} | Qty: ${item.quantity} ${item.unit} @ ${item.unitPrice} | GST: ${item.gstRate}% | Amt: ${item.amount}`
   })
-  return `Bill: ${billNumber}\n${lines.join('\n')}`
+  return `Bill: ${escapeXml(billNumber)}\n${lines.join('\n')}`
 }
 
 export function buildTallyXml(params: {
@@ -70,12 +74,13 @@ export function buildTallyXml(params: {
   lineItems?: LineItemParam[]
 }): string {
   const d = buildTallyDate(params.billDate)
+  const esc = escapeXml
 
   const vendorEntry = params.vendorLedger
     ? `
-            <PARTYLEDGERNAME>${params.vendorLedger}</PARTYLEDGERNAME>
+            <PARTYLEDGERNAME>${esc(params.vendorLedger)}</PARTYLEDGERNAME>
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${params.vendorLedger}</LEDGERNAME>
+              <LEDGERNAME>${esc(params.vendorLedger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
               <AMOUNT>${params.totalAmount}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`
@@ -84,7 +89,7 @@ export function buildTallyXml(params: {
   const purchaseEntry = params.purchaseLedger
     ? `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${params.purchaseLedger}</LEDGERNAME>
+              <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
               <AMOUNT>-${params.subtotal}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`
@@ -93,7 +98,7 @@ export function buildTallyXml(params: {
   const cgstEntry = params.cgstLedger && params.cgstAmount !== 0
     ? `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${params.cgstLedger}</LEDGERNAME>
+              <LEDGERNAME>${esc(params.cgstLedger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
               <AMOUNT>-${params.cgstAmount}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`
@@ -102,7 +107,7 @@ export function buildTallyXml(params: {
   const sgstEntry = params.sgstLedger && params.sgstAmount !== 0
     ? `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${params.sgstLedger}</LEDGERNAME>
+              <LEDGERNAME>${esc(params.sgstLedger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
               <AMOUNT>-${params.sgstAmount}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`
@@ -111,7 +116,7 @@ export function buildTallyXml(params: {
   const igstEntry = params.igstLedger && params.igstAmount !== 0
     ? `
             <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${params.igstLedger}</LEDGERNAME>
+              <LEDGERNAME>${esc(params.igstLedger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
               <AMOUNT>-${params.igstAmount}</AMOUNT>
             </ALLLEDGERENTRIES.LIST>`

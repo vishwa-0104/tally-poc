@@ -7,7 +7,6 @@ import { mappingSchema, type MappingInput } from '@/lib/validators'
 import type { Bill, TallyLedger } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
-/** Read-only badge shown when a ledger is auto-matched */
 function MatchedBadge({ label, value, tag }: { label: string; value: string; tag?: string }) {
   return (
     <div className="mb-4">
@@ -23,6 +22,34 @@ function MatchedBadge({ label, value, tag }: { label: string; value: string; tag
         <CheckCircle className="w-3.5 h-3.5 text-teal-500 flex-shrink-0" />
         <span className="text-sm text-teal-800 font-medium">{value}</span>
       </div>
+    </div>
+  )
+}
+
+interface LedgerInputProps {
+  id: string
+  label: string
+  required?: boolean
+  ledgers: TallyLedger[]
+  registration: ReturnType<ReturnType<typeof useForm<MappingInput>>['register']>
+}
+
+function LedgerInput({ id, label, required, ledgers, registration }: LedgerInputProps) {
+  return (
+    <div className="mb-4">
+      <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+        {label}{required && ' *'}
+      </label>
+      <input
+        {...registration}
+        list={`${id}-list`}
+        autoComplete="off"
+        placeholder={`Type or select ${label}…`}
+        className="input-base w-full"
+      />
+      <datalist id={`${id}-list`}>
+        {ledgers.map((l) => <option key={l.name} value={l.name} />)}
+      </datalist>
     </div>
   )
 }
@@ -50,7 +77,6 @@ export function MappingForm({
 }: MappingFormProps) {
   const hasIgst = bill.igstAmount > 0
 
-  // GSTIN-based auto-match for vendor
   const gstinMatch = bill.vendorGstin
     ? ledgers.find((l) => l.gstin && l.gstin.trim().toUpperCase() === bill.vendorGstin!.trim().toUpperCase())
     : null
@@ -67,6 +93,7 @@ export function MappingForm({
     register,
     handleSubmit,
     setValue,
+    watch,
   } = useForm<MappingInput>({
     resolver: zodResolver(mappingSchema),
     defaultValues: {
@@ -82,7 +109,6 @@ export function MappingForm({
     },
   })
 
-  // Sync resolved values into form whenever they change (ledgers may load after mount)
   useEffect(() => {
     if (resolvedVendor)   setValue('vendorLedger',   resolvedVendor)
     if (resolvedPurchase) setValue('purchaseLedger', resolvedPurchase)
@@ -91,7 +117,16 @@ export function MappingForm({
     if (resolvedIgst)     setValue('igstLedger',     resolvedIgst)
   }, [resolvedVendor, resolvedPurchase, resolvedCgst, resolvedSgst, resolvedIgst]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const anyMatched = resolvedVendor || resolvedPurchase || resolvedCgst || resolvedSgst || (hasIgst && resolvedIgst)
+  const watchedPurchase = watch('purchaseLedger')
+  const watchedCgst     = watch('cgstLedger')
+  const watchedSgst     = watch('sgstLedger')
+  const watchedIgst     = watch('igstLedger')
+
+  // Sync requires purchase + (cgst+sgst for domestic, igst for interstate)
+  const taxLedgersOk = hasIgst
+    ? !!watchedIgst?.trim()
+    : !!(watchedCgst?.trim() && watchedSgst?.trim())
+  const canSync = !!watchedPurchase?.trim() && taxLedgersOk
 
   return (
     <form onSubmit={handleSubmit(onSaveMapping)} noValidate>
@@ -128,21 +163,44 @@ export function MappingForm({
         </div>
       )}
 
-      {/* Matched ledger fields */}
-      {anyMatched ? (
-        <div className="grid grid-cols-2 gap-x-4 mt-5">
-          {resolvedVendor   && <MatchedBadge label="Vendor Ledger"   value={resolvedVendor}   tag={gstinMatch ? 'GSTIN matched' : undefined} />}
-          {resolvedPurchase && <MatchedBadge label="Purchase Ledger" value={resolvedPurchase} />}
-          {resolvedCgst     && <MatchedBadge label="CGST Ledger"     value={resolvedCgst} />}
-          {resolvedSgst     && <MatchedBadge label="SGST Ledger"     value={resolvedSgst} />}
-          {hasIgst && resolvedIgst && <MatchedBadge label="IGST Ledger" value={resolvedIgst} />}
-        </div>
-      ) : (
-        !ledgersLoading && (
-          <p className="text-xs text-gray-500 mt-4">
-            No ledgers matched. Go to Settings → configure default ledger mapping and sync ledgers from Tally.
-          </p>
-        )
+      {/* Ledger fields */}
+      <div className="grid grid-cols-2 gap-x-4 mt-5">
+        {/* Vendor */}
+        {resolvedVendor
+          ? <MatchedBadge label="Vendor Ledger" value={resolvedVendor} tag={gstinMatch ? 'GSTIN matched' : undefined} />
+          : <LedgerInput id="vendor" label="Vendor Ledger" ledgers={ledgers} registration={register('vendorLedger')} />
+        }
+
+        {/* Purchase */}
+        {resolvedPurchase
+          ? <MatchedBadge label="Purchase Ledger" value={resolvedPurchase} />
+          : <LedgerInput id="purchase" label="Purchase Ledger" required ledgers={ledgers} registration={register('purchaseLedger')} />
+        }
+
+        {/* CGST / SGST / IGST */}
+        {!hasIgst && (
+          <>
+            {resolvedCgst
+              ? <MatchedBadge label="CGST Ledger" value={resolvedCgst} />
+              : <LedgerInput id="cgst" label="CGST Ledger" required ledgers={ledgers} registration={register('cgstLedger')} />
+            }
+            {resolvedSgst
+              ? <MatchedBadge label="SGST Ledger" value={resolvedSgst} />
+              : <LedgerInput id="sgst" label="SGST Ledger" required ledgers={ledgers} registration={register('sgstLedger')} />
+            }
+          </>
+        )}
+        {hasIgst && (
+          resolvedIgst
+            ? <MatchedBadge label="IGST Ledger" value={resolvedIgst} />
+            : <LedgerInput id="igst" label="IGST Ledger" required ledgers={ledgers} registration={register('igstLedger')} />
+        )}
+      </div>
+
+      {!canSync && !ledgersLoading && (
+        <p className="text-xs text-amber-600 mt-1">
+          Purchase and tax ledgers are required to sync. Configure them above or set defaults in Settings.
+        </p>
       )}
 
       {/* Line items */}
@@ -165,7 +223,7 @@ export function MappingForm({
                       <input {...register(`lineItems.${i}.description`)} className="w-full min-w-[140px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-tally-400 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
@@ -221,7 +279,7 @@ export function MappingForm({
       {/* Submit */}
       <div className="flex justify-end mt-6">
         <div className="flex items-center gap-3">
-          <Button type="submit" variant="outline" size="lg" loading={saving} disabled={syncing || !anyMatched}>
+          <Button type="submit" variant="outline" size="lg" loading={saving} disabled={syncing}>
             {saving ? 'Saving…' : 'Save mapping'}
           </Button>
           <Button
@@ -229,7 +287,7 @@ export function MappingForm({
             variant="teal"
             size="lg"
             loading={syncing}
-            disabled={saving || !anyMatched}
+            disabled={saving || !canSync}
             onClick={handleSubmit(onSyncToTally, (errors) => console.error('[MappingForm] Sync validation failed:', errors))}
           >
             {syncing ? 'Syncing to Tally…' : 'Sync to Tally'}
