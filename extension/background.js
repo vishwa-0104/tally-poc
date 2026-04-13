@@ -29,6 +29,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ ledgers: [], error: err.message }))
       return true // keep channel open for async
 
+    case 'FETCH_STOCK_ITEMS':
+      handleFetchStockItems(payload.tallyUrl)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ stockItems: [], error: err.message }))
+      return true
+
     case 'SYNC_TO_TALLY':
       handleSyncToTally(payload.xml, payload.tallyUrl)
         .then(sendResponse)
@@ -123,6 +129,65 @@ function parseLedgers(xml) {
   }
 
   return ledgers
+}
+
+// ── Fetch stock items from Tally ─────────────────────────────────────────────
+
+async function handleFetchStockItems(tallyUrl) {
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSStockItems</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSStockItems" ISMODIFY="No">
+            <TYPE>Stock Item</TYPE>
+            <NATIVEMETHOD>Name</NATIVEMETHOD>
+            <NATIVEMETHOD>Parent</NATIVEMETHOD>
+            <NATIVEMETHOD>BaseUnits</NATIVEMETHOD>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  const stockItems = parseStockItems(responseText)
+  console.log('[Tally stock items] count:', stockItems.length)
+  return { stockItems }
+}
+
+function parseStockItems(xml) {
+  const seen = new Set()
+  const items = []
+  const blocks = [...xml.matchAll(/<STOCKITEM\b[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)]
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+
+  for (const match of blocks) {
+    const block = match[0]
+    let name = block.match(/<STOCKITEM\s+NAME="([^"]+)"/i)?.[1]?.trim()
+    if (!name) name = block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1]?.trim()
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+
+    const group = decode(
+      block.match(/<PARENT\.LIST[^>]*>[\s\S]*?<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
+      ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
+      ?? ''
+    )
+    const unit = decode(block.match(/<BASEUNITS[^>]*>([^<]+)<\/BASEUNITS>/i)?.[1]) || undefined
+    items.push({ name, group, unit })
+  }
+  return items
 }
 
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────
