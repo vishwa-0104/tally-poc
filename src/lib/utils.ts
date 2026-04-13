@@ -122,13 +122,6 @@ export function buildTallyXml(params: {
               <AMOUNT>-${item.amount}</AMOUNT>
               <ACTUALQTY>${item.quantity} ${unit}</ACTUALQTY>
               <BILLEDQTY>${item.quantity} ${unit}</BILLEDQTY>
-              <BATCHALLOCATIONS.LIST>
-                <GODOWNNAME>Main Location</GODOWNNAME>
-                <BATCHNAME>Primary Batch</BATCHNAME>
-                <AMOUNT>-${item.amount}</AMOUNT>
-                <ACTUALQTY>${item.quantity} ${unit}</ACTUALQTY>
-                <BILLEDQTY>${item.quantity} ${unit}</BILLEDQTY>
-              </BATCHALLOCATIONS.LIST>
               <ACCOUNTINGALLOCATIONS.LIST>
                 <LEDGERNAME>${esc(params.purchaseLedger!)}</LEDGERNAME>
                 <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
@@ -162,7 +155,7 @@ export function buildTallyXml(params: {
           <VOUCHER VCHTYPE="Purchase" ACTION="Create">
             <DATE>${d}</DATE>
             <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
-            <VOUCHERNUMBER>${esc(params.billNumber)}</VOUCHERNUMBER>
+            <REFERENCE>${esc(params.billNumber)}</REFERENCE>
             <NARRATION>${esc(params.billNumber)}</NARRATION>
             ${vendorEntry}
             ${cgstEntry}

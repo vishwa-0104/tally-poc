@@ -53,8 +53,12 @@ export async function fetchTallyStockItems(tallyUrl: string): Promise<TallyStock
 }
 
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
-  console.log('[Sync] Posting XML to Tally at:', tallyUrl)
-  console.log('[Sync] XML payload:\n', xml)
+  console.group('[Sync] Tally XML Payload')
+  console.log('URL:', tallyUrl)
+  console.log('XML (copy with: copy(window.__lastTallyXml)):\n', xml)
+  console.groupEnd()
+  // Attach to window so you can run copy(window.__lastTallyXml) in console to get the full XML
+  ;(window as unknown as Record<string, unknown>).__lastTallyXml = xml
   const result = await sendToExtension<TallySyncResult>('SYNC_TO_TALLY', { xml, tallyUrl })
   console.log('[Sync] Tally response:', result)
   return result
