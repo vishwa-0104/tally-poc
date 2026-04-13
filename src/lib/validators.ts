@@ -39,6 +39,7 @@ const lineItemEditSchema = z.object({
   gstRate: z.coerce.number(),
   amount: z.coerce.number(),
   tallyLedger: z.string().nullish(),
+  tallyStockItem: z.string().nullish(),
 })
 
 export const mappingSchema = z.object({

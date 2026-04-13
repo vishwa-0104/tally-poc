@@ -58,6 +58,7 @@ interface MappingFormProps {
   bill: Bill
   ledgers: TallyLedger[]
   ledgersLoading: boolean
+  stockItems: { name: string }[]
   saving: boolean
   syncing: boolean
   defaultMapping?: { purchase?: string; cgst?: string; sgst?: string; igst?: string } | null
@@ -69,6 +70,7 @@ export function MappingForm({
   bill,
   ledgers,
   ledgersLoading,
+  stockItems,
   saving,
   syncing,
   defaultMapping,
@@ -221,7 +223,7 @@ export function MappingForm({
             <table className="w-full border-collapse text-xs" aria-label="Line items">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  {['Description', 'HSN', 'Qty', 'Unit', 'Unit Price', 'GST%', 'Amount'].map((h) => (
+                  {['Description', 'HSN', 'Qty', 'Unit', 'Unit Price', 'GST%', 'Amount', 'Tally Item'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -250,9 +252,21 @@ export function MappingForm({
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        {...register(`lineItems.${i}.tallyStockItem`)}
+                        list={`stock-items-list`}
+                        autoComplete="off"
+                        placeholder="Select stock item…"
+                        className="w-40 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
+              <datalist id="stock-items-list">
+                {stockItems.map((item) => <option key={item.name} value={item.name} />)}
+              </datalist>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                 <tr className="border-t border-gray-100">
                   <td colSpan={6} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>

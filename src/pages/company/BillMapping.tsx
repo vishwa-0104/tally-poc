@@ -25,14 +25,16 @@ export default function BillMapping() {
   const { user }     = useAuthStore()
   const { getBill, updateBillStatus } = useBillStore()
   const { getCompany, fetchCompanies, fetchLedgersFromDb, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
-  const ledgersState = useCompanyStore((s) => s.ledgers)
-  const companies    = useCompanyStore((s) => s.companies)
+  const ledgersState    = useCompanyStore((s) => s.ledgers)
+  const stockItemsState = useCompanyStore((s) => s.stockItems)
+  const companies       = useCompanyStore((s) => s.companies)
 
   const companyId = user?.companyId ?? ''
   const company   = companyId ? getCompany(companyId) : null
   const bill      = companyId && billId ? getBill(companyId, billId) : null
 
-  const storedLedgers = companyId ? (ledgersState[companyId] ?? []) : []
+  const storedLedgers    = companyId ? (ledgersState[companyId] ?? []) : []
+  const storedStockItems = companyId ? (stockItemsState[companyId] ?? []) : []
 
   useEffect(() => {
     if (companyId && companies.length === 0) {
@@ -236,6 +238,7 @@ export default function BillMapping() {
               bill={bill}
               ledgers={ledgers}
               ledgersLoading={ledgersLoading}
+              stockItems={storedStockItems}
               saving={saving}
               syncing={syncing}
               defaultMapping={company?.mapping}

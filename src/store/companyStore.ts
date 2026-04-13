@@ -1,11 +1,12 @@
 import { create } from 'zustand'
-import type { Company, LedgerMapping, TallyLedger } from '@/types'
+import type { Company, LedgerMapping, TallyLedger, TallyStockItem } from '@/types'
 import { api } from '@/lib/api'
 
 interface CompanyStore {
   companies: Company[]
   loading: boolean
   ledgers: Record<string, TallyLedger[]>
+  stockItems: Record<string, TallyStockItem[]>
   fetchCompanies: () => Promise<void>
   addCompany: (data: Omit<Company, 'id' | 'totalBills' | 'syncedBills' | 'pendingBills' | 'errorBills' | 'createdAt'> & { password: string }) => Promise<Company>
   updateMapping: (companyId: string, mapping: LedgerMapping) => Promise<void>
@@ -14,6 +15,8 @@ interface CompanyStore {
   getLedgers: (companyId: string) => TallyLedger[]
   fetchLedgersFromDb: (companyId: string) => Promise<void>
   saveLedgersToDb: (companyId: string, ledgers: TallyLedger[]) => Promise<void>
+  setStockItems: (companyId: string, items: TallyStockItem[]) => void
+  getStockItems: (companyId: string) => TallyStockItem[]
   incrementBillCount: (companyId: string) => void
   incrementPending: (companyId: string) => void
   incrementSynced: (companyId: string) => void
@@ -26,6 +29,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   companies: [],
   loading: false,
   ledgers: {},
+  stockItems: {},
 
   fetchCompanies: async () => {
     set({ loading: true })
@@ -58,6 +62,11 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
     set((s) => ({ ledgers: { ...s.ledgers, [companyId]: ledgers } })),
 
   getLedgers: (companyId) => get().ledgers[companyId] ?? [],
+
+  setStockItems: (companyId, items) =>
+    set((s) => ({ stockItems: { ...s.stockItems, [companyId]: items } })),
+
+  getStockItems: (companyId) => get().stockItems[companyId] ?? [],
 
   fetchLedgersFromDb: async (companyId) => {
     console.log('[Step 5] Loading ledgers from DB for company:', companyId)

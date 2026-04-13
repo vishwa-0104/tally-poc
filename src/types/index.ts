@@ -75,6 +75,7 @@ export interface LineItem {
   gstRate: number
   amount: number
   tallyLedger?: string
+  tallyStockItem?: string | null
 }
 
 export interface Bill {
@@ -113,6 +114,12 @@ export interface TallyLedger {
   state?: string
   openingBalance?: string
   gstRegistrationType?: string
+}
+
+export interface TallyStockItem {
+  name: string
+  unit?: string
+  group?: string
 }
 
 export interface TallySyncResult {

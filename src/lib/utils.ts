@@ -42,20 +42,13 @@ interface LineItemParam {
   unitPrice: number
   gstRate: number
   amount: number
+  tallyStockItem?: string | null
 }
 
 function escapeXml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-function buildNarration(billNumber: string, lineItems?: LineItemParam[]): string {
-  if (!lineItems || lineItems.length === 0) return escapeXml(billNumber)
-  const lines = lineItems.map((item) => {
-    const hsn = item.hsnCode ? ` (HSN: ${item.hsnCode})` : ''
-    return `${escapeXml(item.description)}${hsn} | Qty: ${item.quantity} ${item.unit} @ ${item.unitPrice} | GST: ${item.gstRate}% | Amt: ${item.amount}`
-  })
-  return `Bill: ${escapeXml(billNumber)}\n${lines.join('\n')}`
-}
 
 export function buildTallyXml(params: {
   vendorLedger?: string
@@ -86,15 +79,6 @@ export function buildTallyXml(params: {
             </ALLLEDGERENTRIES.LIST>`
     : ''
 
-  const purchaseEntry = params.purchaseLedger
-    ? `
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${params.subtotal}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>`
-    : ''
-
   const cgstEntry = params.cgstLedger && params.cgstAmount !== 0
     ? `
             <ALLLEDGERENTRIES.LIST>
@@ -122,6 +106,45 @@ export function buildTallyXml(params: {
             </ALLLEDGERENTRIES.LIST>`
     : ''
 
+  // Use inventory entries when line items have stock item names, otherwise fall back to plain purchase ledger entry
+  const hasInventory = params.lineItems && params.lineItems.length > 0 &&
+    params.lineItems.some((li) => li.tallyStockItem?.trim())
+
+  const inventoryEntries = hasInventory && params.purchaseLedger
+    ? params.lineItems!.map((item) => {
+        const stockName = esc(item.tallyStockItem?.trim() || item.description)
+        const unit = esc(item.unit || 'Nos')
+        return `
+            <ALLINVENTORYENTRIES.LIST>
+              <STOCKITEMNAME>${stockName}</STOCKITEMNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <RATE>${item.unitPrice}/${unit}</RATE>
+              <AMOUNT>-${item.amount}</AMOUNT>
+              <ACTUALQTY>${item.quantity} ${unit}</ACTUALQTY>
+              <BILLEDQTY>${item.quantity} ${unit}</BILLEDQTY>
+              <BATCHALLOCATIONS.LIST>
+                <GODOWNNAME>Main Location</GODOWNNAME>
+                <BATCHNAME>Primary Batch</BATCHNAME>
+                <AMOUNT>-${item.amount}</AMOUNT>
+                <ACTUALQTY>${item.quantity} ${unit}</ACTUALQTY>
+                <BILLEDQTY>${item.quantity} ${unit}</BILLEDQTY>
+              </BATCHALLOCATIONS.LIST>
+              <ACCOUNTINGALLOCATIONS.LIST>
+                <LEDGERNAME>${esc(params.purchaseLedger!)}</LEDGERNAME>
+                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                <AMOUNT>-${item.amount}</AMOUNT>
+              </ACCOUNTINGALLOCATIONS.LIST>
+            </ALLINVENTORYENTRIES.LIST>`
+      }).join('')
+    : params.purchaseLedger
+      ? `
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${params.subtotal}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>`
+      : ''
+
   return `<ENVELOPE>
   <HEADER>
     <TALLYREQUEST>Import Data</TALLYREQUEST>
@@ -140,12 +163,12 @@ export function buildTallyXml(params: {
             <DATE>${d}</DATE>
             <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
             <VOUCHERNUMBER>${esc(params.billNumber)}</VOUCHERNUMBER>
-            <NARRATION>${buildNarration(params.billNumber, params.lineItems)}</NARRATION>
+            <NARRATION>${esc(params.billNumber)}</NARRATION>
             ${vendorEntry}
-            ${purchaseEntry}
             ${cgstEntry}
             ${sgstEntry}
             ${igstEntry}
+            ${inventoryEntries}
           </VOUCHER>
         </TALLYMESSAGE>
       </REQUESTDATA>
