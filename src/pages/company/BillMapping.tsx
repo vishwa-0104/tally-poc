@@ -10,7 +10,7 @@ import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { useTallyLedgers } from '@/hooks'
 import { syncToTally } from '@/services'
 import { buildTallyXml } from '@/lib/utils'
-import { getTallyUrl, getTallyCompanyName } from './CompanySettings'
+import { getTallyUrl, getTallyCompanyName, getTallyVoucherType } from './CompanySettings'
 import type { MappingInput } from '@/lib/validators'
 import type { Bill } from '@/types'
 
@@ -47,6 +47,7 @@ export default function BillMapping() {
 
   const tallyUrl     = getTallyUrl()
   const tallyCompany = getTallyCompanyName()
+  const voucherType  = getTallyVoucherType()
 
   // Only live-fetch from Tally if no ledgers are stored yet
   const { ledgers: liveLedgers, loading: ledgersLoading } = useTallyLedgers(
@@ -94,6 +95,7 @@ export default function BillMapping() {
       sgstAmount:  bill.sgstAmount,
       igstAmount:  bill.igstAmount,
       tallyCompany: tallyCompany || undefined,
+      voucherType:  voucherType,
       lineItems:   data.lineItems ?? bill.lineItems,
     })
 

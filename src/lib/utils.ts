@@ -64,6 +64,7 @@ export function buildTallyXml(params: {
   sgstAmount: number
   igstAmount: number
   tallyCompany?: string
+  voucherType?: string
   lineItems?: LineItemParam[]
 }): string {
   const d = buildTallyDate(params.billDate)
@@ -152,9 +153,9 @@ export function buildTallyXml(params: {
       </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <VOUCHER VCHTYPE="Purchase" ACTION="Create">
+          <VOUCHER VCHTYPE="${esc(params.voucherType || 'Purchase')}" ACTION="Create">
             <DATE>${d}</DATE>
-            <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>
+            <VOUCHERTYPENAME>${esc(params.voucherType || 'Purchase')}</VOUCHERTYPENAME>
             <REFERENCE>${esc(params.billNumber)}</REFERENCE>
             <NARRATION>${esc(params.billNumber)}</NARRATION>
             ${vendorEntry}

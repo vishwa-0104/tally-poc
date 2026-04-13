@@ -11,6 +11,8 @@ export const TALLY_URL_KEY = 'tally-server-url'
 export const DEFAULT_TALLY_URL = 'http://localhost:9000'
 
 export const TALLY_COMPANY_KEY = 'tally-company-name'
+export const TALLY_VOUCHER_TYPE_KEY = 'tally-voucher-type'
+export const DEFAULT_VOUCHER_TYPE = 'Purchase'
 
 export function getTallyUrl(): string {
   return localStorage.getItem(TALLY_URL_KEY) || DEFAULT_TALLY_URL
@@ -18,6 +20,10 @@ export function getTallyUrl(): string {
 
 export function getTallyCompanyName(): string {
   return localStorage.getItem(TALLY_COMPANY_KEY) ?? ''
+}
+
+export function getTallyVoucherType(): string {
+  return localStorage.getItem(TALLY_VOUCHER_TYPE_KEY) || DEFAULT_VOUCHER_TYPE
 }
 
 export default function CompanySettings() {
@@ -30,6 +36,7 @@ export default function CompanySettings() {
   const [syncingItems, setSyncingItems] = useState(false)
   const [savingMap, setSavingMap]       = useState(false)
   const [tallyUrl, setTallyUrl]         = useState(getTallyUrl)
+  const [voucherType, setVoucherType]   = useState(getTallyVoucherType)
 
   const storedLedgers    = companyId ? getLedgers(companyId) : []
   const storedStockItems = companyId ? getStockItems(companyId) : []
@@ -52,6 +59,11 @@ export default function CompanySettings() {
   const handleSaveTallyUrl = () => {
     localStorage.setItem(TALLY_URL_KEY, tallyUrl.trim() || DEFAULT_TALLY_URL)
     toast.success('Tally server URL saved')
+  }
+
+  const handleSaveVoucherType = () => {
+    localStorage.setItem(TALLY_VOUCHER_TYPE_KEY, voucherType.trim() || DEFAULT_VOUCHER_TYPE)
+    toast.success('Voucher type saved')
   }
 
   const handleSyncLedgers = async () => {
@@ -130,6 +142,27 @@ export default function CompanySettings() {
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Use <span className="font-mono">http://localhost:9000</span> for local Tally, or your ngrok URL e.g. <span className="font-mono">https://baz.ngrok.dev</span>
+            </p>
+          </div>
+
+          {/* Purchase voucher type */}
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+              Purchase Voucher Type
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={voucherType}
+                onChange={(e) => setVoucherType(e.target.value)}
+                placeholder="GST PURCHASE"
+                className="input-base flex-1"
+              />
+              <Button variant="outline" size="sm" onClick={handleSaveVoucherType}>
+                Save
+              </Button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Must match exactly as it appears in Tally (e.g. <span className="font-mono">GST PURCHASE</span> or <span className="font-mono">Purchase</span>).
             </p>
           </div>
 
