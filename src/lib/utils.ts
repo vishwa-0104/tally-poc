@@ -111,7 +111,16 @@ export function buildTallyXml(params: {
   const hasInventory = params.lineItems && params.lineItems.length > 0 &&
     params.lineItems.some((li) => li.tallyStockItem?.trim())
 
-  const inventoryEntries = hasInventory && params.purchaseLedger
+  const purchaseEntry = params.purchaseLedger
+    ? `
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${params.subtotal}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>`
+    : ''
+
+  const inventoryEntries = hasInventory
     ? params.lineItems!.map((item) => {
         const stockName = esc(item.tallyStockItem?.trim() || item.description)
         const unit = esc(item.unit || 'Nos')
@@ -123,21 +132,9 @@ export function buildTallyXml(params: {
               <AMOUNT>-${item.amount}</AMOUNT>
               <ACTUALQTY>${item.quantity} ${unit}</ACTUALQTY>
               <BILLEDQTY>${item.quantity} ${unit}</BILLEDQTY>
-              <ACCOUNTINGALLOCATIONS.LIST>
-                <LEDGERNAME>${esc(params.purchaseLedger!)}</LEDGERNAME>
-                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-                <AMOUNT>-${item.amount}</AMOUNT>
-              </ACCOUNTINGALLOCATIONS.LIST>
             </ALLINVENTORYENTRIES.LIST>`
       }).join('')
-    : params.purchaseLedger
-      ? `
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${params.subtotal}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>`
-      : ''
+    : ''
 
   return `<ENVELOPE>
   <HEADER>
@@ -159,6 +156,7 @@ export function buildTallyXml(params: {
             <REFERENCE>${esc(params.billNumber)}</REFERENCE>
             <NARRATION>${esc(params.billNumber)}</NARRATION>
             ${vendorEntry}
+            ${purchaseEntry}
             ${cgstEntry}
             ${sgstEntry}
             ${igstEntry}
