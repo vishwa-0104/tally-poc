@@ -82,10 +82,11 @@ export default function BillMapping() {
       igstLedger,
     }
 
-    // Auto-compute round-off: difference between totalAmount and sum of known amounts
-    const knownSum    = bill.subtotal + bill.cgstAmount + bill.sgstAmount + bill.igstAmount
-    const roundOff    = parseFloat((data.totalAmount - knownSum).toFixed(2))
-    const roundOffAmt = Math.abs(roundOff) < 0.005 ? undefined : roundOff
+    // Use the form's round-off value (user-editable, pre-filled from AI parse or computed).
+    const roundOffAmt =
+      data.roundOffAmount != null && Math.abs(data.roundOffAmount) >= 0.005
+        ? data.roundOffAmount
+        : undefined
 
     console.log('[buildArtifacts] amounts — subtotal:', bill.subtotal, 'cgst:', bill.cgstAmount, 'sgst:', bill.sgstAmount, 'igst:', bill.igstAmount, 'roundOff:', roundOffAmt)
 

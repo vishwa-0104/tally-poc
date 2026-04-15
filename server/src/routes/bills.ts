@@ -150,29 +150,69 @@ function normalizeBill(bill: Record<string, unknown> & { status: string; lineIte
   return { ...bill, status: bill.status.toLowerCase() }
 }
 
-const PARSE_PROMPT = `You are extracting data from a purchase bill (may be handwritten or printed).
+const PARSE_PROMPT = `You are extracting structured data from an Indian GST purchase bill (may be handwritten or printed).
 
-STEP 1 — Identify the parties on the bill:
-- VENDOR / SELLER / SUPPLIER: the business that ISSUED the bill. Look for headings like "From", "Sold by", "Supplier", "Issued by", or the company name/logo at the TOP of the bill.
-- BUYER / BILL TO / SHIP TO: the business that RECEIVED the bill (our company). Look for "Bill to", "Sold to", "Buyer", "Consignee".
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — Identify the parties
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- VENDOR / SELLER: the business that ISSUED the bill (name/logo at the top, labels like "From", "Supplier", "Sold by").
+- BUYER: the business that RECEIVED the bill (labels like "Bill to", "Sold to", "Consignee").
 
-GSTIN rules — a bill may contain multiple GSTINs. Identify each by its label and position:
-- vendorGstin: the GSTIN belonging to the VENDOR/SELLER (the one who raised the bill). It usually appears near the vendor name/address at the top, or under labels like "GSTIN", "GST No", "Supplier GSTIN", "Our GSTIN".
-- buyerGstin: the GSTIN belonging to the BUYER (our company). It usually appears in the "Bill to" / "Ship to" section, or under labels like "Buyer GSTIN", "Your GSTIN", "Recipient GSTIN".
-- If a GSTIN's role is ambiguous (no clear label), assign it to vendorGstin.
-- A valid Indian GSTIN is 15 characters: 2-digit state code + 10-char PAN + 1 entity + 1 Z + 1 check digit.
+GSTIN rules:
+- vendorGstin: GSTIN of the VENDOR near their name/address, or under "GSTIN", "GST No", "Supplier GSTIN", "Our GSTIN".
+- buyerGstin: GSTIN of the BUYER in the "Bill to" section, or under "Buyer GSTIN", "Your GSTIN", "Recipient GSTIN".
+- Ambiguous GSTIN → assign to vendorGstin.
+- Valid Indian GSTIN: 15 chars — 2-digit state code + 10-char PAN + entity type + Z + check digit.
 
-STEP 2 — Locate and read these values verbatim from the bill, character by character:
-- Each line item: description, HSN code, quantity, unit, unit price, discount %, GST rate, line total (amount after discount, before tax)
-- Subtotal (taxable value / amount before tax)
-- CGST amount — look for labels like "CGST", "C.GST", "Central Tax"
-- SGST amount — look for labels like "SGST", "S.GST", "State Tax"
-- IGST amount — look for label "IGST"; use 0 if not present
-- Round-off amount — look for labels like "Round Off", "Rounding", "Rounded"; use null if not present
-- Grand total / Total amount payable — the final bottom-line number on the bill
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — Identify the bill's calculation pattern
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Indian GST bills use one of two patterns:
 
-STEP 3 — Output ONLY a valid JSON object using the schema below.
+PATTERN A — Per-line discount + GST:
+  Each line item has its own Qty, Unit Price, Discount %, Line Amount, GST %.
+  Taxable amount per line = Qty × UnitPrice × (1 − Discount%/100)
+  Subtotal (taxable value) = sum of all per-line taxable amounts.
+  GST is applied per line or on the subtotal total.
 
+PATTERN B — Invoice-level discount + GST:
+  Lines show Qty, Unit Price, Gross Amount (= Qty × UnitPrice) with no per-line discount.
+  A single discount is deducted from the gross total at the bottom of the bill.
+  Subtotal (taxable value) = Gross Total − Invoice Discount.
+  GST (CGST+SGST or IGST) is applied on the subtotal.
+  Round-off (if any) is applied after tax to reach the final payable amount.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — Extract values
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ lineItem.amount — ALWAYS the tax-exclusive (pre-GST) amount for that line:
+  • Pattern A: amount = Qty × unitPrice × (1 − discountPercent/100)
+  • Pattern B (no per-line discount): amount = Qty × unitPrice × (subtotal / grossTotal)
+    where grossTotal = sum of all (Qty × unitPrice) across lines
+    and subtotal is the taxable value read from the bill.
+    If there is no discount at all: amount = Qty × unitPrice.
+  ⚠ NEVER include GST in lineItem.amount. The amount must be tax-exclusive.
+
+▸ lineItem.discountPercent — per-line discount % only. Use null for Pattern B (discount is invoice-level).
+
+▸ subtotal — read the "Taxable Value", "Net Amount before Tax", or "Taxable Amount" printed on the bill.
+  This is the total of all tax-exclusive line amounts after any discount.
+  VERIFY: sum of all lineItem.amount values should equal subtotal (within ±1 due to rounding).
+
+▸ cgstAmount — read from labels "CGST", "C.GST", "Central GST", "Central Tax". Use 0 if not present.
+▸ sgstAmount — read from labels "SGST", "S.GST", "State GST", "State Tax", "UTGST". Use 0 if not present.
+▸ igstAmount — read from label "IGST". Use 0 if not present.
+▸ roundOffAmount — read from "Round Off", "Rounding", "Rounded". Use null if not present.
+▸ totalAmount — the final grand total payable (bottom-line number on the bill).
+
+VERIFY before outputting:
+  subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount
+  If this does not hold, re-check your subtotal and tax amounts.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — Output ONLY a valid JSON object
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Schema:
 {
   "vendorName": string,
@@ -189,22 +229,22 @@ Schema:
       "unitPrice": number,
       "discountPercent": number | null,
       "gstRate": number,
-      "amount": number
+      "amount": number          ← tax-exclusive, after any discount
     }
   ],
-  "subtotal": number,
+  "subtotal": number,           ← total taxable value (sum of line amounts, before GST)
   "cgstAmount": number,
   "sgstAmount": number,
   "igstAmount": number,
-  "totalAmount": number,
+  "totalAmount": number,        ← final grand total including all taxes and round-off
   "roundOffAmount": number | null
 }
 
 CRITICAL numeric rules:
 - A dot (.) between digits is ALWAYS a decimal point — never drop it (e.g. "1.50" → 1.50, NOT 150).
 - Commas are thousand separators (e.g. "1,450.50" → 1450.50).
-- Do not round, truncate, or multiply any value.
-- If a field is not found set it to null.
+- Do not round or truncate any value; copy numbers exactly as printed.
+- If a field is not present on the bill, use null (not 0 for optional fields).
 
 End your response with the JSON object wrapped in \`\`\`json ... \`\`\`.`
 

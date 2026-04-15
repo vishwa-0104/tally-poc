@@ -69,6 +69,12 @@ export function MappingForm({
 }: MappingFormProps) {
   const hasIgst = bill.igstAmount > 0
 
+  // Default round-off: use AI-parsed value if present, otherwise derive from totals
+  const computedRoundOff = parseFloat(
+    (bill.totalAmount - bill.subtotal - bill.cgstAmount - bill.sgstAmount - bill.igstAmount).toFixed(2)
+  )
+  const defaultRoundOff = bill.roundOffAmount ?? (Math.abs(computedRoundOff) >= 0.005 ? computedRoundOff : 0)
+
   const gstinMatch = bill.vendorGstin
     ? ledgers.find((l) => l.gstin && l.gstin.trim().toUpperCase() === bill.vendorGstin!.trim().toUpperCase())
     : null
@@ -104,10 +110,11 @@ export function MappingForm({
       cgstLedger:     resolvedCgst     || undefined,
       sgstLedger:     resolvedSgst     || undefined,
       igstLedger:     resolvedIgst     || undefined,
-      billDate:    bill.billDate,
-      billNumber:  bill.billNumber,
-      totalAmount: bill.totalAmount,
-      lineItems:   bill.lineItems,
+      billDate:       bill.billDate,
+      billNumber:     bill.billNumber,
+      totalAmount:    bill.totalAmount,
+      roundOffAmount: defaultRoundOff,
+      lineItems:      bill.lineItems,
     },
   })
 
@@ -188,16 +195,30 @@ export function MappingForm({
         </p>
       )}
 
-      {/* Voucher number */}
-      <div className="mt-4">
-        <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-          Tally Voucher Number <span className="font-normal text-gray-400">(optional — leave blank for auto)</span>
-        </label>
-        <input
-          {...register('voucherNumber')}
-          placeholder="e.g. 1288"
-          className="input-base w-48"
-        />
+      {/* Voucher number + Round Off */}
+      <div className="mt-4 flex gap-6 flex-wrap">
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+            Tally Voucher Number <span className="font-normal text-gray-400">(optional — leave blank for auto)</span>
+          </label>
+          <input
+            {...register('voucherNumber')}
+            placeholder="e.g. 1288"
+            className="input-base w-48"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+            Round Off <span className="font-normal text-gray-400">(₹ — negative to deduct)</span>
+          </label>
+          <input
+            {...register('roundOffAmount')}
+            type="number"
+            step="0.01"
+            placeholder="0.00"
+            className="input-base w-32"
+          />
+        </div>
       </div>
 
       {/* Line items */}
@@ -278,6 +299,10 @@ export function MappingForm({
                     <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.igstAmount)}</td>
                   </tr>
                 )}
+                <tr className="border-t border-gray-100">
+                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                  <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(defaultRoundOff)}</td>
+                </tr>
                 <tr className="border-t-2 border-gray-300">
                   <td colSpan={7} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>
