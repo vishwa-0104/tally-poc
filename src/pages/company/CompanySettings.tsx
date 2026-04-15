@@ -12,7 +12,7 @@ export const DEFAULT_TALLY_URL = 'http://localhost:9000'
 
 export const TALLY_COMPANY_KEY = 'tally-company-name'
 export const TALLY_VOUCHER_TYPE_KEY = 'tally-voucher-type'
-export const DEFAULT_VOUCHER_TYPE = 'Purchase'
+export const DEFAULT_VOUCHER_TYPE = 'GST PURCHASE'
 
 export function getTallyUrl(): string {
   return localStorage.getItem(TALLY_URL_KEY) || DEFAULT_TALLY_URL

@@ -43,6 +43,7 @@ export function parsedDataToBill(
     sgstAmount: data.sgstAmount,
     igstAmount: data.igstAmount,
     totalAmount: data.totalAmount,
+    roundOffAmount: data.roundOffAmount ?? undefined,
     status: 'parsed',
     imageUrl,
     lineItems,

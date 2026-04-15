@@ -216,17 +216,21 @@ function parseSyncResponse(xml) {
   const errors      = get('ERRORS')
   const exceptions  = get('EXCEPTIONS')
 
-  // Extract any descriptive error/exception tags Tally may include
-  const allErrors = [...xml.matchAll(/<(?:LINEERROR|IMPORTERROR|TALERROR|EXCEPTIONMSG|ERROR)>([^<]+)<\/(?:LINEERROR|IMPORTERROR|TALERROR|EXCEPTIONMSG|ERROR)>/gi)]
+  // Extract any descriptive error/exception tags Tally may include.
+  // TallyPrime uses several different tag names depending on version and error type.
+  const allErrors = [
+    ...xml.matchAll(/<(?:LINEERROR|IMPORTERROR|TALERROR|EXCEPTIONMSG|ERROR|IMPORTEXCEPTION|DSPERROR|LONGMSG|SHORTMSG|EXCEPTIONERROR|DESC)>([^<]+)<\/(?:LINEERROR|IMPORTERROR|TALERROR|EXCEPTIONMSG|ERROR|IMPORTEXCEPTION|DSPERROR|LONGMSG|SHORTMSG|EXCEPTIONERROR|DESC)>/gi),
+  ]
     .map((m) => m[1].trim())
     .filter(Boolean)
   console.log('[Sync] Parsed — created:', created, 'errors:', errors, 'exceptions:', exceptions, 'messages:', allErrors)
+  console.log('[Sync] Full Tally response:', xml.slice(0, 2000))
 
   if (errors > 0 || exceptions > 0 || created === 0) {
     let message = allErrors.length > 0 ? allErrors.join('; ') : null
 
     if (!message && exceptions > 0) {
-      message = `Tally exception: a ledger name may not exist in Tally, or the voucher type "Purchase" is not configured. Check ledger names in Tally and retry.`
+      message = `Tally exception: a ledger name may not exist in Tally, or the voucher type is not configured. Open the browser console (F12) to see the full Tally response and verify your CGST/SGST ledger names match exactly.`
     }
 
     return {

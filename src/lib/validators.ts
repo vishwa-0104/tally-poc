@@ -36,6 +36,7 @@ const lineItemEditSchema = z.object({
   quantity: z.coerce.number(),
   unit: z.string(),
   unitPrice: z.coerce.number(),
+  discountPercent: z.coerce.number().optional(),
   gstRate: z.coerce.number(),
   amount: z.coerce.number(),
   tallyLedger: z.string().nullish(),
@@ -48,10 +49,11 @@ export const mappingSchema = z.object({
   cgstLedger:     z.string().optional(),
   sgstLedger:     z.string().optional(),
   igstLedger:     z.string().optional(),
-  billDate:    z.string().min(1, 'Date is required'),
-  billNumber:  z.string().min(1, 'Bill number is required'),
-  totalAmount: z.coerce.number().positive('Amount must be positive'),
-  lineItems:   z.array(lineItemEditSchema).optional(),
+  billDate:      z.string().min(1, 'Date is required'),
+  billNumber:    z.string().min(1, 'Bill number is required'),
+  voucherNumber: z.string().optional(),
+  totalAmount:   z.coerce.number().positive('Amount must be positive'),
+  lineItems:     z.array(lineItemEditSchema).optional(),
 })
 
 export type LoginInput      = z.infer<typeof loginSchema>

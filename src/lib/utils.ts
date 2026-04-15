@@ -40,6 +40,7 @@ interface LineItemParam {
   quantity: number
   unit: string
   unitPrice: number
+  discountPercent?: number
   gstRate: number
   amount: number
   tallyStockItem?: string | null
@@ -49,94 +50,181 @@ function escapeXml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-
+/**
+ * Build a TallyPrime-compatible purchase voucher XML.
+ *
+ * Structure mirrors the actual TallyPrime XML export format:
+ *   VOUCHER
+ *     ALLINVENTORYENTRIES.LIST  (one per line item, at voucher level)
+ *       BATCHALLOCATIONS.LIST       (godown / batch)
+ *       ACCOUNTINGALLOCATIONS.LIST  (purchase ledger per item)
+ *     LEDGERENTRIES.LIST  (party / vendor — credit)
+ *     LEDGERENTRIES.LIST  (CGST / SGST / IGST — debit)
+ *     LEDGERENTRIES.LIST  (Round Off — if applicable)
+ *
+ * Key fields:
+ *   DATE          = voucher entry date
+ *   REFERENCEDATE = supplier's invoice date
+ *   REFERENCE     = supplier's invoice number (Ti/25-26/446)
+ */
 export function buildTallyXml(params: {
   vendorLedger?: string
   purchaseLedger?: string
   cgstLedger?: string
   sgstLedger?: string
   igstLedger?: string
-  billNumber: string
-  billDate: string
+  billNumber: string        // supplier invoice number → REFERENCE
+  billDate: string          // supplier invoice date  → REFERENCEDATE
+  voucherDate?: string      // our entry date         → DATE (defaults to billDate)
+  voucherNumber?: string    // Tally voucher number   → VOUCHERNUMBER (auto-assigned if omitted)
   totalAmount: number
   subtotal: number
   cgstAmount: number
   sgstAmount: number
   igstAmount: number
+  roundOffAmount?: number   // positive = debit round-off (e.g. 0.50), negative = credit
+  roundOffLedger?: string   // defaults to 'Round Off'
   tallyCompany?: string
   voucherType?: string
   lineItems?: LineItemParam[]
 }): string {
-  const d = buildTallyDate(params.billDate)
   const esc = escapeXml
+  // Avoid floating-point noise like -90.00000000001
+  const amt = (n: number) => parseFloat(n.toFixed(2))
 
-  const vendorEntry = params.vendorLedger
-    ? `
-            <PARTYLEDGERNAME>${esc(params.vendorLedger)}</PARTYLEDGERNAME>
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.vendorLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
-              <AMOUNT>${params.totalAmount}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>`
-    : ''
+  const entryDate       = buildTallyDate(params.voucherDate || params.billDate)
+  const invoiceDate     = buildTallyDate(params.billDate)
+  const voucherTypeName = esc(params.voucherType || 'GST PURCHASE')
 
-  const cgstEntry = params.cgstLedger && params.cgstAmount !== 0
-    ? `
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.cgstLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${params.cgstAmount}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>`
-    : ''
+  // Itemised mode whenever line items are present.
+  // Falls back to item description when tallyStockItem is not mapped.
+  const hasInventory = !!(params.lineItems?.length)
 
-  const sgstEntry = params.sgstLedger && params.sgstAmount !== 0
-    ? `
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.sgstLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${params.sgstAmount}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>`
-    : ''
-
-  const igstEntry = params.igstLedger && params.igstAmount !== 0
-    ? `
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.igstLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${params.igstAmount}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>`
-    : ''
-
-  // Use inventory entries when line items have stock item names, otherwise fall back to plain purchase ledger entry
-  const hasInventory = params.lineItems && params.lineItems.length > 0 &&
-    params.lineItems.some((li) => li.tallyStockItem?.trim())
-
-  const purchaseEntry = params.purchaseLedger
-    ? `
-            <ALLLEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <AMOUNT>-${params.subtotal}</AMOUNT>
-            </ALLLEDGERENTRIES.LIST>`
-    : ''
-
+  // ── Inventory entries (VOUCHER level) ─────────────────────────────────────
+  // Matches real Tally export: ALLINVENTORYENTRIES.LIST at voucher level,
+  // each containing BATCHALLOCATIONS.LIST and ACCOUNTINGALLOCATIONS.LIST.
   const inventoryEntries = hasInventory
     ? params.lineItems!.map((item) => {
-        const stockName = esc(item.tallyStockItem?.trim() || item.description)
-        const unit = esc(item.unit || 'Nos')
+        const stockName   = esc(item.tallyStockItem?.trim() || item.description)
+        const unit        = esc(item.unit || 'Nos')
+        const quantity    = item.quantity
+        const rate        = amt(item.unitPrice)
+        const itemAmt     = amt(item.amount)
+        const purchLedger = params.purchaseLedger ? esc(params.purchaseLedger) : ''
+
+        const discPct = item.discountPercent != null && item.discountPercent !== 0
+          ? `\n              <DISCOUNTINPERCENT>${item.discountPercent}</DISCOUNTINPERCENT>` : ''
+
         return `
             <ALLINVENTORYENTRIES.LIST>
               <STOCKITEMNAME>${stockName}</STOCKITEMNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <RATE>${item.unitPrice}/${unit}</RATE>
-              <AMOUNT>-${item.amount}</AMOUNT>
-              <ACTUALQTY>${item.quantity} ${unit}</ACTUALQTY>
-              <BILLEDQTY>${item.quantity} ${unit}</BILLEDQTY>
+              <RATE>${rate}/${unit}</RATE>${discPct}
+              <AMOUNT>-${itemAmt}</AMOUNT>
+              <ACTUALQTY> ${quantity} ${unit}</ACTUALQTY>
+              <BILLEDQTY> ${quantity} ${unit}</BILLEDQTY>
+              <BATCHALLOCATIONS.LIST>
+                <GODOWNNAME>Main Location</GODOWNNAME>
+                <BATCHNAME>Primary Batch</BATCHNAME>
+                <AMOUNT>-${itemAmt}</AMOUNT>
+                <ACTUALQTY> ${quantity} ${unit}</ACTUALQTY>
+                <BILLEDQTY> ${quantity} ${unit}</BILLEDQTY>
+              </BATCHALLOCATIONS.LIST>${purchLedger ? `
+              <ACCOUNTINGALLOCATIONS.LIST>
+                <LEDGERNAME>${purchLedger}</LEDGERNAME>
+                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                <LEDGERFROMITEM>No</LEDGERFROMITEM>
+                <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+                <ISPARTYLEDGER>No</ISPARTYLEDGER>
+                <AMOUNT>-${itemAmt}</AMOUNT>
+              </ACCOUNTINGALLOCATIONS.LIST>` : ''}
             </ALLINVENTORYENTRIES.LIST>`
       }).join('')
     : ''
 
-  return `<ENVELOPE>
+  // ── Ledger entries — using LEDGERENTRIES.LIST as per real Tally XML ────────
+
+  // Party ledger (vendor) — credit
+  const partyEntry = params.vendorLedger
+    ? `
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(params.vendorLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
+              <AMOUNT>${amt(params.totalAmount)}</AMOUNT>
+            </LEDGERENTRIES.LIST>`
+    : ''
+
+  // Purchase ledger — only when NOT in itemised mode (no line items)
+  const purchaseEntry = !hasInventory && params.purchaseLedger
+    ? `
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>-${amt(params.subtotal)}</AMOUNT>
+            </LEDGERENTRIES.LIST>`
+    : ''
+
+  // Tax ledgers — debit
+  const cgstEntry = params.cgstLedger?.trim() && params.cgstAmount !== 0
+    ? `
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(params.cgstLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>-${amt(params.cgstAmount)}</AMOUNT>
+            </LEDGERENTRIES.LIST>`
+    : ''
+
+  const sgstEntry = params.sgstLedger?.trim() && params.sgstAmount !== 0
+    ? `
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(params.sgstLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>-${amt(params.sgstAmount)}</AMOUNT>
+            </LEDGERENTRIES.LIST>`
+    : ''
+
+  const igstEntry = params.igstLedger?.trim() && params.igstAmount !== 0
+    ? `
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(params.igstLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>-${amt(params.igstAmount)}</AMOUNT>
+            </LEDGERENTRIES.LIST>`
+    : ''
+
+  // Round-off — ROUNDTYPE and ROUNDLIMIT match real Tally export.
+  // ISDEEMEDPOSITIVE=Yes means debit (positive roundoff reduces vendor payable).
+  const roundOffEntry = params.roundOffAmount && params.roundOffAmount !== 0
+    ? `
+            <LEDGERENTRIES.LIST>
+              <ROUNDTYPE>Normal Rounding</ROUNDTYPE>
+              <LEDGERNAME>${esc(params.roundOffLedger || 'Round Off')}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>${params.roundOffAmount > 0 ? 'Yes' : 'No'}</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>${params.roundOffAmount > 0 ? '-' : ''}${amt(Math.abs(params.roundOffAmount))}</AMOUNT>
+              <ROUNDLIMIT> 1</ROUNDLIMIT>
+            </LEDGERENTRIES.LIST>`
+    : ''
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<ENVELOPE>
   <HEADER>
     <TALLYREQUEST>Import Data</TALLYREQUEST>
   </HEADER>
@@ -145,22 +233,22 @@ export function buildTallyXml(params: {
       <REQUESTDESC>
         <REPORTNAME>Vouchers</REPORTNAME>${params.tallyCompany ? `
         <STATICVARIABLES>
-          <SVCURRENTCOMPANY>${params.tallyCompany}</SVCURRENTCOMPANY>
+          <SVCURRENTCOMPANY>${esc(params.tallyCompany)}</SVCURRENTCOMPANY>
         </STATICVARIABLES>` : ''}
       </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <VOUCHER VCHTYPE="${esc(params.voucherType || 'Purchase')}" ACTION="Create">
-            <DATE>${d}</DATE>
-            <VOUCHERTYPENAME>${esc(params.voucherType || 'Purchase')}</VOUCHERTYPENAME>
+          <VOUCHER VCHTYPE="${voucherTypeName}" ACTION="Create" OBJVIEW="Invoice Voucher View">
+            <DATE>${entryDate}</DATE>${params.voucherNumber ? `
+            <VOUCHERNUMBER>${esc(params.voucherNumber)}</VOUCHERNUMBER>` : ''}
+            <REFERENCEDATE>${invoiceDate}</REFERENCEDATE>
+            <VOUCHERTYPENAME>${voucherTypeName}</VOUCHERTYPENAME>${params.vendorLedger ? `
+            <PARTYLEDGERNAME>${esc(params.vendorLedger)}</PARTYLEDGERNAME>
+            <PARTYMAILINGNAME>${esc(params.vendorLedger)}</PARTYMAILINGNAME>` : ''}
             <REFERENCE>${esc(params.billNumber)}</REFERENCE>
-            <NARRATION>${esc(params.billNumber)}</NARRATION>
-            ${vendorEntry}
-            ${purchaseEntry}
-            ${cgstEntry}
-            ${sgstEntry}
-            ${igstEntry}
-            ${inventoryEntries}
+            <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
+            <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
+            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${partyEntry}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${roundOffEntry}
           </VOUCHER>
         </TALLYMESSAGE>
       </REQUESTDATA>

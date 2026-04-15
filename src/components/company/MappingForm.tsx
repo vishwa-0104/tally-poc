@@ -7,39 +7,29 @@ import { mappingSchema, type MappingInput } from '@/lib/validators'
 import type { Bill, TallyLedger } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
-function MatchedBadge({ label, value, tag }: { label: string; value: string; tag?: string }) {
-  return (
-    <div className="mb-4">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-semibold text-gray-700 tracking-wide">{label}</span>
-        {tag && (
-          <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
-            <Zap className="w-3 h-3" /> {tag}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2 px-3 py-2 bg-teal-50 border border-teal-200 rounded-lg">
-        <CheckCircle className="w-3.5 h-3.5 text-teal-500 flex-shrink-0" />
-        <span className="text-sm text-teal-800 font-medium">{value}</span>
-      </div>
-    </div>
-  )
-}
 
 interface LedgerInputProps {
   id: string
   label: string
   required?: boolean
+  matched?: boolean
   ledgers: TallyLedger[]
   registration: ReturnType<ReturnType<typeof useForm<MappingInput>>['register']>
 }
 
-function LedgerInput({ id, label, required, ledgers, registration }: LedgerInputProps) {
+function LedgerInput({ id, label, required, matched, ledgers, registration }: LedgerInputProps) {
   return (
     <div className="mb-4">
-      <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-        {label}{required && ' *'}
-      </label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs font-semibold text-gray-700 tracking-wide">
+          {label}{required && ' *'}
+        </label>
+        {matched && (
+          <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
+            <CheckCircle className="w-3 h-3" /> matched
+          </span>
+        )}
+      </div>
       <input
         {...registration}
         list={`${id}-list`}
@@ -175,37 +165,20 @@ export function MappingForm({
         </div>
       )}
 
-      {/* Ledger fields */}
+      {/* Ledger fields — always editable inputs so RHF registers every field */}
       <div className="grid grid-cols-2 gap-x-4 mt-5">
-        {/* Vendor */}
-        {resolvedVendor
-          ? <MatchedBadge label="Vendor Ledger" value={resolvedVendor} tag={gstinMatch ? 'GSTIN matched' : undefined} />
-          : <LedgerInput id="vendor" label="Vendor Ledger" ledgers={ledgers} registration={register('vendorLedger')} />
-        }
+        <LedgerInput id="vendor"    label="Vendor Ledger"   matched={!!resolvedVendor}   ledgers={ledgers} registration={register('vendorLedger')} />
+        <LedgerInput id="purchase"  label="Purchase Ledger" matched={!!resolvedPurchase} required ledgers={ledgers} registration={register('purchaseLedger')} />
 
-        {/* Purchase */}
-        {resolvedPurchase
-          ? <MatchedBadge label="Purchase Ledger" value={resolvedPurchase} />
-          : <LedgerInput id="purchase" label="Purchase Ledger" required ledgers={ledgers} registration={register('purchaseLedger')} />
-        }
-
-        {/* CGST / SGST / IGST */}
+        {/* CGST / SGST shown for domestic bills; IGST for interstate */}
         {!hasIgst && (
           <>
-            {resolvedCgst
-              ? <MatchedBadge label="CGST Ledger" value={resolvedCgst} />
-              : <LedgerInput id="cgst" label="CGST Ledger" required ledgers={ledgers} registration={register('cgstLedger')} />
-            }
-            {resolvedSgst
-              ? <MatchedBadge label="SGST Ledger" value={resolvedSgst} />
-              : <LedgerInput id="sgst" label="SGST Ledger" required ledgers={ledgers} registration={register('sgstLedger')} />
-            }
+            <LedgerInput id="cgst" label="CGST Ledger" matched={!!resolvedCgst} required ledgers={ledgers} registration={register('cgstLedger')} />
+            <LedgerInput id="sgst" label="SGST Ledger" matched={!!resolvedSgst} required ledgers={ledgers} registration={register('sgstLedger')} />
           </>
         )}
         {hasIgst && (
-          resolvedIgst
-            ? <MatchedBadge label="IGST Ledger" value={resolvedIgst} />
-            : <LedgerInput id="igst" label="IGST Ledger" required ledgers={ledgers} registration={register('igstLedger')} />
+          <LedgerInput id="igst" label="IGST Ledger" matched={!!resolvedIgst} required ledgers={ledgers} registration={register('igstLedger')} />
         )}
       </div>
 
@@ -215,6 +188,18 @@ export function MappingForm({
         </p>
       )}
 
+      {/* Voucher number */}
+      <div className="mt-4">
+        <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+          Tally Voucher Number <span className="font-normal text-gray-400">(optional — leave blank for auto)</span>
+        </label>
+        <input
+          {...register('voucherNumber')}
+          placeholder="e.g. 1288"
+          className="input-base w-48"
+        />
+      </div>
+
       {/* Line items */}
       {bill.lineItems.length > 0 && (
         <div className="mt-5">
@@ -223,7 +208,7 @@ export function MappingForm({
             <table className="w-full border-collapse text-xs" aria-label="Line items">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  {['Description', 'HSN', 'Qty', 'Unit', 'Unit Price', 'GST%', 'Amount', 'Tally Item'].map((h) => (
+                  {['Description', 'HSN', 'Qty', 'Unit', 'Unit Price', 'Disc%', 'GST%', 'Amount', 'Tally Item'].map((h) => (
                     <th key={h} className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -245,6 +230,9 @@ export function MappingForm({
                     </td>
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
@@ -269,29 +257,29 @@ export function MappingForm({
               </datalist>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                 <tr className="border-t border-gray-100">
-                  <td colSpan={6} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
+                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
                   <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
                 </tr>
                 {!hasIgst && (
                   <>
                     <tr className="border-t border-gray-100">
-                      <td colSpan={6} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
+                      <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
                       <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.cgstAmount)}</td>
                     </tr>
                     <tr className="border-t border-gray-100">
-                      <td colSpan={6} className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
+                      <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
                       <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.sgstAmount)}</td>
                     </tr>
                   </>
                 )}
                 {hasIgst && (
                   <tr className="border-t border-gray-100">
-                    <td colSpan={6} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
+                    <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
                     <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.igstAmount)}</td>
                   </tr>
                 )}
                 <tr className="border-t-2 border-gray-300">
-                  <td colSpan={6} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
+                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>
                 </tr>
               </tfoot>

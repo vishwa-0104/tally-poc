@@ -133,9 +133,11 @@ billsRouter.post('/bills/parse', async (req, res) => {
     const parsed = JSON.parse(jsonStr)
     res.json({
       ...parsed,
+      roundOffAmount: parsed.roundOffAmount ?? null,
       lineItems: (parsed.lineItems ?? []).map((item: Record<string, unknown>) => ({
         ...item,
         hsnCode: item.hsnCode ?? '',
+        discountPercent: item.discountPercent ?? null,
       })),
     })
   } catch {
@@ -161,11 +163,12 @@ GSTIN rules — a bill may contain multiple GSTINs. Identify each by its label a
 - A valid Indian GSTIN is 15 characters: 2-digit state code + 10-char PAN + 1 entity + 1 Z + 1 check digit.
 
 STEP 2 — Locate and read these values verbatim from the bill, character by character:
-- Each line item: description, HSN code, quantity, unit, unit price, GST rate, line total
+- Each line item: description, HSN code, quantity, unit, unit price, discount %, GST rate, line total (amount after discount, before tax)
 - Subtotal (taxable value / amount before tax)
 - CGST amount — look for labels like "CGST", "C.GST", "Central Tax"
 - SGST amount — look for labels like "SGST", "S.GST", "State Tax"
 - IGST amount — look for label "IGST"; use 0 if not present
+- Round-off amount — look for labels like "Round Off", "Rounding", "Rounded"; use null if not present
 - Grand total / Total amount payable — the final bottom-line number on the bill
 
 STEP 3 — Output ONLY a valid JSON object using the schema below.
@@ -184,6 +187,7 @@ Schema:
       "quantity": number,
       "unit": string,
       "unitPrice": number,
+      "discountPercent": number | null,
       "gstRate": number,
       "amount": number
     }
@@ -192,7 +196,8 @@ Schema:
   "cgstAmount": number,
   "sgstAmount": number,
   "igstAmount": number,
-  "totalAmount": number
+  "totalAmount": number,
+  "roundOffAmount": number | null
 }
 
 CRITICAL numeric rules:

@@ -62,6 +62,7 @@ export interface ParsedBillData {
   sgstAmount: number
   igstAmount: number
   totalAmount: number
+  roundOffAmount?: number
   lineItems: Omit<LineItem, 'id'>[]
 }
 
@@ -72,6 +73,7 @@ export interface LineItem {
   quantity: number
   unit: string
   unitPrice: number
+  discountPercent?: number
   gstRate: number
   amount: number
   tallyLedger?: string
@@ -97,6 +99,7 @@ export interface Bill {
   isEdited?: boolean
   rawAiJson?: Record<string, unknown>
   imageUrl?: string
+  roundOffAmount?: number
   status: BillStatus
   tallyXml?: string
   tallyMapping?: TallyBillMapping

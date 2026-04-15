@@ -78,9 +78,10 @@ model Bill {
   originalData Json?
   isEdited     Boolean    @default(false)
   rawAiJson    Json?
-  tallyXml     String?
-  tallyMapping Json?
-  syncedAt     DateTime?
+  tallyXml       String?
+  tallyMapping   Json?
+  roundOffAmount Float?
+  syncedAt       DateTime?
   syncError    String?
   lineItems    LineItem[]
   createdAt    DateTime   @default(now())
@@ -88,15 +89,17 @@ model Bill {
 }
 
 model LineItem {
-  id          String  @id @default(cuid())
-  bill        Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
-  billId      String
-  description String
-  hsnCode     String?
-  quantity    Float
-  unit        String
-  unitPrice   Float
-  gstRate     Float
-  amount      Float
-  tallyLedger String?
+  id              String  @id @default(cuid())
+  bill            Bill    @relation(fields: [billId], references: [id], onDelete: Cascade)
+  billId          String
+  description     String
+  hsnCode         String?
+  quantity        Float
+  unit            String
+  unitPrice       Float
+  discountPercent Float?
+  gstRate         Float
+  amount          Float
+  tallyLedger     String?
+  tallyStockItem  String?
 }

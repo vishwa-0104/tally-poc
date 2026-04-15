@@ -69,34 +69,44 @@ export default function BillMapping() {
   }
 
   const buildArtifacts = (data: MappingInput) => {
-    const igstLedger = data.igstLedger && data.igstLedger.trim() ? data.igstLedger : undefined
+    const trim = (v?: string) => (v && v.trim() ? v.trim() : undefined)
+    const cgstLedger = trim(data.cgstLedger)
+    const sgstLedger = trim(data.sgstLedger)
+    const igstLedger = trim(data.igstLedger)
 
     const tallyMapping = {
-      vendorLedger: data.vendorLedger,
-      purchaseLedger: data.purchaseLedger,
-      cgstLedger: data.cgstLedger,
-      sgstLedger: data.sgstLedger,
+      vendorLedger: trim(data.vendorLedger),
+      purchaseLedger: trim(data.purchaseLedger),
+      cgstLedger,
+      sgstLedger,
       igstLedger,
     }
 
-    console.log('[buildArtifacts] amounts — subtotal:', bill.subtotal, 'cgst:', bill.cgstAmount, 'sgst:', bill.sgstAmount, 'igst:', bill.igstAmount)
+    // Auto-compute round-off: difference between totalAmount and sum of known amounts
+    const knownSum    = bill.subtotal + bill.cgstAmount + bill.sgstAmount + bill.igstAmount
+    const roundOff    = parseFloat((data.totalAmount - knownSum).toFixed(2))
+    const roundOffAmt = Math.abs(roundOff) < 0.005 ? undefined : roundOff
+
+    console.log('[buildArtifacts] amounts — subtotal:', bill.subtotal, 'cgst:', bill.cgstAmount, 'sgst:', bill.sgstAmount, 'igst:', bill.igstAmount, 'roundOff:', roundOffAmt)
 
     const generatedXml = buildTallyXml({
-      vendorLedger:   data.vendorLedger,
-      purchaseLedger: data.purchaseLedger,
-      cgstLedger:     data.cgstLedger,
-      sgstLedger:     data.sgstLedger,
+      vendorLedger:   trim(data.vendorLedger),
+      purchaseLedger: trim(data.purchaseLedger),
+      cgstLedger,
+      sgstLedger,
       igstLedger,
-      billNumber:  data.billNumber,
-      billDate:    data.billDate,
-      totalAmount: data.totalAmount,
-      subtotal:    bill.subtotal,
-      cgstAmount:  bill.cgstAmount,
-      sgstAmount:  bill.sgstAmount,
-      igstAmount:  bill.igstAmount,
-      tallyCompany: tallyCompany || undefined,
-      voucherType:  voucherType,
-      lineItems:   data.lineItems ?? bill.lineItems,
+      billNumber:    data.billNumber,
+      billDate:      data.billDate,
+      voucherNumber: data.voucherNumber?.trim() || undefined,
+      totalAmount:   data.totalAmount,
+      subtotal:      bill.subtotal,
+      cgstAmount:    bill.cgstAmount,
+      sgstAmount:    bill.sgstAmount,
+      igstAmount:    bill.igstAmount,
+      roundOffAmount: roundOffAmt,
+      tallyCompany:  tallyCompany || undefined,
+      voucherType:   voucherType,
+      lineItems:     data.lineItems ?? bill.lineItems,
     })
 
     return { generatedXml, tallyMapping }
