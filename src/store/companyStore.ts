@@ -8,7 +8,7 @@ interface CompanyStore {
   ledgers: Record<string, TallyLedger[]>
   stockItems: Record<string, TallyStockItem[]>
   fetchCompanies: () => Promise<void>
-  addCompany: (data: Omit<Company, 'id' | 'totalBills' | 'syncedBills' | 'pendingBills' | 'errorBills' | 'createdAt'> & { password: string }) => Promise<Company>
+  addCompany: (data: Omit<Company, 'id' | 'totalBills' | 'syncedBills' | 'pendingBills' | 'errorBills' | 'voucherCounter' | 'createdAt'> & { password: string }) => Promise<Company>
   updateMapping: (companyId: string, mapping: LedgerMapping) => Promise<void>
   getCompany: (id: string) => Company | undefined
   setLedgers: (companyId: string, ledgers: TallyLedger[]) => void

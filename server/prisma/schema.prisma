@@ -33,16 +33,17 @@ model User {
 }
 
 model Company {
-  id           String         @id @default(cuid())
-  name         String
-  gstin        String?
-  email        String         @unique
-  port         Int            @default(9000)
-  mapping      Json?
-  bills        Bill[]
-  users        User[]
-  ledgerCache  LedgerCache[]
-  createdAt    DateTime       @default(now())
+  id             String         @id @default(cuid())
+  name           String
+  gstin          String?
+  email          String         @unique
+  port           Int            @default(9000)
+  mapping        Json?
+  voucherCounter Int            @default(0)
+  bills          Bill[]
+  users          User[]
+  ledgerCache    LedgerCache[]
+  createdAt      DateTime       @default(now())
 }
 
 model LedgerCache {

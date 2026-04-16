@@ -5,11 +5,11 @@ import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
 import { MappingForm } from '@/components/company/MappingForm'
-import { XmlPreview } from '@/components/company/XmlPreview'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { useTallyLedgers } from '@/hooks'
 import { syncToTally } from '@/services'
 import { buildTallyXml } from '@/lib/utils'
+import { getNextVoucherCounter } from '@/lib/api'
 import { getTallyUrl, getTallyCompanyName, getTallyVoucherType } from './CompanySettings'
 import { normalizeLedgerMapping } from '@/types'
 import type { MappingInput } from '@/lib/validators'
@@ -20,7 +20,6 @@ export default function BillMapping() {
   const navigate   = useNavigate()
   const [saving, setSaving]     = useState(false)
   const [syncing, setSyncing]   = useState(false)
-  const [xml, setXml]           = useState<string | null>(null)
   const [syncDone, setSyncDone] = useState(false)
 
   const { user }     = useAuthStore()
@@ -120,7 +119,6 @@ export default function BillMapping() {
 
     const fromStatus = bill.status
     const { generatedXml, tallyMapping } = buildArtifacts(data)
-    setXml(generatedXml)
     setSyncDone(false)
 
     updateBillStatus(companyId, bill.id, 'mapped', {
@@ -151,62 +149,60 @@ export default function BillMapping() {
     if (!companyId) return
     setSyncing(true)
 
-    const fromStatus = bill.status
-    const { generatedXml, tallyMapping } = buildArtifacts(data)
-    setXml(generatedXml)
-    setSyncDone(false)
-
-    // Always persist mapping before attempting sync.
-    updateBillStatus(companyId, bill.id, 'mapped', {
-      billDate: data.billDate,
-      billNumber: data.billNumber,
-      totalAmount: data.totalAmount,
-      tallyXml: generatedXml,
-      tallyMapping,
-      syncError: undefined,
-      ...(data.lineItems && { lineItems: data.lineItems as Bill['lineItems'] }),
-      isEdited: data.lineItems
-        ? JSON.stringify(data.lineItems) !== JSON.stringify(bill.originalData?.lineItems)
-        : bill.isEdited,
-    })
-
-    // Moving error -> mapped means the bill is now pending again.
-    if (fromStatus === 'error') {
-      decrementError(companyId)
-      incrementPending(companyId)
-    }
-
     try {
+      const fromStatus = bill.status
+
+      // Get next voucher counter and build voucher number
+      const counter = await getNextVoucherCounter(companyId)
+      const voucherNumber = `${data.billNumber}_${counter}`
+      const dataWithVoucher: MappingInput = { ...data, voucherNumber }
+
+      const { generatedXml, tallyMapping } = buildArtifacts(dataWithVoucher)
+
+      // Always persist mapping before attempting sync.
+      updateBillStatus(companyId, bill.id, 'mapped', {
+        billDate: data.billDate,
+        billNumber: data.billNumber,
+        totalAmount: data.totalAmount,
+        tallyXml: generatedXml,
+        tallyMapping,
+        syncError: undefined,
+        ...(data.lineItems && { lineItems: data.lineItems as Bill['lineItems'] }),
+        isEdited: data.lineItems
+          ? JSON.stringify(data.lineItems) !== JSON.stringify(bill.originalData?.lineItems)
+          : bill.isEdited,
+      })
+
+      // Moving error -> mapped means the bill is now pending again.
+      if (fromStatus === 'error') {
+        decrementError(companyId)
+        incrementPending(companyId)
+      }
+
       const result = await syncToTally(generatedXml, tallyUrl)
 
       if (result.success && result.created > 0) {
-        // mapped -> synced
-        await updateBillStatus(companyId, bill.id, 'synced', {
+        toast.success('Bill synced to Tally successfully!')
+        setSyncDone(true)
+        incrementSynced(companyId)
+        decrementPending(companyId)
+        fetchCompanies().catch(() => {})
+        updateBillStatus(companyId, bill.id, 'synced', {
           tallyXml: generatedXml,
           syncedAt: new Date().toISOString(),
           syncError: undefined,
-        })
-        incrementSynced(companyId)
-        decrementPending(companyId)
-        fetchCompanies().catch(() => {}) // refresh admin counts from DB
-        setSyncDone(true)
-        toast.success('Bill synced to Tally successfully!')
+        }).catch(() => {})
       } else {
         throw new Error(result.message ?? 'Tally returned 0 created vouchers')
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sync failed'
-
-      // mapped -> error
-      await updateBillStatus(companyId, bill.id, 'error', {
-        tallyXml: generatedXml,
-        tallyMapping,
+      toast.error(msg)
+      updateBillStatus(companyId, bill.id, 'error', {
         syncError: msg,
-      })
-
+      }).catch(() => {})
       decrementPending(companyId)
       incrementError(companyId)
-      toast.error(msg)
     } finally {
       setSyncing(false)
     }
@@ -263,18 +259,13 @@ export default function BillMapping() {
                 igst:     normalizeLedgerMapping(company.mapping).igstLedgers[0],
               } : null}
               savedLedgerSets={normalizeLedgerMapping(company?.mapping)}
+              nextVoucherNumber={`${bill.billNumber}_${(company?.voucherCounter ?? 0) + 1}`}
               onSaveMapping={handleSaveMapping}
               onSyncToTally={handleSync}
             />
           </div>
         )}
 
-        {/* XML preview shown after generation */}
-        {xml && (
-          <div className="card p-6">
-            <XmlPreview xml={xml} />
-          </div>
-        )}
       </div>
     </>
   )

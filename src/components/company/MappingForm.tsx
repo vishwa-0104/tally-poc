@@ -59,6 +59,7 @@ interface MappingFormProps {
   syncing: boolean
   defaultMapping?: { purchase?: string; cgst?: string; sgst?: string; igst?: string } | null
   savedLedgerSets?: LedgerMapping | null
+  nextVoucherNumber?: string
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -72,6 +73,7 @@ export function MappingForm({
   syncing,
   defaultMapping,
   savedLedgerSets,
+  nextVoucherNumber,
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
@@ -81,7 +83,7 @@ export function MappingForm({
   const computedRoundOff = parseFloat(
     (bill.totalAmount - bill.subtotal - bill.cgstAmount - bill.sgstAmount - bill.igstAmount).toFixed(2)
   )
-  const defaultRoundOff = bill.roundOffAmount ?? (Math.abs(computedRoundOff) >= 0.005 ? computedRoundOff : 0)
+  const defaultRoundOff = bill.roundOffAmount ?? (Math.abs(computedRoundOff) >= 0.005 ? computedRoundOff : 0.25)
 
   const gstinMatch = bill.vendorGstin
     ? ledgers.find((l) => l.gstin && l.gstin.trim().toUpperCase() === bill.vendorGstin!.trim().toUpperCase())
@@ -207,13 +209,12 @@ export function MappingForm({
       <div className="mt-4 flex gap-6 flex-wrap">
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-            Tally Voucher Number <span className="font-normal text-gray-400">(optional — leave blank for auto)</span>
+            Tally Voucher Number
           </label>
-          <input
-            {...register('voucherNumber')}
-            placeholder="e.g. 1288"
-            className="input-base w-48"
-          />
+          <div className="input-base w-48 bg-gray-50 text-gray-500 cursor-not-allowed select-none">
+            {nextVoucherNumber ?? `${bill.billNumber}_1`}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Auto-assigned on sync</p>
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
@@ -324,18 +325,18 @@ export function MappingForm({
       {/* Submit */}
       <div className="flex justify-end mt-6">
         <div className="flex items-center gap-3">
-          <Button type="submit" variant="outline" size="lg" loading={saving} disabled={syncing}>
+          <Button type="submit" variant="outline" loading={saving} disabled={syncing} className="whitespace-nowrap px-6 py-2.5">
             {saving ? 'Saving…' : 'Save mapping'}
           </Button>
           <Button
             type="button"
             variant="teal"
-            size="lg"
             loading={syncing}
             disabled={saving || !canSync}
+            className="whitespace-nowrap px-6 py-2.5"
             onClick={handleSubmit(onSyncToTally, (errors) => console.error('[MappingForm] Sync validation failed:', errors))}
           >
-            {syncing ? 'Syncing to Tally…' : 'Sync to Tally'}
+            {syncing ? 'Pushing to Tally…' : 'Push to Tally'}
           </Button>
         </div>
       </div>

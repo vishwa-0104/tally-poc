@@ -7,20 +7,14 @@ import { StatCard } from '@/components/ui'
 import { Button } from '@/components/ui/Button'
 import { BillsTable, UploadModal } from '@/components/company'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
-import { buildTallyXml } from '@/lib/utils'
-import { syncToTally } from '@/services'
-import { getTallyUrl } from './CompanySettings'
-import { normalizeLedgerMapping } from '@/types'
-import type { TallyBillMapping } from '@/types'
 
 export default function CompanyBills() {
   const [showUpload, setShowUpload] = useState(false)
-  const [syncingAll, setSyncingAll] = useState(false)
   const navigate = useNavigate()
 
-  const { user }    = useAuthStore()
-  const { getBills, updateBillStatus } = useBillStore()
-  const { getCompany, fetchCompanies, incrementSynced, decrementPending, incrementError, decrementError } = useCompanyStore()
+  const { user }  = useAuthStore()
+  const { getBills } = useBillStore()
+  const { getCompany } = useCompanyStore()
 
   const company = user?.companyId ? getCompany(user.companyId) : null
   const bills   = user?.companyId ? getBills(user.companyId) : []
@@ -28,114 +22,6 @@ export default function CompanyBills() {
   const synced  = bills.filter((b) => b.status === 'synced').length
   const pending = bills.filter((b) => ['parsed', 'mapped'].includes(b.status)).length
   const errors  = bills.filter((b) => b.status === 'error').length
-
-  const syncableBills = bills.filter((b) => b.status === 'parsed' || b.status === 'mapped' || b.status === 'error')
-
-  const getXmlForBill = (bill: (typeof bills)[number]) => {
-    if (bill.tallyXml) {
-      return { xml: bill.tallyXml, mappingUsed: bill.tallyMapping ?? null }
-    }
-
-    const mapping   = bill.tallyMapping ?? null
-    const normalized = normalizeLedgerMapping(company?.mapping)
-
-    const vendorLedger   = mapping?.vendorLedger   ?? bill.vendorName
-    const purchaseLedger = mapping?.purchaseLedger  ?? normalized.purchaseLedgers[0] ?? ''
-    const cgstLedger     = mapping?.cgstLedger      ?? normalized.cgstLedgers[0]     ?? ''
-    const sgstLedger     = mapping?.sgstLedger      ?? normalized.sgstLedgers[0]     ?? ''
-    const igstLedger     = mapping?.igstLedger      ?? normalized.igstLedgers[0]     ?? ''
-
-    const hasIgst      = bill.igstAmount > 0
-    const taxLedgersOk = hasIgst
-      ? !!igstLedger.trim()
-      : !!(cgstLedger.trim() && sgstLedger.trim())
-
-    if (!purchaseLedger || !taxLedgersOk) return null
-
-    const mappingUsed: TallyBillMapping = {
-      vendorLedger,
-      purchaseLedger,
-      cgstLedger:  cgstLedger  || undefined,
-      sgstLedger:  sgstLedger  || undefined,
-      igstLedger:  igstLedger  || undefined,
-    }
-
-    const xml = buildTallyXml({
-      vendorLedger:  mappingUsed.vendorLedger,
-      purchaseLedger: mappingUsed.purchaseLedger,
-      cgstLedger:    mappingUsed.cgstLedger,
-      sgstLedger:    mappingUsed.sgstLedger,
-      igstLedger:    mappingUsed.igstLedger,
-      billNumber:    bill.billNumber,
-      billDate:      bill.billDate,
-      totalAmount:   bill.totalAmount,
-      subtotal:      bill.subtotal,
-      cgstAmount:    bill.cgstAmount,
-      sgstAmount:    bill.sgstAmount,
-      igstAmount:    bill.igstAmount,
-      lineItems:     bill.lineItems,
-    })
-    return { xml, mappingUsed }
-  }
-
-  const handleSyncAll = async () => {
-    if (!company || syncableBills.length === 0) return
-    setSyncingAll(true)
-    try {
-      for (const bill of syncableBills) {
-        const built = getXmlForBill(bill)
-        if (!built) {
-          await updateBillStatus(company.id, bill.id, 'error', {
-            syncError: company?.mapping
-              ? 'Mapping not available for this bill. Please open it and save mapping.'
-              : 'Company ledger mapping is not configured. Please set it in Settings, or open the bill and save mapping.',
-          })
-          if (bill.status === 'parsed' || bill.status === 'mapped') {
-            decrementPending(company.id)
-            incrementError(company.id)
-          }
-          continue
-        }
-
-        const { xml, mappingUsed } = built
-
-        try {
-          const result = await syncToTally(xml, getTallyUrl())
-          if (result.success && result.created > 0) {
-            await updateBillStatus(company.id, bill.id, 'synced', {
-              tallyXml: xml,
-              tallyMapping: mappingUsed ?? undefined,
-              syncedAt: new Date().toISOString(),
-              syncError: undefined,
-            })
-
-            if (bill.status === 'error') decrementError(company.id)
-            else decrementPending(company.id)
-
-            incrementSynced(company.id)
-          } else {
-            throw new Error(result.message ?? 'Tally returned 0 created vouchers')
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Sync failed'
-
-          await updateBillStatus(company.id, bill.id, 'error', {
-            tallyXml: xml,
-            tallyMapping: mappingUsed ?? undefined,
-            syncError: msg,
-          })
-
-          if (bill.status === 'parsed' || bill.status === 'mapped') {
-            decrementPending(company.id)
-            incrementError(company.id)
-          }
-        }
-      }
-    } finally {
-      setSyncingAll(false)
-      fetchCompanies().catch(() => {}) // refresh admin-visible counts from DB
-    }
-  }
 
   const handleParsed = (billId: string) => {
     navigate(`/company/bills/${billId}`)
@@ -149,15 +35,6 @@ export default function CompanyBills() {
         actions={
           <>
             <ExtensionStatus />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={syncingAll || syncableBills.length === 0}
-              loading={syncingAll}
-              onClick={handleSyncAll}
-            >
-              {syncingAll ? 'Syncing…' : `Sync All (${syncableBills.length})`}
-            </Button>
             <Button variant="teal" size="sm" onClick={() => setShowUpload(true)}>
               <Upload className="w-3.5 h-3.5" />
               Upload Bill
@@ -169,10 +46,10 @@ export default function CompanyBills() {
       <div className="p-7">
         {/* Stats */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
-          <StatCard label="Total Bills" value={bills.length} sub="All time"       accent="blue"  />
-          <StatCard label="Synced"      value={synced}       sub="In Tally"       accent="green" />
-          <StatCard label="Pending"     value={pending}      sub="Needs mapping or sync"  accent="amber" />
-          <StatCard label="Errors"      value={errors}       sub="Need attention" accent="red"   />
+          <StatCard label="Total Bills" value={bills.length} sub="All time"                accent="blue"  />
+          <StatCard label="Synced"      value={synced}       sub="In Tally"                accent="green" />
+          <StatCard label="Pending"     value={pending}      sub="Needs mapping or sync"   accent="amber" />
+          <StatCard label="Errors"      value={errors}       sub="Need attention"          accent="red"   />
         </div>
 
         {/* Bills table */}

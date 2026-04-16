@@ -2,6 +2,11 @@ import axios from 'axios'
 
 export const api = axios.create({ baseURL: '/api' })
 
+export async function getNextVoucherCounter(companyId: string): Promise<number> {
+  const { data } = await api.post<{ counter: number }>(`/companies/${companyId}/voucher-counter/next`)
+  return data.counter
+}
+
 // Attach JWT from localStorage on every request
 api.interceptors.request.use((config) => {
   const raw = localStorage.getItem('tally-auth')

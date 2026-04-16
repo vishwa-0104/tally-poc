@@ -55,6 +55,7 @@ export interface Company {
   syncedBills: number
   pendingBills: number
   errorBills: number
+  voucherCounter: number
   mapping: LedgerMapping | null
   createdAt: string
 }

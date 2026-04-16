@@ -118,6 +118,19 @@ companiesRouter.put('/companies/:id/ledgers', async (req, res) => {
   res.json({ saved: incoming.length })
 })
 
+// POST /api/companies/:id/voucher-counter/next — atomically increment and return next counter
+companiesRouter.post('/companies/:id/voucher-counter/next', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const company = await prisma.company.update({
+    where: { id: req.params.id },
+    data:  { voucherCounter: { increment: 1 } },
+    select: { voucherCounter: true },
+  })
+  res.json({ counter: company.voucherCounter })
+})
+
 // PUT /api/companies/:id/mapping
 companiesRouter.put('/companies/:id/mapping', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {

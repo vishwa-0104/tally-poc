@@ -11,6 +11,7 @@ export const MOCK_COMPANIES: Company[] = [
     syncedBills: 24,
     pendingBills: 3,
     errorBills: 1,
+    voucherCounter: 0,
     mapping: {
       purchaseLedgers: ['Grocery Purchases'],
       cgstLedgers: ['Input CGST @2.5%'],
@@ -29,6 +30,7 @@ export const MOCK_COMPANIES: Company[] = [
     syncedBills: 13,
     pendingBills: 0,
     errorBills: 2,
+    voucherCounter: 0,
     mapping: {
       purchaseLedgers: ['Electronics Purchase'],
       cgstLedgers: ['Input CGST @9%'],
@@ -47,6 +49,7 @@ export const MOCK_COMPANIES: Company[] = [
     syncedBills: 9,
     pendingBills: 0,
     errorBills: 0,
+    voucherCounter: 0,
     mapping: null,
     createdAt: '2025-02-01T00:00:00Z',
   },

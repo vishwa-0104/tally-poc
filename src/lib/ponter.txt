@@ -1,0 +1,17 @@
+1. Toaster not working
+2. Unique voucher number (invoice_number+1)
+3. Date field in XML should be current date
+4. Remove xml response from bottom (may be as setting)
+5. Alignment of buttons
+6. Sync status should be updated and button should be disabled
+7. Push to tally button name update
+8. Dashboard numbers
+9. Sync all button hide
+10. Save settings
+11. My bill pagination dashboard
+12. Settings - save ledgers and map ledgers according to the GST numbers
+12. Multi bill parsing
+13. Add status on dashboard and sync bill in background
+14. Product input box filled automatically and save if mapped
+15. Group syncing
+16. Subscription need added
