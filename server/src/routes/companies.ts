@@ -102,19 +102,76 @@ companiesRouter.put('/companies/:id/ledgers', async (req, res) => {
   const incoming  = result.data
   console.log(`[Ledgers] PUT /${companyId}/ledgers — received ${incoming.length} ledgers`)
 
+  const CHUNK = 200
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < incoming.length; i += CHUNK) {
+      const chunk = incoming.slice(i, i + CHUNK)
+      await tx.$executeRaw`
+        INSERT INTO "LedgerCache" (id, "companyId", name, "group", gstin, state, "openingBalance", "gstRegistrationType")
+        SELECT gen_random_uuid(), ${companyId}, l.name, l."group", l.gstin, l.state, l."openingBalance", l."gstRegistrationType"
+        FROM json_to_recordset(${JSON.stringify(chunk)}::json) AS l(
+          name text, "group" text, gstin text, state text, "openingBalance" text, "gstRegistrationType" text
+        )
+        ON CONFLICT ("companyId", name) DO UPDATE SET
+          "group"               = EXCLUDED."group",
+          gstin                 = EXCLUDED.gstin,
+          state                 = EXCLUDED.state,
+          "openingBalance"      = EXCLUDED."openingBalance",
+          "gstRegistrationType" = EXCLUDED."gstRegistrationType"
+      `
+    }
+    await tx.ledgerCache.deleteMany({
+      where: { companyId, name: { notIn: incoming.map((l) => l.name) } },
+    })
+  }, { timeout: 60000 })
+
+  console.log(`[Ledgers] Upserted ${incoming.length} ledgers for company ${companyId}`)
+  res.json({ saved: incoming.length })
+})
+
+// GET /api/companies/:id/stock-items
+companiesRouter.get('/companies/:id/stock-items', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const items = await prisma.stockItemCache.findMany({
+    where: { companyId: req.params.id },
+    orderBy: { name: 'asc' },
+  })
+  res.json(items)
+})
+
+// PUT /api/companies/:id/stock-items — replace all cached stock items
+companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.array(z.object({
+    name:  z.string(),
+    group: z.string().default(''),
+    unit:  z.string().default(''),
+  }))
+  const result = schema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: 'Invalid input' }); return
+  }
+
+  const companyId = req.params.id
+  const incoming  = result.data
+
   await prisma.$transaction([
-    ...incoming.map((l) =>
-      prisma.ledgerCache.upsert({
-        where:  { companyId_name: { companyId, name: l.name } },
-        update: { group: l.group ?? '', gstin: l.gstin, state: l.state, openingBalance: l.openingBalance, gstRegistrationType: l.gstRegistrationType },
-        create: { companyId, name: l.name, group: l.group ?? '', gstin: l.gstin, state: l.state, openingBalance: l.openingBalance, gstRegistrationType: l.gstRegistrationType },
+    ...incoming.map((item) =>
+      prisma.stockItemCache.upsert({
+        where:  { companyId_name: { companyId, name: item.name } },
+        update: { group: item.group, unit: item.unit },
+        create: { companyId, name: item.name, group: item.group, unit: item.unit },
       })
     ),
-    prisma.ledgerCache.deleteMany({
-      where: { companyId, name: { notIn: incoming.map((l) => l.name) } },
+    prisma.stockItemCache.deleteMany({
+      where: { companyId, name: { notIn: incoming.map((i) => i.name) } },
     }),
   ])
-  console.log(`[Ledgers] Upserted ${incoming.length} ledgers for company ${companyId}`)
+
   res.json({ saved: incoming.length })
 })
 

@@ -19,7 +19,6 @@ interface LedgerInputProps {
 }
 
 function LedgerInput({ id, label, required, matched, ledgers, pinnedNames = [], registration }: LedgerInputProps) {
-  // Pinned names (from saved ledger sets) shown first, then remaining Tally ledgers
   const allNames = [
     ...pinnedNames,
     ...ledgers.map((l) => l.name).filter((n) => !pinnedNames.includes(n)),
@@ -57,7 +56,6 @@ interface MappingFormProps {
   stockItems: { name: string }[]
   saving: boolean
   syncing: boolean
-  defaultMapping?: { purchase?: string; cgst?: string; sgst?: string; igst?: string } | null
   savedLedgerSets?: LedgerMapping | null
   nextVoucherNumber?: string
   onSaveMapping: (data: MappingInput) => void
@@ -71,81 +69,117 @@ export function MappingForm({
   stockItems,
   saving,
   syncing,
-  defaultMapping,
   savedLedgerSets,
   nextVoucherNumber,
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
-  const hasIgst = bill.igstAmount > 0
 
-  // Default round-off: use AI-parsed value if present, otherwise derive from totals
-  const computedRoundOff = parseFloat(
-    (bill.totalAmount - bill.subtotal - bill.cgstAmount - bill.sgstAmount - bill.igstAmount).toFixed(2)
-  )
-  const defaultRoundOff = bill.roundOffAmount ?? (Math.abs(computedRoundOff) >= 0.005 ? computedRoundOff : 0.25)
+  // ── Determine tax type ──────────────────────────────────────────────────────
+  const isInterstate = bill.igstAmount > 0
 
+  // ── Derive rate buckets from line items ─────────────────────────────────────
+  const ratesPresent = new Set(bill.lineItems.map((i) => i.gstRate))
+  let show5      = ratesPresent.has(5)
+  let show18     = ratesPresent.has(18)
+  let showExempt = ratesPresent.has(0)
+
+  // Fallback: when line items are absent or carry no recognised rate, infer from bill totals
+  if (!show5 && !show18 && !showExempt) {
+    const totalTax    = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
+    const effectiveRate = bill.subtotal > 0 ? Math.round(totalTax / bill.subtotal * 100) : 0
+    if (totalTax === 0)        showExempt = true
+    else if (effectiveRate <= 7) show5    = true   // ~5 %
+    else                         show18   = true   // ~18 %
+  }
+
+  // Safety: always show at least one field
+  if (!show5 && !show18 && !showExempt) showExempt = true
+
+  // ── Pre-fill values from company mapping ────────────────────────────────────
+  const prefillPurchase5      = isInterstate ? savedLedgerSets?.purchase_interstate_5  : savedLedgerSets?.purchase_up_5
+  const prefillPurchase18     = isInterstate ? savedLedgerSets?.purchase_interstate_18 : savedLedgerSets?.purchase_up_18
+  const prefillPurchaseExempt = savedLedgerSets?.purchase_exempt
+  const prefillCgst5          = savedLedgerSets?.input_cgst_2_5
+  const prefillSgst5          = savedLedgerSets?.input_sgst_2_5
+  const prefillCgst18         = savedLedgerSets?.input_cgst_9
+  const prefillSgst18         = savedLedgerSets?.input_sgst_9
+  const prefillIgst5          = savedLedgerSets?.igst_5
+  const prefillIgst18         = savedLedgerSets?.igst_18
+
+  // ── Vendor matching ─────────────────────────────────────────────────────────
   const gstinMatch = bill.vendorGstin
     ? ledgers.find((l) => l.gstin && l.gstin.trim().toUpperCase() === bill.vendorGstin!.trim().toUpperCase())
     : null
-
   const vendorNameMatch = !gstinMatch && ledgers.some((l) => l.name === bill.vendorName)
+  const resolvedVendor  = gstinMatch?.name ?? (vendorNameMatch ? bill.vendorName : '')
 
-  // Auto-detect from ledger group/name when defaultMapping not set
-  const autoDetect = (filter: (l: TallyLedger) => boolean) => {
-    const matches = ledgers.filter(filter)
-    return matches.length === 1 ? matches[0].name : ''
-  }
+  // ── Round-off ───────────────────────────────────────────────────────────────
+  // Use AI-extracted value if present; otherwise derive from the bill's own totals.
+  // Only treat as meaningful when the absolute value is ≥ ₹0.01.
+  const computedRoundOff = parseFloat(
+    (bill.totalAmount - bill.subtotal - bill.cgstAmount - bill.sgstAmount - bill.igstAmount).toFixed(2)
+  )
+  const roundOffValue  = bill.roundOffAmount ?? (Math.abs(computedRoundOff) >= 0.01 ? computedRoundOff : null)
+  const hasRoundOff    = roundOffValue !== null && Math.abs(roundOffValue) >= 0.01
 
-  const resolvedVendor   = gstinMatch?.name ?? (vendorNameMatch ? bill.vendorName : '')
-  const resolvedPurchase = defaultMapping?.purchase
-    || autoDetect((l) => l.group.toLowerCase().includes('purchase'))
-  const resolvedCgst     = defaultMapping?.cgst
-    || autoDetect((l) => l.name.toLowerCase().includes('cgst'))
-  const resolvedSgst     = defaultMapping?.sgst
-    || autoDetect((l) => l.name.toLowerCase().includes('sgst'))
-  const resolvedIgst     = defaultMapping?.igst
-    || autoDetect((l) => l.name.toLowerCase().includes('igst'))
-
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-  } = useForm<MappingInput>({
+  // ── Form ────────────────────────────────────────────────────────────────────
+  const { register, handleSubmit, setValue, watch } = useForm<MappingInput>({
     resolver: zodResolver(mappingSchema),
     defaultValues: {
-      vendorLedger:   resolvedVendor   || undefined,
-      purchaseLedger: resolvedPurchase || undefined,
-      cgstLedger:     resolvedCgst     || undefined,
-      sgstLedger:     resolvedSgst     || undefined,
-      igstLedger:     resolvedIgst     || undefined,
+      vendorLedger:          resolvedVendor || undefined,
+      purchaseLedger_5:      show5      ? prefillPurchase5      || undefined : undefined,
+      purchaseLedger_18:     show18     ? prefillPurchase18     || undefined : undefined,
+      purchaseLedger_exempt: showExempt ? prefillPurchaseExempt || undefined : undefined,
+      cgstLedger_5:  !isInterstate && show5  ? prefillCgst5  || undefined : undefined,
+      sgstLedger_5:  !isInterstate && show5  ? prefillSgst5  || undefined : undefined,
+      cgstLedger_18: !isInterstate && show18 ? prefillCgst18 || undefined : undefined,
+      sgstLedger_18: !isInterstate && show18 ? prefillSgst18 || undefined : undefined,
+      igstLedger_5:  isInterstate  && show5  ? prefillIgst5  || undefined : undefined,
+      igstLedger_18: isInterstate  && show18 ? prefillIgst18 || undefined : undefined,
       billDate:       bill.billDate,
       billNumber:     bill.billNumber,
       totalAmount:    bill.totalAmount,
-      roundOffAmount: defaultRoundOff,
+      roundOffAmount: hasRoundOff ? roundOffValue! : undefined,
       lineItems:      bill.lineItems,
     },
   })
 
+  // Re-fill when ledger sets or vendor resolve after async load
   useEffect(() => {
-    if (resolvedVendor)   setValue('vendorLedger',   resolvedVendor)
-    if (resolvedPurchase) setValue('purchaseLedger', resolvedPurchase)
-    if (resolvedCgst)     setValue('cgstLedger',     resolvedCgst)
-    if (resolvedSgst)     setValue('sgstLedger',     resolvedSgst)
-    if (resolvedIgst)     setValue('igstLedger',     resolvedIgst)
-  }, [resolvedVendor, resolvedPurchase, resolvedCgst, resolvedSgst, resolvedIgst]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (resolvedVendor) setValue('vendorLedger', resolvedVendor)
 
-  const watchedPurchase = watch('purchaseLedger')
-  const watchedCgst     = watch('cgstLedger')
-  const watchedSgst     = watch('sgstLedger')
-  const watchedIgst     = watch('igstLedger')
+    if (show5      && prefillPurchase5)      setValue('purchaseLedger_5',      prefillPurchase5)
+    if (show18     && prefillPurchase18)     setValue('purchaseLedger_18',     prefillPurchase18)
+    if (showExempt && prefillPurchaseExempt) setValue('purchaseLedger_exempt', prefillPurchaseExempt)
 
-  // Sync requires purchase + (cgst+sgst for domestic, igst for interstate)
-  const taxLedgersOk = hasIgst
-    ? !!watchedIgst?.trim()
-    : !!(watchedCgst?.trim() && watchedSgst?.trim())
-  const canSync = !!watchedPurchase?.trim() && taxLedgersOk
+    if (!isInterstate) {
+      if (show5  && prefillCgst5)  setValue('cgstLedger_5',  prefillCgst5)
+      if (show5  && prefillSgst5)  setValue('sgstLedger_5',  prefillSgst5)
+      if (show18 && prefillCgst18) setValue('cgstLedger_18', prefillCgst18)
+      if (show18 && prefillSgst18) setValue('sgstLedger_18', prefillSgst18)
+    } else {
+      if (show5  && prefillIgst5)  setValue('igstLedger_5',  prefillIgst5)
+      if (show18 && prefillIgst18) setValue('igstLedger_18', prefillIgst18)
+    }
+  }, [resolvedVendor, savedLedgerSets]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Can-sync guard ──────────────────────────────────────────────────────────
+  const wP5  = watch('purchaseLedger_5')
+  const wP18 = watch('purchaseLedger_18')
+  const wPEx = watch('purchaseLedger_exempt')
+  const wC5  = watch('cgstLedger_5');  const wS5  = watch('sgstLedger_5')
+  const wC18 = watch('cgstLedger_18'); const wS18 = watch('sgstLedger_18')
+  const wI5  = watch('igstLedger_5');  const wI18 = watch('igstLedger_18')
+
+  const purchaseOk = (!show5 || !!wP5?.trim()) && (!show18 || !!wP18?.trim()) && (!showExempt || !!wPEx?.trim())
+  const taxOk = isInterstate
+    ? (!show5 || !!wI5?.trim()) && (!show18 || !!wI18?.trim())
+    : (!show5 || (!!wC5?.trim() && !!wS5?.trim())) && (!show18 || (!!wC18?.trim() && !!wS18?.trim()))
+  const canSync = purchaseOk && ((!show5 && !show18) || taxOk)
+
+  // All ledger options for datalist
+  const allLedgerNames = ledgers.map((l) => l.name)
 
   return (
     <form onSubmit={handleSubmit(onSaveMapping)} noValidate>
@@ -182,26 +216,134 @@ export function MappingForm({
         </div>
       )}
 
-      {/* Ledger fields — always editable inputs so RHF registers every field */}
-      <div className="grid grid-cols-2 gap-x-4 mt-5">
-        <LedgerInput id="vendor"   label="Vendor Ledger"   matched={!!resolvedVendor}   ledgers={ledgers} registration={register('vendorLedger')} />
-        <LedgerInput id="purchase" label="Purchase Ledger" matched={!!resolvedPurchase} required ledgers={ledgers} pinnedNames={savedLedgerSets?.purchaseLedgers} registration={register('purchaseLedger')} />
-
-        {/* CGST / SGST shown for domestic bills; IGST for interstate */}
-        {!hasIgst && (
-          <>
-            <LedgerInput id="cgst" label="CGST Ledger" matched={!!resolvedCgst} required ledgers={ledgers} pinnedNames={savedLedgerSets?.cgstLedgers} registration={register('cgstLedger')} />
-            <LedgerInput id="sgst" label="SGST Ledger" matched={!!resolvedSgst} required ledgers={ledgers} pinnedNames={savedLedgerSets?.sgstLedgers} registration={register('sgstLedger')} />
-          </>
-        )}
-        {hasIgst && (
-          <LedgerInput id="igst" label="IGST Ledger" matched={!!resolvedIgst} required ledgers={ledgers} pinnedNames={savedLedgerSets?.igstLedgers} registration={register('igstLedger')} />
-        )}
+      {/* ── Vendor ── */}
+      <div className="mt-5">
+        <LedgerInput
+          id="vendor"
+          label="Vendor Ledger"
+          matched={!!resolvedVendor}
+          ledgers={ledgers}
+          registration={register('vendorLedger')}
+        />
       </div>
+
+      {/* ── Purchase Ledgers ── */}
+      <div className="mt-2">
+        <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
+        <div className="grid grid-cols-2 gap-x-4">
+          {show5 && (
+            <LedgerInput
+              id="purchase-5"
+              label="Purchase Ledger (5%)"
+              required
+              ledgers={ledgers}
+              pinnedNames={prefillPurchase5 ? [prefillPurchase5] : []}
+              registration={register('purchaseLedger_5')}
+            />
+          )}
+          {show18 && (
+            <LedgerInput
+              id="purchase-18"
+              label="Purchase Ledger (18%)"
+              required
+              ledgers={ledgers}
+              pinnedNames={prefillPurchase18 ? [prefillPurchase18] : []}
+              registration={register('purchaseLedger_18')}
+            />
+          )}
+          {showExempt && (
+            <LedgerInput
+              id="purchase-exempt"
+              label="Purchase Ledger (Exempt)"
+              ledgers={ledgers}
+              pinnedNames={prefillPurchaseExempt ? [prefillPurchaseExempt] : []}
+              registration={register('purchaseLedger_exempt')}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ── CGST / SGST (intra-state) ── */}
+      {!isInterstate && (show5 || show18) && (
+        <div className="mt-2">
+          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">CGST / SGST</p>
+          <div className="grid grid-cols-2 gap-x-4">
+            {show5 && (
+              <>
+                <LedgerInput
+                  id="cgst-5"
+                  label="CGST (5%)"
+                  required
+                  ledgers={ledgers}
+                  pinnedNames={prefillCgst5 ? [prefillCgst5] : []}
+                  registration={register('cgstLedger_5')}
+                />
+                <LedgerInput
+                  id="sgst-5"
+                  label="SGST (5%)"
+                  required
+                  ledgers={ledgers}
+                  pinnedNames={prefillSgst5 ? [prefillSgst5] : []}
+                  registration={register('sgstLedger_5')}
+                />
+              </>
+            )}
+            {show18 && (
+              <>
+                <LedgerInput
+                  id="cgst-18"
+                  label="CGST (18%)"
+                  required
+                  ledgers={ledgers}
+                  pinnedNames={prefillCgst18 ? [prefillCgst18] : []}
+                  registration={register('cgstLedger_18')}
+                />
+                <LedgerInput
+                  id="sgst-18"
+                  label="SGST (18%)"
+                  required
+                  ledgers={ledgers}
+                  pinnedNames={prefillSgst18 ? [prefillSgst18] : []}
+                  registration={register('sgstLedger_18')}
+                />
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── IGST (interstate) ── */}
+      {isInterstate && (show5 || show18) && (
+        <div className="mt-2">
+          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">IGST</p>
+          <div className="grid grid-cols-2 gap-x-4">
+            {show5 && (
+              <LedgerInput
+                id="igst-5"
+                label="IGST (5%)"
+                required
+                ledgers={ledgers}
+                pinnedNames={prefillIgst5 ? [prefillIgst5] : []}
+                registration={register('igstLedger_5')}
+              />
+            )}
+            {show18 && (
+              <LedgerInput
+                id="igst-18"
+                label="IGST (18%)"
+                required
+                ledgers={ledgers}
+                pinnedNames={prefillIgst18 ? [prefillIgst18] : []}
+                registration={register('igstLedger_18')}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       {!canSync && !ledgersLoading && (
         <p className="text-xs text-amber-600 mt-1">
-          Purchase and tax ledgers are required to sync. Configure them above or set defaults in Settings.
+          Fill all required purchase and tax ledgers to enable sync.
         </p>
       )}
 
@@ -216,18 +358,20 @@ export function MappingForm({
           </div>
           <p className="text-xs text-gray-400 mt-1">Auto-assigned on sync</p>
         </div>
-        <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-            Round Off <span className="font-normal text-gray-400">(₹ — negative to deduct)</span>
-          </label>
-          <input
-            {...register('roundOffAmount')}
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            className="input-base w-32"
-          />
-        </div>
+        {hasRoundOff && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+              Round Off <span className="font-normal text-gray-400">(₹ — negative to deduct)</span>
+            </label>
+            <input
+              {...register('roundOffAmount')}
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              className="input-base w-32"
+            />
+          </div>
+        )}
       </div>
 
       {/* Line items */}
@@ -250,7 +394,7 @@ export function MappingForm({
                       <input {...register(`lineItems.${i}.description`)} className="w-full min-w-[140px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-tally-400 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
@@ -273,7 +417,7 @@ export function MappingForm({
                     <td className="px-2 py-1.5">
                       <input
                         {...register(`lineItems.${i}.tallyStockItem`)}
-                        list={`stock-items-list`}
+                        list="stock-items-list"
                         autoComplete="off"
                         placeholder="Select stock item…"
                         className="w-40 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
@@ -285,12 +429,15 @@ export function MappingForm({
               <datalist id="stock-items-list">
                 {stockItems.map((item) => <option key={item.name} value={item.name} />)}
               </datalist>
+              <datalist id="all-ledgers-list">
+                {allLedgerNames.map((name) => <option key={name} value={name} />)}
+              </datalist>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                 <tr className="border-t border-gray-100">
                   <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
                   <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
                 </tr>
-                {!hasIgst && (
+                {!isInterstate && (
                   <>
                     <tr className="border-t border-gray-100">
                       <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
@@ -302,16 +449,18 @@ export function MappingForm({
                     </tr>
                   </>
                 )}
-                {hasIgst && (
+                {isInterstate && (
                   <tr className="border-t border-gray-100">
                     <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
                     <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.igstAmount)}</td>
                   </tr>
                 )}
-                <tr className="border-t border-gray-100">
-                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
-                  <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(defaultRoundOff)}</td>
-                </tr>
+                {hasRoundOff && (
+                  <tr className="border-t border-gray-100">
+                    <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(roundOffValue!)}</td>
+                  </tr>
+                )}
                 <tr className="border-t-2 border-gray-300">
                   <td colSpan={7} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>

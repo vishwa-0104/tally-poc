@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
-import { RefreshCw, CheckCircle, X, Plus } from 'lucide-react'
+import { RefreshCw, CheckCircle } from 'lucide-react'
 import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
@@ -19,81 +19,29 @@ export function getTallyUrl():         string { return localStorage.getItem(TALL
 export function getTallyCompanyName(): string { return localStorage.getItem(TALLY_COMPANY_KEY)      ?? '' }
 export function getTallyVoucherType(): string { return localStorage.getItem(TALLY_VOUCHER_TYPE_KEY) || DEFAULT_VOUCHER_TYPE }
 
-// ── Multi-ledger tag row ──────────────────────────────────────────────────────
+// ── Single ledger dropdown ────────────────────────────────────────────────────
 
-interface LedgerTagRowProps {
+interface LedgerSelectProps {
   label: string
-  required?: boolean
-  values: string[]
+  value: string | undefined
   ledgerOptions: string[]
-  onChange: (values: string[]) => void
+  onChange: (v: string) => void
 }
 
-function LedgerTagRow({ label, required, values, ledgerOptions, onChange }: LedgerTagRowProps) {
-  const [input, setInput] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-  const listId = `ledger-list-${label.replace(/\s+/g, '-').toLowerCase()}`
-
-  const add = () => {
-    const v = input.trim()
-    if (!v || values.includes(v)) { setInput(''); return }
-    onChange([...values, v])
-    setInput('')
-    inputRef.current?.focus()
-  }
-
-  const remove = (name: string) => onChange(values.filter((v) => v !== name))
-
+function LedgerSelect({ label, value, ledgerOptions, onChange }: LedgerSelectProps) {
   return (
-    <div className="mb-5">
-      <label className="block text-xs font-semibold text-gray-700 mb-2 tracking-wide uppercase">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-
-      {/* Tags */}
-      {values.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {values.map((name) => (
-            <span
-              key={name}
-              className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-50 text-teal-800 border border-teal-200 rounded-full text-xs font-medium"
-            >
-              {name}
-              <button
-                type="button"
-                onClick={() => remove(name)}
-                className="hover:text-red-500 transition-colors"
-                aria-label={`Remove ${name}`}
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Input + Add */}
-      <div className="flex gap-2">
-        <input
-          ref={inputRef}
-          list={listId}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-          placeholder={`Type or select ${label.toLowerCase()}…`}
-          autoComplete="off"
-          className="input-base flex-1 text-sm"
-        />
-        <datalist id={listId}>
-          {ledgerOptions.filter((o) => !values.includes(o)).map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-        <Button type="button" variant="outline" size="sm" onClick={add}>
-          <Plus className="w-3.5 h-3.5" />
-          Add
-        </Button>
-      </div>
+    <div className="flex items-center gap-3 mb-3">
+      <label className="text-xs font-medium text-gray-600 w-44 shrink-0">{label}</label>
+      <select
+        value={value ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="input-base flex-1 text-sm"
+      >
+        <option value="">— Select Ledger —</option>
+        {ledgerOptions.map((name) => (
+          <option key={name} value={name}>{name}</option>
+        ))}
+      </select>
     </div>
   )
 }
@@ -102,7 +50,7 @@ function LedgerTagRow({ label, required, values, ledgerOptions, onChange }: Ledg
 
 export default function CompanySettings() {
   const { user }    = useAuthStore()
-  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, setStockItems } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb } = useCompanyStore()
   const company     = user?.companyId ? getCompany(user.companyId) : null
   const companyId   = user?.companyId ?? ''
 
@@ -126,6 +74,9 @@ export default function CompanySettings() {
   useEffect(() => {
     if (companyId && storedLedgers.length === 0) {
       fetchLedgersFromDb(companyId).catch(() => {})
+    }
+    if (companyId && storedStockItems.length === 0) {
+      fetchStockItemsFromDb(companyId).catch(() => {})
     }
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -158,8 +109,8 @@ export default function CompanySettings() {
     setSyncingItems(true)
     try {
       const items = await fetchTallyStockItems(getTallyUrl())
-      setStockItems(companyId, items)
-      toast.success(`${items.length} stock items synced`)
+      await saveStockItemsToDb(companyId, items)
+      toast.success(`${items.length} stock items synced and saved`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch stock items. Is Tally running?')
     } finally {
@@ -167,16 +118,11 @@ export default function CompanySettings() {
     }
   }
 
+  const set = (key: keyof LedgerMapping) => (v: string) =>
+    setMapping((m) => ({ ...m, [key]: v || undefined }))
+
   const handleSaveMapping = async () => {
     if (!companyId) return
-    if (mapping.purchaseLedgers.length === 0) {
-      toast.error('At least one purchase ledger is required')
-      return
-    }
-    if (mapping.cgstLedgers.length === 0 || mapping.sgstLedgers.length === 0) {
-      toast.error('At least one CGST and one SGST ledger are required')
-      return
-    }
     setSavingMap(true)
     try {
       await updateMapping(companyId, mapping)
@@ -287,7 +233,7 @@ export default function CompanySettings() {
           </div>
         </div>
 
-        {/* Default ledger mapping — multi-tag UI */}
+        {/* Default ledger mapping — 1:1 static dropdowns */}
         <div className="card p-6">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-sm font-bold text-gray-800">Default Ledger Mapping</h2>
@@ -298,36 +244,38 @@ export default function CompanySettings() {
             )}
           </div>
           <p className="text-xs text-gray-400 mb-5">
-            Add multiple ledgers for each type — the first one is used as the default when syncing. You can still override per bill.
+            Assign one Tally ledger to each GST category. These are used as defaults when syncing bills.
           </p>
 
-          <LedgerTagRow
-            label="Purchase Ledger"
-            required
-            values={mapping.purchaseLedgers}
-            ledgerOptions={ledgerOptions}
-            onChange={(v) => setMapping((m) => ({ ...m, purchaseLedgers: v }))}
-          />
-          <LedgerTagRow
-            label="CGST Ledger"
-            required
-            values={mapping.cgstLedgers}
-            ledgerOptions={ledgerOptions}
-            onChange={(v) => setMapping((m) => ({ ...m, cgstLedgers: v }))}
-          />
-          <LedgerTagRow
-            label="SGST Ledger"
-            required
-            values={mapping.sgstLedgers}
-            ledgerOptions={ledgerOptions}
-            onChange={(v) => setMapping((m) => ({ ...m, sgstLedgers: v }))}
-          />
-          <LedgerTagRow
-            label="IGST Ledger"
-            values={mapping.igstLedgers}
-            ledgerOptions={ledgerOptions}
-            onChange={(v) => setMapping((m) => ({ ...m, igstLedgers: v }))}
-          />
+          {/* Purchase Ledgers */}
+          <div className="mb-5">
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
+            <LedgerSelect label="Interstate 18%"        value={mapping.purchase_interstate_18} ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_18')} />
+            <LedgerSelect label="Interstate 5%"         value={mapping.purchase_interstate_5}  ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_5')} />
+            <LedgerSelect label="UP (Intra-state) 18%"  value={mapping.purchase_up_18}         ledgerOptions={ledgerOptions} onChange={set('purchase_up_18')} />
+            <LedgerSelect label="UP (Intra-state) 5%"   value={mapping.purchase_up_5}          ledgerOptions={ledgerOptions} onChange={set('purchase_up_5')} />
+            <LedgerSelect label="Exempt"                value={mapping.purchase_exempt}        ledgerOptions={ledgerOptions} onChange={set('purchase_exempt')} />
+          </div>
+
+          {/* CGST / SGST */}
+          <div className="mb-5">
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">CGST / SGST</p>
+
+            <p className="text-xs text-gray-500 mb-2 font-medium">@ 9% each (18% GST)</p>
+            <LedgerSelect label="CGST 9%"   value={mapping.input_cgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_cgst_9')} />
+            <LedgerSelect label="SGST 9%"   value={mapping.input_sgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_sgst_9')} />
+
+            <p className="text-xs text-gray-500 mt-3 mb-2 font-medium">@ 2.5% each (5% GST)</p>
+            <LedgerSelect label="CGST 2.5%" value={mapping.input_cgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_cgst_2_5')} />
+            <LedgerSelect label="SGST 2.5%" value={mapping.input_sgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_sgst_2_5')} />
+          </div>
+
+          {/* IGST */}
+          <div className="mb-5">
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">IGST</p>
+            <LedgerSelect label="IGST 5%"  value={mapping.igst_5}  ledgerOptions={ledgerOptions} onChange={set('igst_5')} />
+            <LedgerSelect label="IGST 18%" value={mapping.igst_18} ledgerOptions={ledgerOptions} onChange={set('igst_18')} />
+          </div>
 
           <Button variant="teal" loading={savingMap} onClick={handleSaveMapping}>
             Save Default Mapping

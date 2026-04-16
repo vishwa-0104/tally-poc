@@ -18,22 +18,26 @@ export interface AuthState {
 
 // ── Company ───────────────────────────────────────────────
 export interface LedgerMapping {
-  purchaseLedgers: string[]
-  cgstLedgers: string[]
-  sgstLedgers: string[]
-  igstLedgers: string[]
+  // Purchase ledgers (1:1 static keys)
+  purchase_interstate_18?: string
+  purchase_interstate_5?:  string
+  purchase_up_18?:         string
+  purchase_up_5?:          string
+  purchase_exempt?:        string
+  // CGST / SGST input pairs
+  input_cgst_9?:   string
+  input_sgst_9?:   string
+  input_cgst_2_5?: string
+  input_sgst_2_5?: string
+  // IGST
+  igst_5?:  string
+  igst_18?: string
 }
 
-/** Safely convert any stored mapping shape (old single-string or new array) to arrays */
+/** Cast stored JSON to LedgerMapping (all fields optional, no migration needed) */
 export function normalizeLedgerMapping(raw: unknown): LedgerMapping {
-  const r = raw as Record<string, unknown> | null | undefined
-  if (Array.isArray(r?.purchaseLedgers)) return r as unknown as LedgerMapping
-  return {
-    purchaseLedgers: r?.purchase ? [r.purchase as string] : [],
-    cgstLedgers:     r?.cgst     ? [r.cgst as string]     : [],
-    sgstLedgers:     r?.sgst     ? [r.sgst as string]     : [],
-    igstLedgers:     r?.igst     ? [r.igst as string]     : [],
-  }
+  if (!raw || typeof raw !== 'object') return {}
+  return raw as LedgerMapping
 }
 
 // Ledger mapping chosen for a single bill before syncing to Tally.

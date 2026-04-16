@@ -24,7 +24,7 @@ export default function BillMapping() {
 
   const { user }     = useAuthStore()
   const { getBill, updateBillStatus } = useBillStore()
-  const { getCompany, fetchCompanies, fetchLedgersFromDb, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
+  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
   const ledgersState    = useCompanyStore((s) => s.ledgers)
   const stockItemsState = useCompanyStore((s) => s.stockItems)
   const companies       = useCompanyStore((s) => s.companies)
@@ -42,6 +42,9 @@ export default function BillMapping() {
     }
     if (companyId && storedLedgers.length === 0) {
       fetchLedgersFromDb(companyId).catch((err) => console.error('[BillMapping] Failed to load ledgers from DB:', err))
+    }
+    if (companyId && storedStockItems.length === 0) {
+      fetchStockItemsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load stock items from DB:', err))
     }
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -70,13 +73,16 @@ export default function BillMapping() {
 
   const buildArtifacts = (data: MappingInput) => {
     const trim = (v?: string) => (v && v.trim() ? v.trim() : undefined)
-    const cgstLedger = trim(data.cgstLedger)
-    const sgstLedger = trim(data.sgstLedger)
-    const igstLedger = trim(data.igstLedger)
+
+    // Derive single-value ledgers for XML (temporary until XML supports multi-ledger entries)
+    const purchaseLedger = trim(data.purchaseLedger_18) ?? trim(data.purchaseLedger_5) ?? trim(data.purchaseLedger_exempt)
+    const cgstLedger     = trim(data.cgstLedger_18)     ?? trim(data.cgstLedger_5)
+    const sgstLedger     = trim(data.sgstLedger_18)     ?? trim(data.sgstLedger_5)
+    const igstLedger     = trim(data.igstLedger_18)     ?? trim(data.igstLedger_5)
 
     const tallyMapping = {
       vendorLedger: trim(data.vendorLedger),
-      purchaseLedger: trim(data.purchaseLedger),
+      purchaseLedger,
       cgstLedger,
       sgstLedger,
       igstLedger,
@@ -92,7 +98,7 @@ export default function BillMapping() {
 
     const generatedXml = buildTallyXml({
       vendorLedger:   trim(data.vendorLedger),
-      purchaseLedger: trim(data.purchaseLedger),
+      purchaseLedger,
       cgstLedger,
       sgstLedger,
       igstLedger,
@@ -252,12 +258,6 @@ export default function BillMapping() {
               stockItems={storedStockItems}
               saving={saving}
               syncing={syncing}
-              defaultMapping={company?.mapping ? {
-                purchase: normalizeLedgerMapping(company.mapping).purchaseLedgers[0],
-                cgst:     normalizeLedgerMapping(company.mapping).cgstLedgers[0],
-                sgst:     normalizeLedgerMapping(company.mapping).sgstLedgers[0],
-                igst:     normalizeLedgerMapping(company.mapping).igstLedgers[0],
-              } : null}
               savedLedgerSets={normalizeLedgerMapping(company?.mapping)}
               nextVoucherNumber={`${bill.billNumber}_${(company?.voucherCounter ?? 0) + 1}`}
               onSaveMapping={handleSaveMapping}

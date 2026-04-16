@@ -44,17 +44,26 @@ const lineItemEditSchema = z.object({
 })
 
 export const mappingSchema = z.object({
-  vendorLedger:   z.string().optional(),
-  purchaseLedger: z.string().optional(),
-  cgstLedger:     z.string().optional(),
-  sgstLedger:     z.string().optional(),
-  igstLedger:     z.string().optional(),
-  billDate:      z.string().min(1, 'Date is required'),
-  billNumber:    z.string().min(1, 'Bill number is required'),
-  voucherNumber: z.string().optional(),
-  totalAmount:   z.coerce.number().positive('Amount must be positive'),
+  vendorLedger:          z.string().optional(),
+  // Purchase ledgers — one per GST rate bucket present in the bill
+  purchaseLedger_exempt: z.string().optional(),
+  purchaseLedger_5:      z.string().optional(),
+  purchaseLedger_18:     z.string().optional(),
+  // CGST / SGST — intra-state bills only
+  cgstLedger_5:          z.string().optional(),
+  sgstLedger_5:          z.string().optional(),
+  cgstLedger_18:         z.string().optional(),
+  sgstLedger_18:         z.string().optional(),
+  // IGST — interstate bills only
+  igstLedger_5:          z.string().optional(),
+  igstLedger_18:         z.string().optional(),
+  // Bill meta
+  billDate:       z.string().min(1, 'Date is required'),
+  billNumber:     z.string().min(1, 'Bill number is required'),
+  voucherNumber:  z.string().optional(),
+  totalAmount:    z.coerce.number().positive('Amount must be positive'),
   roundOffAmount: z.coerce.number().optional(),
-  lineItems:     z.array(lineItemEditSchema).optional(),
+  lineItems:      z.array(lineItemEditSchema).optional(),
 })
 
 export type LoginInput      = z.infer<typeof loginSchema>

@@ -43,6 +43,7 @@ model Company {
   bills          Bill[]
   users          User[]
   ledgerCache    LedgerCache[]
+  stockItemCache StockItemCache[]
   createdAt      DateTime       @default(now())
 }
 
@@ -87,6 +88,17 @@ model Bill {
   lineItems    LineItem[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+}
+
+model StockItemCache {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  name      String
+  group     String  @default("")
+  unit      String  @default("")
+
+  @@unique([companyId, name])
 }
 
 model LineItem {

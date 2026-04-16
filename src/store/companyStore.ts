@@ -17,6 +17,8 @@ interface CompanyStore {
   saveLedgersToDb: (companyId: string, ledgers: TallyLedger[]) => Promise<void>
   setStockItems: (companyId: string, items: TallyStockItem[]) => void
   getStockItems: (companyId: string) => TallyStockItem[]
+  fetchStockItemsFromDb: (companyId: string) => Promise<void>
+  saveStockItemsToDb: (companyId: string, items: TallyStockItem[]) => Promise<void>
   incrementBillCount: (companyId: string) => void
   incrementPending: (companyId: string) => void
   incrementSynced: (companyId: string) => void
@@ -65,6 +67,16 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
     set((s) => ({ stockItems: { ...s.stockItems, [companyId]: items } })),
 
   getStockItems: (companyId) => get().stockItems[companyId] ?? [],
+
+  fetchStockItemsFromDb: async (companyId) => {
+    const { data } = await api.get<TallyStockItem[]>(`/companies/${companyId}/stock-items`)
+    set((s) => ({ stockItems: { ...s.stockItems, [companyId]: data } }))
+  },
+
+  saveStockItemsToDb: async (companyId, items) => {
+    await api.put<{ saved: number }>(`/companies/${companyId}/stock-items`, items)
+    set((s) => ({ stockItems: { ...s.stockItems, [companyId]: items } }))
+  },
 
   fetchLedgersFromDb: async (companyId) => {
     const { data } = await api.get<TallyLedger[]>(`/companies/${companyId}/ledgers`)

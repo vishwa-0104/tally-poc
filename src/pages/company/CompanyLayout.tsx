@@ -5,6 +5,7 @@ import { AppLayout, ProtectedRoute } from '@/components/shared'
 import type { NavItem } from '@/components/shared/AppLayout'
 import { useAuthStore } from '@/store/authStore'
 import { useBillStore } from '@/store/billStore'
+import { useCompanyStore } from '@/store/companyStore'
 
 const NAV: NavItem[] = [
   { label: 'My Bills',  path: '/company',          icon: FileText  },
@@ -15,10 +16,14 @@ const NAV: NavItem[] = [
 export default function CompanyLayout() {
   const { user } = useAuthStore()
   const { fetchBills } = useBillStore()
+  const { fetchCompanies } = useCompanyStore()
 
   useEffect(() => {
-    if (user?.companyId) fetchBills(user.companyId)
-  }, [user?.companyId])
+    if (user?.companyId) {
+      fetchBills(user.companyId)
+      fetchCompanies()
+    }
+  }, [user?.companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ProtectedRoute allowedRole="company">
