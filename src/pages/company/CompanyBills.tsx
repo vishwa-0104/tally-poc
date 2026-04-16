@@ -10,6 +10,7 @@ import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { buildTallyXml } from '@/lib/utils'
 import { syncToTally } from '@/services'
 import { getTallyUrl } from './CompanySettings'
+import { normalizeLedgerMapping } from '@/types'
 import type { TallyBillMapping } from '@/types'
 
 export default function CompanyBills() {
@@ -35,39 +36,44 @@ export default function CompanyBills() {
       return { xml: bill.tallyXml, mappingUsed: bill.tallyMapping ?? null }
     }
 
-    const mapping: TallyBillMapping | null = bill.tallyMapping ?? null
-    const companyMapping = company?.mapping ?? null
+    const mapping   = bill.tallyMapping ?? null
+    const normalized = normalizeLedgerMapping(company?.mapping)
 
-    const vendorLedger = mapping?.vendorLedger ?? bill.vendorName
-    const purchaseLedger = mapping?.purchaseLedger ?? companyMapping?.purchase ?? ''
-    const cgstLedger = mapping?.cgstLedger ?? companyMapping?.cgst ?? ''
-    const sgstLedger = mapping?.sgstLedger ?? companyMapping?.sgst ?? ''
-    const igstLedger = mapping?.igstLedger ?? (companyMapping?.igst ? companyMapping.igst : undefined)
+    const vendorLedger   = mapping?.vendorLedger   ?? bill.vendorName
+    const purchaseLedger = mapping?.purchaseLedger  ?? normalized.purchaseLedgers[0] ?? ''
+    const cgstLedger     = mapping?.cgstLedger      ?? normalized.cgstLedgers[0]     ?? ''
+    const sgstLedger     = mapping?.sgstLedger      ?? normalized.sgstLedgers[0]     ?? ''
+    const igstLedger     = mapping?.igstLedger      ?? normalized.igstLedgers[0]     ?? ''
 
-    if (!purchaseLedger || !cgstLedger || !sgstLedger) return null
+    const hasIgst      = bill.igstAmount > 0
+    const taxLedgersOk = hasIgst
+      ? !!igstLedger.trim()
+      : !!(cgstLedger.trim() && sgstLedger.trim())
+
+    if (!purchaseLedger || !taxLedgersOk) return null
 
     const mappingUsed: TallyBillMapping = {
       vendorLedger,
       purchaseLedger,
-      cgstLedger,
-      sgstLedger,
-      igstLedger: igstLedger && igstLedger.trim() ? igstLedger : undefined,
+      cgstLedger:  cgstLedger  || undefined,
+      sgstLedger:  sgstLedger  || undefined,
+      igstLedger:  igstLedger  || undefined,
     }
 
     const xml = buildTallyXml({
-      vendorLedger: mappingUsed.vendorLedger,
+      vendorLedger:  mappingUsed.vendorLedger,
       purchaseLedger: mappingUsed.purchaseLedger,
-      cgstLedger: mappingUsed.cgstLedger,
-      sgstLedger: mappingUsed.sgstLedger,
-      igstLedger: mappingUsed.igstLedger,
-      billNumber: bill.billNumber,
-      billDate: bill.billDate,
-      totalAmount: bill.totalAmount,
-      subtotal: bill.subtotal,
-      cgstAmount: bill.cgstAmount,
-      sgstAmount: bill.sgstAmount,
-      igstAmount: bill.igstAmount,
-      lineItems:  bill.lineItems,
+      cgstLedger:    mappingUsed.cgstLedger,
+      sgstLedger:    mappingUsed.sgstLedger,
+      igstLedger:    mappingUsed.igstLedger,
+      billNumber:    bill.billNumber,
+      billDate:      bill.billDate,
+      totalAmount:   bill.totalAmount,
+      subtotal:      bill.subtotal,
+      cgstAmount:    bill.cgstAmount,
+      sgstAmount:    bill.sgstAmount,
+      igstAmount:    bill.igstAmount,
+      lineItems:     bill.lineItems,
     })
     return { xml, mappingUsed }
   }
@@ -146,6 +152,7 @@ export default function CompanyBills() {
               variant="outline"
               size="sm"
               disabled={syncingAll || syncableBills.length === 0}
+              loading={syncingAll}
               onClick={handleSyncAll}
             >
               {syncingAll ? 'Syncing…' : `Sync All (${syncableBills.length})`}

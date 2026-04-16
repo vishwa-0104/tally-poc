@@ -11,6 +11,7 @@ import { useTallyLedgers } from '@/hooks'
 import { syncToTally } from '@/services'
 import { buildTallyXml } from '@/lib/utils'
 import { getTallyUrl, getTallyCompanyName, getTallyVoucherType } from './CompanySettings'
+import { normalizeLedgerMapping } from '@/types'
 import type { MappingInput } from '@/lib/validators'
 import type { Bill } from '@/types'
 
@@ -254,7 +255,13 @@ export default function BillMapping() {
               stockItems={storedStockItems}
               saving={saving}
               syncing={syncing}
-              defaultMapping={company?.mapping}
+              defaultMapping={company?.mapping ? {
+                purchase: normalizeLedgerMapping(company.mapping).purchaseLedgers[0],
+                cgst:     normalizeLedgerMapping(company.mapping).cgstLedgers[0],
+                sgst:     normalizeLedgerMapping(company.mapping).sgstLedgers[0],
+                igst:     normalizeLedgerMapping(company.mapping).igstLedgers[0],
+              } : null}
+              savedLedgerSets={normalizeLedgerMapping(company?.mapping)}
               onSaveMapping={handleSaveMapping}
               onSyncToTally={handleSync}
             />

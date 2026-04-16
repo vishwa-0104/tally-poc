@@ -9,7 +9,7 @@ export const companiesRouter = Router()
 companiesRouter.use(requireAuth)
 
 // GET /api/companies — admin sees all, company user sees own
-companiesRouter.get('/', async (req, res) => {
+companiesRouter.get('/companies', async (req, res) => {
   const companies = req.auth.role === 'ADMIN'
     ? await prisma.company.findMany({ orderBy: { createdAt: 'desc' } })
     : await prisma.company.findMany({ where: { id: req.auth.companyId! } })
@@ -31,7 +31,7 @@ companiesRouter.get('/', async (req, res) => {
 })
 
 // GET /api/companies/:id
-companiesRouter.get('/:id', async (req, res) => {
+companiesRouter.get('/companies/:id', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
     res.status(403).json({ error: 'Forbidden' })
     return
@@ -42,7 +42,7 @@ companiesRouter.get('/:id', async (req, res) => {
 })
 
 // POST /api/companies — admin only
-companiesRouter.post('/', requireAdmin, async (req, res) => {
+companiesRouter.post('/companies', requireAdmin, async (req, res) => {
   const schema = z.object({
     name: z.string().min(3),
     gstin: z.string().optional(),
@@ -119,7 +119,7 @@ companiesRouter.put('/companies/:id/ledgers', async (req, res) => {
 })
 
 // PUT /api/companies/:id/mapping
-companiesRouter.put('/:id/mapping', async (req, res) => {
+companiesRouter.put('/companies/:id/mapping', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
     res.status(403).json({ error: 'Forbidden' }); return
   }

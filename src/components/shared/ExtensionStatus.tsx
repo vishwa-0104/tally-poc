@@ -1,8 +1,7 @@
 import { useExtensionStatus } from '@/hooks'
 
 export function ExtensionStatus() {
-  console.log(">>>>>> ")
-  const { connected, version } = useExtensionStatus()
+  const { connected } = useExtensionStatus()
   return (
     <div
       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
@@ -12,7 +11,7 @@ export function ExtensionStatus() {
       aria-live="polite"
     >
       <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-      {connected ? `Extension v${version ?? ''} connected` : 'Extension not detected'}
+      {connected ? 'Connected to Tally' : 'Extension not detected'}
     </div>
   )
 }

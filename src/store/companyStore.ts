@@ -54,9 +54,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
     }))
   },
 
-  getCompany: (id) => {
-    console.log(">>>>>> userwww ", id, get().companies)
-    return get().companies.find((c) => c.id === id)},
+  getCompany: (id) => get().companies.find((c) => c.id === id),
 
   setLedgers: (companyId, ledgers) =>
     set((s) => ({ ledgers: { ...s.ledgers, [companyId]: ledgers } })),
@@ -69,16 +67,12 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   getStockItems: (companyId) => get().stockItems[companyId] ?? [],
 
   fetchLedgersFromDb: async (companyId) => {
-    console.log('[Step 5] Loading ledgers from DB for company:', companyId)
     const { data } = await api.get<TallyLedger[]>(`/companies/${companyId}/ledgers`)
-    console.log('[Step 6] Ledgers loaded from DB. Count:', data.length, data.length === 0 ? '⚠ DB is empty — go to Settings and click Sync Ledgers' : '')
     set((s) => ({ ledgers: { ...s.ledgers, [companyId]: data } }))
   },
 
   saveLedgersToDb: async (companyId, ledgers) => {
-    console.log('[Step 3] Sending ledgers to backend API. companyId:', companyId, '| Count:', ledgers.length)
-    const { data } = await api.put<{ saved: number }>(`/companies/${companyId}/ledgers`, ledgers)
-    console.log('[Step 4] Backend response:', data)
+    await api.put<{ saved: number }>(`/companies/${companyId}/ledgers`, ledgers)
     set((s) => ({ ledgers: { ...s.ledgers, [companyId]: ledgers } }))
   },
 

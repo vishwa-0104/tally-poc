@@ -18,10 +18,22 @@ export interface AuthState {
 
 // ── Company ───────────────────────────────────────────────
 export interface LedgerMapping {
-  purchase: string
-  cgst: string
-  sgst: string
-  igst: string
+  purchaseLedgers: string[]
+  cgstLedgers: string[]
+  sgstLedgers: string[]
+  igstLedgers: string[]
+}
+
+/** Safely convert any stored mapping shape (old single-string or new array) to arrays */
+export function normalizeLedgerMapping(raw: unknown): LedgerMapping {
+  const r = raw as Record<string, unknown> | null | undefined
+  if (Array.isArray(r?.purchaseLedgers)) return r as unknown as LedgerMapping
+  return {
+    purchaseLedgers: r?.purchase ? [r.purchase as string] : [],
+    cgstLedgers:     r?.cgst     ? [r.cgst as string]     : [],
+    sgstLedgers:     r?.sgst     ? [r.sgst as string]     : [],
+    igstLedgers:     r?.igst     ? [r.igst as string]     : [],
+  }
 }
 
 // Ledger mapping chosen for a single bill before syncing to Tally.

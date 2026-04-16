@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, CheckCircle, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
-import type { Bill, TallyLedger } from '@/types'
+import type { Bill, TallyLedger, LedgerMapping } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
 
@@ -14,10 +14,16 @@ interface LedgerInputProps {
   required?: boolean
   matched?: boolean
   ledgers: TallyLedger[]
+  pinnedNames?: string[]
   registration: ReturnType<ReturnType<typeof useForm<MappingInput>>['register']>
 }
 
-function LedgerInput({ id, label, required, matched, ledgers, registration }: LedgerInputProps) {
+function LedgerInput({ id, label, required, matched, ledgers, pinnedNames = [], registration }: LedgerInputProps) {
+  // Pinned names (from saved ledger sets) shown first, then remaining Tally ledgers
+  const allNames = [
+    ...pinnedNames,
+    ...ledgers.map((l) => l.name).filter((n) => !pinnedNames.includes(n)),
+  ]
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between mb-1.5">
@@ -38,7 +44,7 @@ function LedgerInput({ id, label, required, matched, ledgers, registration }: Le
         className="input-base w-full"
       />
       <datalist id={`${id}-list`}>
-        {ledgers.map((l) => <option key={l.name} value={l.name} />)}
+        {allNames.map((name) => <option key={name} value={name} />)}
       </datalist>
     </div>
   )
@@ -52,6 +58,7 @@ interface MappingFormProps {
   saving: boolean
   syncing: boolean
   defaultMapping?: { purchase?: string; cgst?: string; sgst?: string; igst?: string } | null
+  savedLedgerSets?: LedgerMapping | null
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -64,6 +71,7 @@ export function MappingForm({
   saving,
   syncing,
   defaultMapping,
+  savedLedgerSets,
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
@@ -174,18 +182,18 @@ export function MappingForm({
 
       {/* Ledger fields — always editable inputs so RHF registers every field */}
       <div className="grid grid-cols-2 gap-x-4 mt-5">
-        <LedgerInput id="vendor"    label="Vendor Ledger"   matched={!!resolvedVendor}   ledgers={ledgers} registration={register('vendorLedger')} />
-        <LedgerInput id="purchase"  label="Purchase Ledger" matched={!!resolvedPurchase} required ledgers={ledgers} registration={register('purchaseLedger')} />
+        <LedgerInput id="vendor"   label="Vendor Ledger"   matched={!!resolvedVendor}   ledgers={ledgers} registration={register('vendorLedger')} />
+        <LedgerInput id="purchase" label="Purchase Ledger" matched={!!resolvedPurchase} required ledgers={ledgers} pinnedNames={savedLedgerSets?.purchaseLedgers} registration={register('purchaseLedger')} />
 
         {/* CGST / SGST shown for domestic bills; IGST for interstate */}
         {!hasIgst && (
           <>
-            <LedgerInput id="cgst" label="CGST Ledger" matched={!!resolvedCgst} required ledgers={ledgers} registration={register('cgstLedger')} />
-            <LedgerInput id="sgst" label="SGST Ledger" matched={!!resolvedSgst} required ledgers={ledgers} registration={register('sgstLedger')} />
+            <LedgerInput id="cgst" label="CGST Ledger" matched={!!resolvedCgst} required ledgers={ledgers} pinnedNames={savedLedgerSets?.cgstLedgers} registration={register('cgstLedger')} />
+            <LedgerInput id="sgst" label="SGST Ledger" matched={!!resolvedSgst} required ledgers={ledgers} pinnedNames={savedLedgerSets?.sgstLedgers} registration={register('sgstLedger')} />
           </>
         )}
         {hasIgst && (
-          <LedgerInput id="igst" label="IGST Ledger" matched={!!resolvedIgst} required ledgers={ledgers} registration={register('igstLedger')} />
+          <LedgerInput id="igst" label="IGST Ledger" matched={!!resolvedIgst} required ledgers={ledgers} pinnedNames={savedLedgerSets?.igstLedgers} registration={register('igstLedger')} />
         )}
       </div>
 

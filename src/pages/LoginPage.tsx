@@ -10,11 +10,12 @@ import { loginSchema, type LoginInput } from '@/lib/validators'
 import { useAuthStore } from '@/store'
 
 export default function LoginPage() {
-  const { role } = useParams<{ role: string }>()
+  const { role } = useParams<{ role?: string }>()
   const navigate  = useNavigate()
   const { login, isAuthenticated, user } = useAuthStore()
 
-  const isAdmin  = role === 'admin'
+  const isAdmin   = role === 'admin'
+  const hasRole   = role === 'admin' || role === 'company'
 
   // Redirect if already logged in
   useEffect(() => {
@@ -29,24 +30,30 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
+    defaultValues: hasRole ? {
       email:    isAdmin ? 'admin@tallysync.com' : 'groceries@sharma.com',
       password: isAdmin ? 'admin123' : 'company123',
-    },
+    } : {},
   })
 
   const onSubmit = async (data: LoginInput) => {
     try {
       await login(data.email, data.password)
       toast.success('Welcome back!')
-      navigate(isAdmin ? '/admin' : '/company', { replace: true })
+      // useEffect on isAuthenticated handles redirect
     } catch {
       toast.error('Invalid email or password')
     }
   }
 
+  const gradientClass = isAdmin
+    ? 'bg-gradient-to-br from-gray-950 via-brand-700 to-brand-500'
+    : hasRole
+      ? 'bg-gradient-to-br from-gray-950 via-teal-700 to-teal-500'
+      : 'bg-gradient-to-br from-gray-950 via-gray-800 to-teal-900'
+
   return (
-    <div className={`min-h-screen flex items-center justify-center p-5 ${isAdmin ? 'bg-gradient-to-br from-gray-950 via-brand-700 to-brand-500' : 'bg-gradient-to-br from-gray-950 via-teal-700 to-teal-500'}`}>
+    <div className={`min-h-screen flex items-center justify-center p-5 ${gradientClass}`}>
       <div className="w-full max-w-md">
         {/* Back link */}
         <Link
@@ -54,14 +61,16 @@ export default function LoginPage() {
           className="inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white mb-6 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to portal selection
+          Back to home
         </Link>
 
         <div className="card p-10">
           {/* Role badge */}
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase mb-5 ${isAdmin ? 'bg-brand-50 text-brand-700' : 'bg-teal-50 text-teal-700'}`}>
-            {isAdmin ? 'Admin Login' : 'Company Login'}
-          </span>
+          {hasRole && (
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase mb-5 ${isAdmin ? 'bg-brand-50 text-brand-700' : 'bg-teal-50 text-teal-700'}`}>
+              {isAdmin ? 'Admin Login' : 'Company Login'}
+            </span>
+          )}
 
           {/* Logo */}
           <div className="flex items-center gap-2.5 mb-2">
@@ -107,10 +116,11 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Demo hint */}
-          <p className="text-xs text-gray-400 text-center mt-4">
-            Demo: use pre-filled credentials and click Sign in
-          </p>
+          {hasRole && (
+            <p className="text-xs text-gray-400 text-center mt-4">
+              Demo: use pre-filled credentials and click Sign in
+            </p>
+          )}
         </div>
       </div>
     </div>
