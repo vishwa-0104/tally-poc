@@ -20,7 +20,7 @@ export default function CompanyBills() {
 
   const { user }    = useAuthStore()
   const { getBills, updateBillStatus } = useBillStore()
-  const { getCompany, incrementSynced, decrementPending, incrementError, decrementError } = useCompanyStore()
+  const { getCompany, fetchCompanies, incrementSynced, decrementPending, incrementError, decrementError } = useCompanyStore()
 
   const company = user?.companyId ? getCompany(user.companyId) : null
   const bills   = user?.companyId ? getBills(user.companyId) : []
@@ -85,7 +85,7 @@ export default function CompanyBills() {
       for (const bill of syncableBills) {
         const built = getXmlForBill(bill)
         if (!built) {
-          updateBillStatus(company.id, bill.id, 'error', {
+          await updateBillStatus(company.id, bill.id, 'error', {
             syncError: company?.mapping
               ? 'Mapping not available for this bill. Please open it and save mapping.'
               : 'Company ledger mapping is not configured. Please set it in Settings, or open the bill and save mapping.',
@@ -102,7 +102,7 @@ export default function CompanyBills() {
         try {
           const result = await syncToTally(xml, getTallyUrl())
           if (result.success && result.created > 0) {
-            updateBillStatus(company.id, bill.id, 'synced', {
+            await updateBillStatus(company.id, bill.id, 'synced', {
               tallyXml: xml,
               tallyMapping: mappingUsed ?? undefined,
               syncedAt: new Date().toISOString(),
@@ -119,7 +119,7 @@ export default function CompanyBills() {
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Sync failed'
 
-          updateBillStatus(company.id, bill.id, 'error', {
+          await updateBillStatus(company.id, bill.id, 'error', {
             tallyXml: xml,
             tallyMapping: mappingUsed ?? undefined,
             syncError: msg,
@@ -133,6 +133,7 @@ export default function CompanyBills() {
       }
     } finally {
       setSyncingAll(false)
+      fetchCompanies().catch(() => {}) // refresh admin-visible counts from DB
     }
   }
 

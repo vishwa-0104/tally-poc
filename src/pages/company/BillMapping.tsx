@@ -181,13 +181,14 @@ export default function BillMapping() {
 
       if (result.success && result.created > 0) {
         // mapped -> synced
-        updateBillStatus(companyId, bill.id, 'synced', {
+        await updateBillStatus(companyId, bill.id, 'synced', {
           tallyXml: generatedXml,
           syncedAt: new Date().toISOString(),
           syncError: undefined,
         })
         incrementSynced(companyId)
         decrementPending(companyId)
+        fetchCompanies().catch(() => {}) // refresh admin counts from DB
         setSyncDone(true)
         toast.success('Bill synced to Tally successfully!')
       } else {
@@ -197,7 +198,7 @@ export default function BillMapping() {
       const msg = err instanceof Error ? err.message : 'Sync failed'
 
       // mapped -> error
-      updateBillStatus(companyId, bill.id, 'error', {
+      await updateBillStatus(companyId, bill.id, 'error', {
         tallyXml: generatedXml,
         tallyMapping,
         syncError: msg,

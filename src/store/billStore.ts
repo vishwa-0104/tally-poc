@@ -46,13 +46,33 @@ export const useBillStore = create<BillStore>((set, get) => ({
     if (!existing) return
 
     const updated: Bill = { ...existing, status, ...extra }
-    const { data } = await api.put<Bill>(`/bills/${billId}`, updated)
 
+    // Optimistic update — UI reflects the new status immediately
     set((s) => ({
       bills: {
         ...s.bills,
-        [companyId]: (s.bills[companyId] ?? []).map((b) => (b.id === billId ? data : b)),
+        [companyId]: (s.bills[companyId] ?? []).map((b) => (b.id === billId ? updated : b)),
       },
     }))
+
+    try {
+      const { data } = await api.put<Bill>(`/bills/${billId}`, updated)
+      // Reconcile with server response (e.g. normalised status casing)
+      set((s) => ({
+        bills: {
+          ...s.bills,
+          [companyId]: (s.bills[companyId] ?? []).map((b) => (b.id === billId ? data : b)),
+        },
+      }))
+    } catch (err) {
+      // Revert to previous state if the API call fails
+      set((s) => ({
+        bills: {
+          ...s.bills,
+          [companyId]: (s.bills[companyId] ?? []).map((b) => (b.id === billId ? existing : b)),
+        },
+      }))
+      throw err
+    }
   },
 }))

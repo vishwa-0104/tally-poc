@@ -57,13 +57,26 @@ billsRouter.put('/bills/:id', async (req, res) => {
   if (!existing) { res.status(404).json({ error: 'Not found' }); return }
   if (!canAccessCompany(req, existing.companyId)) { res.status(403).json({ error: 'Forbidden' }); return }
 
-  const { lineItems, ...billData } = req.body
+  const { lineItems, ...body } = req.body
+
+  // Only pick schema-updatable fields — never pass id/companyId/createdAt/updatedAt to Prisma
+  const updatable = [
+    'billNumber', 'vendorName', 'vendorGstin', 'buyerGstin', 'billDate',
+    'subtotal', 'cgstAmount', 'sgstAmount', 'igstAmount', 'totalAmount',
+    'imageUrl', 'originalData', 'isEdited', 'rawAiJson',
+    'tallyXml', 'tallyMapping', 'roundOffAmount', 'syncError',
+  ] as const
+  const safeData: Record<string, unknown> = {}
+  for (const key of updatable) {
+    if (key in body) safeData[key] = body[key]
+  }
+  safeData.status   = (body.status as string)?.toUpperCase() ?? existing.status
+  if (body.syncedAt) safeData.syncedAt = new Date(body.syncedAt as string)
 
   const bill = await prisma.bill.update({
     where: { id: req.params.id },
     data: {
-      ...billData,
-      status: (billData.status as string)?.toUpperCase() ?? existing.status,
+      ...safeData,
       ...(lineItems && {
         lineItems: {
           deleteMany: {},
