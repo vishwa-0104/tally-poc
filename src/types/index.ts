@@ -126,6 +126,11 @@ export interface Bill {
   createdAt: string
 }
 
+export interface StockItemAlias {
+  billItemName: string       // lowercase bill description
+  tallyStockItemName: string // Tally stock item name
+}
+
 // ── Tally ─────────────────────────────────────────────────
 export interface TallyLedger {
   name: string

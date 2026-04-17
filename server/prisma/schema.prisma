@@ -40,11 +40,12 @@ model Company {
   port           Int            @default(9000)
   mapping        Json?
   voucherCounter Int            @default(0)
-  bills          Bill[]
-  users          User[]
-  ledgerCache    LedgerCache[]
-  stockItemCache StockItemCache[]
-  createdAt      DateTime       @default(now())
+  bills            Bill[]
+  users            User[]
+  ledgerCache      LedgerCache[]
+  stockItemCache   StockItemCache[]
+  stockItemAliases StockItemAlias[]
+  createdAt        DateTime       @default(now())
 }
 
 model LedgerCache {
@@ -91,14 +92,26 @@ model Bill {
 }
 
 model StockItemCache {
-  id        String  @id @default(cuid())
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id        String           @id @default(cuid())
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId String
   name      String
-  group     String  @default("")
-  unit      String  @default("")
+  group     String           @default("")
+  unit      String           @default("")
+  aliases   StockItemAlias[]
 
   @@unique([companyId, name])
+}
+
+model StockItemAlias {
+  id               String         @id @default(cuid())
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId        String
+  stockItem        StockItemCache @relation(fields: [stockItemCacheId], references: [id], onDelete: Cascade)
+  stockItemCacheId String
+  billItemName     String         // stored lowercase for case-insensitive lookup
+
+  @@unique([companyId, billItemName])
 }
 
 model LineItem {

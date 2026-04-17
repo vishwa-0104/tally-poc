@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Company, LedgerMapping, TallyLedger, TallyStockItem } from '@/types'
+import type { Company, LedgerMapping, TallyLedger, TallyStockItem, StockItemAlias } from '@/types'
 import { api } from '@/lib/api'
 
 interface CompanyStore {
@@ -7,6 +7,7 @@ interface CompanyStore {
   loading: boolean
   ledgers: Record<string, TallyLedger[]>
   stockItems: Record<string, TallyStockItem[]>
+  stockItemAliases: Record<string, StockItemAlias[]>
   fetchCompanies: () => Promise<void>
   addCompany: (data: Omit<Company, 'id' | 'totalBills' | 'syncedBills' | 'pendingBills' | 'errorBills' | 'voucherCounter' | 'createdAt'> & { password: string }) => Promise<Company>
   updateMapping: (companyId: string, mapping: LedgerMapping) => Promise<void>
@@ -19,6 +20,8 @@ interface CompanyStore {
   getStockItems: (companyId: string) => TallyStockItem[]
   fetchStockItemsFromDb: (companyId: string) => Promise<void>
   saveStockItemsToDb: (companyId: string, items: TallyStockItem[]) => Promise<void>
+  fetchAliases: (companyId: string) => Promise<void>
+  saveAliases: (companyId: string, aliases: StockItemAlias[]) => Promise<void>
   incrementBillCount: (companyId: string) => void
   incrementPending: (companyId: string) => void
   incrementSynced: (companyId: string) => void
@@ -32,6 +35,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   loading: false,
   ledgers: {},
   stockItems: {},
+  stockItemAliases: {},
 
   fetchCompanies: async () => {
     set({ loading: true })
@@ -76,6 +80,27 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   saveStockItemsToDb: async (companyId, items) => {
     await api.put<{ saved: number }>(`/companies/${companyId}/stock-items`, items)
     set((s) => ({ stockItems: { ...s.stockItems, [companyId]: items } }))
+  },
+
+  fetchAliases: async (companyId) => {
+    const { data } = await api.get<StockItemAlias[]>(`/companies/${companyId}/stock-item-aliases`)
+    set((s) => ({ stockItemAliases: { ...s.stockItemAliases, [companyId]: data } }))
+  },
+
+  saveAliases: async (companyId, aliases) => {
+    if (aliases.length === 0) return
+    await api.post<{ saved: number }>(`/companies/${companyId}/stock-item-aliases`, aliases)
+    set((s) => {
+      const existing = s.stockItemAliases[companyId] ?? []
+      const merged = [...existing]
+      for (const a of aliases) {
+        const idx = merged.findIndex((e) => e.billItemName === a.billItemName.toLowerCase())
+        const entry = { billItemName: a.billItemName.toLowerCase(), tallyStockItemName: a.tallyStockItemName }
+        if (idx >= 0) merged[idx] = entry
+        else merged.push(entry)
+      }
+      return { stockItemAliases: { ...s.stockItemAliases, [companyId]: merged } }
+    })
   },
 
   fetchLedgersFromDb: async (companyId) => {

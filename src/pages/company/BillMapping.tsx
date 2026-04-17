@@ -24,10 +24,11 @@ export default function BillMapping() {
 
   const { user }     = useAuthStore()
   const { getBill, updateBillStatus } = useBillStore()
-  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
-  const ledgersState    = useCompanyStore((s) => s.ledgers)
-  const stockItemsState = useCompanyStore((s) => s.stockItems)
-  const companies       = useCompanyStore((s) => s.companies)
+  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
+  const ledgersState       = useCompanyStore((s) => s.ledgers)
+  const stockItemsState    = useCompanyStore((s) => s.stockItems)
+  const stockItemAliasesState = useCompanyStore((s) => s.stockItemAliases)
+  const companies          = useCompanyStore((s) => s.companies)
 
   const companyId = user?.companyId ?? ''
   const company   = companyId ? getCompany(companyId) : null
@@ -35,6 +36,7 @@ export default function BillMapping() {
 
   const storedLedgers    = companyId ? (ledgersState[companyId] ?? []) : []
   const storedStockItems = companyId ? (stockItemsState[companyId] ?? []) : []
+  const storedAliases    = companyId ? (stockItemAliasesState[companyId] ?? []) : []
 
   useEffect(() => {
     if (companyId && companies.length === 0) {
@@ -46,7 +48,19 @@ export default function BillMapping() {
     if (companyId && storedStockItems.length === 0) {
       fetchStockItemsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load stock items from DB:', err))
     }
+    if (companyId && storedAliases.length === 0) {
+      fetchAliases(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load aliases from DB:', err))
+    }
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist stock item aliases for any line item that has a tallyStockItem mapped
+  const persistAliases = (lineItems: MappingInput['lineItems']) => {
+    if (!companyId || !lineItems?.length) return
+    const toSave = lineItems
+      .filter((item) => item.tallyStockItem?.trim() && item.description?.trim())
+      .map((item) => ({ billItemName: item.description.trim(), tallyStockItemName: item.tallyStockItem!.trim() }))
+    if (toSave.length > 0) saveAliases(companyId, toSave).catch(() => {})
+  }
 
   const tallyUrl     = getTallyUrl()
   const tallyCompany = getTallyCompanyName()
@@ -90,7 +104,7 @@ export default function BillMapping() {
 
     // Use the form's round-off value (user-editable, pre-filled from AI parse or computed).
     const roundOffAmt =
-      data.roundOffAmount != null && Math.abs(data.roundOffAmount) >= 0.005
+      data.roundOffAmount != null && Math.abs(data.roundOffAmount) >= 0.01
         ? data.roundOffAmount
         : undefined
 
@@ -146,6 +160,7 @@ export default function BillMapping() {
       incrementPending(companyId)
     }
 
+    persistAliases(data.lineItems)
     toast.success('Mapping saved. Ready to sync.')
     setSaving(false)
   }
@@ -188,6 +203,7 @@ export default function BillMapping() {
       const result = await syncToTally(generatedXml, tallyUrl)
 
       if (result.success && result.created > 0) {
+        persistAliases(dataWithVoucher.lineItems)
         toast.success('Bill synced to Tally successfully!')
         setSyncDone(true)
         incrementSynced(companyId)
@@ -260,6 +276,7 @@ export default function BillMapping() {
               syncing={syncing}
               savedLedgerSets={normalizeLedgerMapping(company?.mapping)}
               nextVoucherNumber={`${bill.billNumber}_${(company?.voucherCounter ?? 0) + 1}`}
+              stockItemAliases={storedAliases}
               onSaveMapping={handleSaveMapping}
               onSyncToTally={handleSync}
             />

@@ -294,3 +294,5 @@ Use plan mode (`EnterPlanMode`) before starting any task that:
 - Changes auth or role logic
 
 For small fixes (single file, clear change), skip plan mode and act directly.
+
+Context Management Rule: > "Monitor the session context window. If the context exceeds 60% capacity, automatically execute the /compact command with a summary of the current task and pending items before proceeding with the next command."

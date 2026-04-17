@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, CheckCircle, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
-import type { Bill, TallyLedger, LedgerMapping } from '@/types'
+import type { Bill, TallyLedger, LedgerMapping, StockItemAlias } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
 
@@ -58,6 +58,7 @@ interface MappingFormProps {
   syncing: boolean
   savedLedgerSets?: LedgerMapping | null
   nextVoucherNumber?: string
+  stockItemAliases?: StockItemAlias[]
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -71,6 +72,7 @@ export function MappingForm({
   syncing,
   savedLedgerSets,
   nextVoucherNumber,
+  stockItemAliases = [],
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
@@ -115,13 +117,12 @@ export function MappingForm({
   const resolvedVendor  = gstinMatch?.name ?? (vendorNameMatch ? bill.vendorName : '')
 
   // ── Round-off ───────────────────────────────────────────────────────────────
-  // Use AI-extracted value if present; otherwise derive from the bill's own totals.
-  // Only treat as meaningful when the absolute value is ≥ ₹0.01.
-  const computedRoundOff = parseFloat(
-    (bill.totalAmount - bill.subtotal - bill.cgstAmount - bill.sgstAmount - bill.igstAmount).toFixed(2)
-  )
-  const roundOffValue  = bill.roundOffAmount ?? (Math.abs(computedRoundOff) >= 0.01 ? computedRoundOff : null)
-  const hasRoundOff    = roundOffValue !== null && Math.abs(roundOffValue) >= 0.01
+  // Only use the AI-parsed value from the bill. Never derive from totals — the
+  // difference can be non-zero due to floating point even when no round-off exists.
+  const roundOffValue = (bill.roundOffAmount != null && Math.abs(bill.roundOffAmount) >= 0.01)
+    ? bill.roundOffAmount
+    : null
+  const hasRoundOff = roundOffValue !== null
 
   // ── Form ────────────────────────────────────────────────────────────────────
   const { register, handleSubmit, setValue, watch } = useForm<MappingInput>({
@@ -163,6 +164,17 @@ export function MappingForm({
       if (show18 && prefillIgst18) setValue('igstLedger_18', prefillIgst18)
     }
   }, [resolvedVendor, savedLedgerSets]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-populate tallyStockItem from saved aliases (case-insensitive match on description)
+  useEffect(() => {
+    if (!stockItemAliases.length) return
+    bill.lineItems.forEach((item, i) => {
+      const alias = stockItemAliases.find(
+        (a) => a.billItemName === item.description.trim().toLowerCase()
+      )
+      if (alias) setValue(`lineItems.${i}.tallyStockItem`, alias.tallyStockItemName)
+    })
+  }, [stockItemAliases]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Can-sync guard ──────────────────────────────────────────────────────────
   const wP5  = watch('purchaseLedger_5')
@@ -347,8 +359,42 @@ export function MappingForm({
         </p>
       )}
 
+      {/* Bill Details */}
+      <div className="mt-5">
+        <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Bill Details</p>
+        <div className="grid grid-cols-3 gap-x-4 gap-y-0">
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Bill Number *</label>
+            <input
+              {...register('billNumber')}
+              type="text"
+              placeholder="e.g. INV-001"
+              className="input-base w-full"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Bill Date *</label>
+            <input
+              {...register('billDate')}
+              type="date"
+              className="input-base w-full"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Total Amount *</label>
+            <input
+              {...register('totalAmount')}
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              className="input-base w-full"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Voucher number + Round Off */}
-      <div className="mt-4 flex gap-6 flex-wrap">
+      <div className="mt-2 flex gap-6 flex-wrap">
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
             Tally Voucher Number

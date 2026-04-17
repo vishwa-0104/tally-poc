@@ -141,7 +141,7 @@ companiesRouter.get('/companies/:id/stock-items', async (req, res) => {
   res.json(items)
 })
 
-// PUT /api/companies/:id/stock-items — replace all cached stock items
+// PUT /api/companies/:id/stock-items — upsert by name (preserves IDs so aliases survive)
 companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
     res.status(403).json({ error: 'Forbidden' }); return
@@ -159,18 +159,66 @@ companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
   const companyId = req.params.id
   const incoming  = result.data
 
-  await prisma.$transaction([
-    ...incoming.map((item) =>
-      prisma.stockItemCache.upsert({
+  // Upsert each item by (companyId, name) — same id is preserved on update so FK in StockItemAlias stays valid.
+  // Delete only items no longer returned by Tally (cascade-deletes their aliases too).
+  await prisma.$transaction(async (tx) => {
+    for (const item of incoming) {
+      await tx.stockItemCache.upsert({
         where:  { companyId_name: { companyId, name: item.name } },
         update: { group: item.group, unit: item.unit },
         create: { companyId, name: item.name, group: item.group, unit: item.unit },
       })
-    ),
-    prisma.stockItemCache.deleteMany({
+    }
+    await tx.stockItemCache.deleteMany({
       where: { companyId, name: { notIn: incoming.map((i) => i.name) } },
-    }),
-  ])
+    })
+  })
+
+  res.json({ saved: incoming.length })
+})
+
+// GET /api/companies/:id/stock-item-aliases
+companiesRouter.get('/companies/:id/stock-item-aliases', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const aliases = await prisma.stockItemAlias.findMany({
+    where: { companyId: req.params.id },
+    select: { billItemName: true, stockItem: { select: { name: true } } },
+  })
+  res.json(aliases.map((a) => ({ billItemName: a.billItemName, tallyStockItemName: a.stockItem.name })))
+})
+
+// POST /api/companies/:id/stock-item-aliases — bulk upsert
+companiesRouter.post('/companies/:id/stock-item-aliases', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.array(z.object({
+    billItemName:      z.string().min(1),
+    tallyStockItemName: z.string().min(1),
+  }))
+  const result = schema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: 'Invalid input' }); return
+  }
+
+  const companyId = req.params.id
+  const incoming  = result.data
+
+  // Resolve each tallyStockItemName to a StockItemCache id for this company
+  for (const entry of incoming) {
+    const stockItem = await prisma.stockItemCache.findUnique({
+      where: { companyId_name: { companyId, name: entry.tallyStockItemName } },
+    })
+    if (!stockItem) continue // skip if item not in cache (shouldn't happen normally)
+
+    await prisma.stockItemAlias.upsert({
+      where:  { companyId_billItemName: { companyId, billItemName: entry.billItemName.toLowerCase() } },
+      update: { stockItemCacheId: stockItem.id },
+      create: { companyId, stockItemCacheId: stockItem.id, billItemName: entry.billItemName.toLowerCase() },
+    })
+  }
 
   res.json({ saved: incoming.length })
 })

@@ -29,11 +29,15 @@ interface LedgerSelectProps {
 }
 
 function LedgerSelect({ label, value, ledgerOptions, onChange }: LedgerSelectProps) {
+  // Only show the saved value if it still exists in the current ledger list.
+  // If the ledger was removed from Tally after a re-sync, the dropdown shows blank.
+  const resolvedValue = value && ledgerOptions.includes(value) ? value : ''
+
   return (
     <div className="flex items-center gap-3 mb-3">
       <label className="text-xs font-medium text-gray-600 w-44 shrink-0">{label}</label>
       <select
-        value={value ?? ''}
+        value={resolvedValue}
         onChange={(e) => onChange(e.target.value)}
         className="input-base flex-1 text-sm"
       >
