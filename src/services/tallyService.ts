@@ -1,4 +1,4 @@
-import type { TallyLedger, TallyStockItem, TallyStockGroup, TallySyncResult } from '@/types'
+import type { TallyLedger, TallyStockItem, TallyStockGroup, TallyStockUnit, TallySyncResult } from '@/types'
 
 const EXTENSION_MSG_TIMEOUT = 10_000
 
@@ -55,6 +55,11 @@ export async function fetchTallyStockItems(tallyUrl: string): Promise<TallyStock
 export async function fetchTallyStockGroups(tallyUrl: string): Promise<TallyStockGroup[]> {
   const result = await sendToExtension<{ stockGroups: TallyStockGroup[] }>('FETCH_STOCK_GROUPS', { tallyUrl })
   return result.stockGroups
+}
+
+export async function fetchTallyStockUnits(tallyUrl: string): Promise<TallyStockUnit[]> {
+  const result = await sendToExtension<{ stockUnits: TallyStockUnit[] }>('FETCH_STOCK_UNITS', { tallyUrl })
+  return result.stockUnits
 }
 
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {

@@ -229,6 +229,59 @@ companiesRouter.put('/companies/:id/stock-groups', async (req, res) => {
   res.json({ saved: incoming.length })
 })
 
+// GET /api/companies/:id/stock-units
+companiesRouter.get('/companies/:id/stock-units', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const units = await prisma.stockUnitCache.findMany({
+    where: { companyId: req.params.id },
+    orderBy: { name: 'asc' },
+  })
+  res.json(units)
+})
+
+// PUT /api/companies/:id/stock-units — replace all cached stock units
+companiesRouter.put('/companies/:id/stock-units', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.array(z.object({
+    name:   z.string(),
+    symbol: z.string().default(''),
+  }))
+  const result = schema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: 'Invalid input' }); return
+  }
+
+  const companyId = req.params.id
+  const incoming  = result.data
+  console.log(`[StockUnits] PUT /${companyId}/stock-units — received ${incoming.length} units`)
+
+  const CHUNK = 200
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < incoming.length; i += CHUNK) {
+      const chunk = incoming.slice(i, i + CHUNK)
+      await tx.$executeRaw`
+        INSERT INTO "StockUnitCache" (id, "companyId", name, symbol)
+        SELECT gen_random_uuid(), ${companyId}, u.name, u.symbol
+        FROM json_to_recordset(${JSON.stringify(chunk)}::json) AS u(
+          name text, symbol text
+        )
+        ON CONFLICT ("companyId", name) DO UPDATE SET
+          symbol = EXCLUDED.symbol
+      `
+    }
+    await tx.stockUnitCache.deleteMany({
+      where: { companyId, name: { notIn: incoming.map((u) => u.name) } },
+    })
+  }, { timeout: 60000 })
+
+  console.log(`[StockUnits] Upserted ${incoming.length} units for company ${companyId}`)
+  res.json({ saved: incoming.length })
+})
+
 // GET /api/companies/:id/stock-item-aliases
 companiesRouter.get('/companies/:id/stock-item-aliases', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
