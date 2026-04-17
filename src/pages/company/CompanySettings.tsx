@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchTallyLedgers, fetchTallyStockItems } from '@/services/tallyService'
+import { fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups } from '@/services/tallyService'
 import { normalizeLedgerMapping } from '@/types'
 import type { LedgerMapping } from '@/types'
 
@@ -56,19 +56,21 @@ function LedgerSelect({ label, value, ledgerOptions, onChange }: LedgerSelectPro
 
 export default function CompanySettings() {
   const { user }    = useAuthStore()
-  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb } = useCompanyStore()
   const company     = user?.companyId ? getCompany(user.companyId) : null
   const companyId   = user?.companyId ?? ''
 
-  const [syncing,      setSyncing]      = useState(false)
-  const [syncingItems, setSyncingItems] = useState(false)
-  const [savingMap,    setSavingMap]    = useState(false)
+  const [syncing,       setSyncing]       = useState(false)
+  const [syncingItems,  setSyncingItems]  = useState(false)
+  const [syncingGroups, setSyncingGroups] = useState(false)
+  const [savingMap,     setSavingMap]     = useState(false)
   const [tallyUrl,     setTallyUrl]     = useState(getTallyUrl)
   const [voucherType,  setVoucherType]  = useState(getTallyVoucherType)
 
-  const storedLedgers    = companyId ? getLedgers(companyId)    : []
-  const storedStockItems = companyId ? getStockItems(companyId) : []
-  const ledgerOptions    = storedLedgers.map((l) => l.name)
+  const storedLedgers     = companyId ? getLedgers(companyId)     : []
+  const storedStockItems  = companyId ? getStockItems(companyId)  : []
+  const storedStockGroups = companyId ? getStockGroups(companyId) : []
+  const ledgerOptions     = storedLedgers.map((l) => l.name)
 
   const [mapping, setMapping] = useState<LedgerMapping>(() => normalizeLedgerMapping(company?.mapping))
 
@@ -83,6 +85,9 @@ export default function CompanySettings() {
     }
     if (companyId && storedStockItems.length === 0) {
       fetchStockItemsFromDb(companyId).catch(() => {})
+    }
+    if (companyId && storedStockGroups.length === 0) {
+      fetchStockGroupsFromDb(companyId).catch(() => {})
     }
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -121,6 +126,20 @@ export default function CompanySettings() {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch stock items. Is Tally running?')
     } finally {
       setSyncingItems(false)
+    }
+  }
+
+  const handleSyncStockGroups = async () => {
+    if (!companyId) return
+    setSyncingGroups(true)
+    try {
+      const groups = await fetchTallyStockGroups(getTallyUrl())
+      await saveStockGroupsToDb(companyId, groups)
+      toast.success(`${groups.length} stock groups synced and saved`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock groups. Is Tally running?')
+    } finally {
+      setSyncingGroups(false)
     }
   }
 
@@ -234,6 +253,28 @@ export default function CompanySettings() {
             {storedStockItems.length === 0 && (
               <p className="text-xs text-gray-400 mt-1.5">
                 Sync stock items to enable per-line-item mapping in purchase bills.
+              </p>
+            )}
+          </div>
+
+          {/* Stock group sync */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-gray-700">Tally Stock Groups</span>
+              {storedStockGroups.length > 0 && (
+                <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  {storedStockGroups.length} groups synced
+                </span>
+              )}
+            </div>
+            <Button variant="outline" size="sm" loading={syncingGroups} onClick={handleSyncStockGroups} className="w-full">
+              <RefreshCw className="w-3.5 h-3.5" />
+              {storedStockGroups.length > 0 ? 'Refresh Stock Groups from Tally' : 'Sync Stock Groups from Tally'}
+            </Button>
+            {storedStockGroups.length === 0 && (
+              <p className="text-xs text-gray-400 mt-1.5">
+                Sync stock groups to enable group-based item classification.
               </p>
             )}
           </div>

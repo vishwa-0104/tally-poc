@@ -177,6 +177,51 @@ companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
   res.json({ saved: incoming.length })
 })
 
+// GET /api/companies/:id/stock-groups
+companiesRouter.get('/companies/:id/stock-groups', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const groups = await prisma.stockGroupCache.findMany({
+    where: { companyId: req.params.id },
+    orderBy: { name: 'asc' },
+  })
+  res.json(groups)
+})
+
+// PUT /api/companies/:id/stock-groups — replace all cached stock groups
+companiesRouter.put('/companies/:id/stock-groups', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.array(z.object({
+    name:   z.string(),
+    parent: z.string().default(''),
+  }))
+  const result = schema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: 'Invalid input' }); return
+  }
+
+  const companyId = req.params.id
+  const incoming  = result.data
+
+  await prisma.$transaction(async (tx) => {
+    for (const g of incoming) {
+      await tx.stockGroupCache.upsert({
+        where:  { companyId_name: { companyId, name: g.name } },
+        update: { parent: g.parent },
+        create: { companyId, name: g.name, parent: g.parent },
+      })
+    }
+    await tx.stockGroupCache.deleteMany({
+      where: { companyId, name: { notIn: incoming.map((g) => g.name) } },
+    })
+  })
+
+  res.json({ saved: incoming.length })
+})
+
 // GET /api/companies/:id/stock-item-aliases
 companiesRouter.get('/companies/:id/stock-item-aliases', async (req, res) => {
   if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {

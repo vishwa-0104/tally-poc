@@ -44,6 +44,7 @@ model Company {
   users            User[]
   ledgerCache      LedgerCache[]
   stockItemCache   StockItemCache[]
+  stockGroupCache  StockGroupCache[]
   stockItemAliases StockItemAlias[]
   createdAt        DateTime       @default(now())
 }
@@ -112,6 +113,16 @@ model StockItemAlias {
   billItemName     String         // stored lowercase for case-insensitive lookup
 
   @@unique([companyId, billItemName])
+}
+
+model StockGroupCache {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  name      String
+  parent    String  @default("")
+
+  @@unique([companyId, name])
 }
 
 model LineItem {

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Company, LedgerMapping, TallyLedger, TallyStockItem, StockItemAlias } from '@/types'
+import type { Company, LedgerMapping, TallyLedger, TallyStockItem, TallyStockGroup, StockItemAlias } from '@/types'
 import { api } from '@/lib/api'
 
 interface CompanyStore {
@@ -7,6 +7,7 @@ interface CompanyStore {
   loading: boolean
   ledgers: Record<string, TallyLedger[]>
   stockItems: Record<string, TallyStockItem[]>
+  stockGroups: Record<string, TallyStockGroup[]>
   stockItemAliases: Record<string, StockItemAlias[]>
   fetchCompanies: () => Promise<void>
   addCompany: (data: Omit<Company, 'id' | 'totalBills' | 'syncedBills' | 'pendingBills' | 'errorBills' | 'voucherCounter' | 'createdAt'> & { password: string }) => Promise<Company>
@@ -20,6 +21,9 @@ interface CompanyStore {
   getStockItems: (companyId: string) => TallyStockItem[]
   fetchStockItemsFromDb: (companyId: string) => Promise<void>
   saveStockItemsToDb: (companyId: string, items: TallyStockItem[]) => Promise<void>
+  getStockGroups: (companyId: string) => TallyStockGroup[]
+  fetchStockGroupsFromDb: (companyId: string) => Promise<void>
+  saveStockGroupsToDb: (companyId: string, groups: TallyStockGroup[]) => Promise<void>
   fetchAliases: (companyId: string) => Promise<void>
   saveAliases: (companyId: string, aliases: StockItemAlias[]) => Promise<void>
   incrementBillCount: (companyId: string) => void
@@ -35,6 +39,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   loading: false,
   ledgers: {},
   stockItems: {},
+  stockGroups: {},
   stockItemAliases: {},
 
   fetchCompanies: async () => {
@@ -80,6 +85,18 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   saveStockItemsToDb: async (companyId, items) => {
     await api.put<{ saved: number }>(`/companies/${companyId}/stock-items`, items)
     set((s) => ({ stockItems: { ...s.stockItems, [companyId]: items } }))
+  },
+
+  getStockGroups: (companyId) => get().stockGroups[companyId] ?? [],
+
+  fetchStockGroupsFromDb: async (companyId) => {
+    const { data } = await api.get<TallyStockGroup[]>(`/companies/${companyId}/stock-groups`)
+    set((s) => ({ stockGroups: { ...s.stockGroups, [companyId]: data } }))
+  },
+
+  saveStockGroupsToDb: async (companyId, groups) => {
+    await api.put<{ saved: number }>(`/companies/${companyId}/stock-groups`, groups)
+    set((s) => ({ stockGroups: { ...s.stockGroups, [companyId]: groups } }))
   },
 
   fetchAliases: async (companyId) => {
