@@ -44,9 +44,13 @@ export const useBillStore = create<BillStore>((set, get) => ({
 
   updateBillStatus: async (companyId, billId, status, extra = {}) => {
     const existing = get().getBill(companyId, billId)
-    if (!existing) return
+    if (!existing) {
+      console.error(`[updateBillStatus] bill not found in store: ${billId}`)
+      return
+    }
 
     const updated: Bill = { ...existing, status, ...extra }
+    console.log(`[updateBillStatus] ${existing.status} → ${status}`, { billId, extra: Object.keys(extra) })
 
     // Optimistic update — UI reflects the new status immediately
     set((s) => ({
@@ -58,6 +62,7 @@ export const useBillStore = create<BillStore>((set, get) => ({
 
     try {
       const { data } = await api.put<Bill>(`/bills/${billId}`, updated)
+      console.log(`[updateBillStatus] server confirmed status=${data.status}`)
       // Reconcile with server response (e.g. normalised status casing)
       set((s) => ({
         bills: {
@@ -66,6 +71,7 @@ export const useBillStore = create<BillStore>((set, get) => ({
         },
       }))
     } catch (err) {
+      console.error(`[updateBillStatus] API failed, reverting ${status} → ${existing.status}`, err)
       // Revert to previous state if the API call fails
       set((s) => ({
         bills: {

@@ -73,6 +73,8 @@ billsRouter.put('/bills/:id', async (req, res) => {
   safeData.status   = (body.status as string)?.toUpperCase() ?? existing.status
   if (body.syncedAt) safeData.syncedAt = new Date(body.syncedAt as string)
 
+  console.log(`[PUT /bills/${req.params.id}] status=${safeData.status} lineItems=${lineItems?.length ?? 'none'}`)
+
   const bill = await prisma.bill.update({
     where: { id: req.params.id },
     data: {
@@ -80,13 +82,16 @@ billsRouter.put('/bills/:id', async (req, res) => {
       ...(lineItems && {
         lineItems: {
           deleteMany: {},
-          create: lineItems.map(({ id: _id, ...item }: { id?: string } & Record<string, unknown>) => item),
+          // Strip both `id` (lineItem PK) and `billId` (FK set by Prisma via the
+          // nesting relation — passing it explicitly causes an "Unknown argument" error).
+          create: lineItems.map(({ id: _id, billId: _billId, ...item }: { id?: string; billId?: string } & Record<string, unknown>) => item),
         },
       }),
     },
     include: { lineItems: true },
   })
 
+  console.log(`[PUT /bills/${req.params.id}] saved status=${bill.status}`)
   res.json(normalizeBill(bill))
 })
 
