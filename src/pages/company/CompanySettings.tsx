@@ -19,7 +19,9 @@ export function getTallyUrl():         string { return localStorage.getItem(TALL
 export function getTallyCompanyName(): string { return localStorage.getItem(TALLY_COMPANY_KEY)      ?? '' }
 export function getTallyVoucherType(): string { return localStorage.getItem(TALLY_VOUCHER_TYPE_KEY) || DEFAULT_VOUCHER_TYPE }
 
-// ── Single ledger dropdown ────────────────────────────────────────────────────
+// ── Single ledger combobox (input + datalist) ─────────────────────────────────
+
+let _ledgerSelectId = 0
 
 interface LedgerSelectProps {
   label: string
@@ -29,23 +31,23 @@ interface LedgerSelectProps {
 }
 
 function LedgerSelect({ label, value, ledgerOptions, onChange }: LedgerSelectProps) {
-  // Only show the saved value if it still exists in the current ledger list.
-  // If the ledger was removed from Tally after a re-sync, the dropdown shows blank.
-  const resolvedValue = value && ledgerOptions.includes(value) ? value : ''
+  const [id] = useState(() => `ls-${++_ledgerSelectId}`)
 
   return (
     <div className="flex items-center gap-3 mb-3">
-      <label className="text-xs font-medium text-gray-600 w-44 shrink-0">{label}</label>
-      <select
-        value={resolvedValue}
+      <label htmlFor={id} className="text-xs font-medium text-gray-600 w-44 shrink-0">{label}</label>
+      <input
+        id={id}
+        list={`${id}-list`}
+        value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
+        autoComplete="off"
+        placeholder="Type or select…"
         className="input-base flex-1 text-sm"
-      >
-        <option value="">— Select Ledger —</option>
-        {ledgerOptions.map((name) => (
-          <option key={name} value={name}>{name}</option>
-        ))}
-      </select>
+      />
+      <datalist id={`${id}-list`}>
+        {ledgerOptions.map((name) => <option key={name} value={name} />)}
+      </datalist>
     </div>
   )
 }
@@ -279,6 +281,15 @@ export default function CompanySettings() {
             <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">IGST</p>
             <LedgerSelect label="IGST 5%"  value={mapping.igst_5}  ledgerOptions={ledgerOptions} onChange={set('igst_5')} />
             <LedgerSelect label="IGST 18%" value={mapping.igst_18} ledgerOptions={ledgerOptions} onChange={set('igst_18')} />
+          </div>
+
+          {/* Round Off */}
+          <div className="mb-5">
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Round Off</p>
+            <LedgerSelect label="Round Off Ledger" value={mapping.roundoff_ledger} ledgerOptions={ledgerOptions} onChange={set('roundoff_ledger')} />
+            <p className="text-xs text-gray-400 -mt-1">
+              Used as the ledger name in Tally for round-off entries. Defaults to <span className="font-mono">Round Off</span> if blank.
+            </p>
           </div>
 
           <Button variant="teal" loading={savingMap} onClick={handleSaveMapping}>

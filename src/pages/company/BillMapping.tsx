@@ -125,6 +125,7 @@ export default function BillMapping() {
       sgstAmount:    bill.sgstAmount,
       igstAmount:    bill.igstAmount,
       roundOffAmount: roundOffAmt,
+      roundOffLedger: company?.mapping?.roundoff_ledger?.trim() || undefined,
       tallyCompany:  tallyCompany || undefined,
       voucherType:   voucherType,
       lineItems:     data.lineItems ?? bill.lineItems,

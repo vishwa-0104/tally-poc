@@ -32,6 +32,8 @@ export interface LedgerMapping {
   // IGST
   igst_5?:  string
   igst_18?: string
+  // Round off
+  roundoff_ledger?: string
 }
 
 /** Cast stored JSON to LedgerMapping (all fields optional, no migration needed) */

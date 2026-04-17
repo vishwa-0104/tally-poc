@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, ChevronLeft, ChevronRight } from 'lucide-react'
+import { FileText, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { toast } from 'react-hot-toast'
 import { StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { useBillStore, useAuthStore } from '@/store'
 import type { Bill } from '@/types'
 
 const PAGE_SIZE = 10
@@ -17,6 +19,24 @@ interface BillsTableProps {
 export function BillsTable({ bills, onUpload }: BillsTableProps) {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const { user } = useAuthStore()
+  const { deleteBill } = useBillStore()
+
+  const handleDelete = async (bill: Bill) => {
+    if (!user?.companyId) return
+    if (!window.confirm(`Delete bill "${bill.billNumber}" from ${bill.vendorName}? This cannot be undone.`)) return
+    setDeleting(bill.id)
+    try {
+      await deleteBill(user.companyId, bill.id)
+      toast.success('Bill deleted')
+    } catch {
+      toast.error('Failed to delete bill')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   // Reset to page 1 when bill list changes (new upload, etc.)
   useEffect(() => { setPage(1) }, [bills.length])
@@ -43,8 +63,8 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
         <table className="w-full border-collapse" aria-label="Bills list">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
-              {['Bill No.', 'Vendor', 'Date', 'Amount', 'Status', 'Action'].map((h) => (
-                <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              {['Bill No.', 'Vendor', 'Date', 'Amount', 'Status', 'Action', ''].map((h, i) => (
+                <th key={i} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                   {h}
                 </th>
               ))}
@@ -70,8 +90,20 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
                     </Button>
                   )}
                   {bill.status === 'synced' && (
-                    <span className="text-xs font-semibold text-emerald-600">✓ Synced</span>
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/company/bills/${bill.id}`)}>
+                      View
+                    </Button>
                   )}
+                </td>
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => handleDelete(bill)}
+                    disabled={deleting === bill.id}
+                    className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-40 transition-colors"
+                    title="Delete bill"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </td>
               </tr>
             ))}

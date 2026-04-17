@@ -10,6 +10,7 @@ interface BillStore {
   getBill: (companyId: string, billId: string) => Bill | undefined
   addBill: (bill: Bill) => Promise<void>
   updateBillStatus: (companyId: string, billId: string, status: BillStatus, extra?: Partial<Bill>) => Promise<void>
+  deleteBill: (companyId: string, billId: string) => Promise<void>
 }
 
 export const useBillStore = create<BillStore>((set, get) => ({
@@ -72,6 +73,24 @@ export const useBillStore = create<BillStore>((set, get) => ({
           [companyId]: (s.bills[companyId] ?? []).map((b) => (b.id === billId ? existing : b)),
         },
       }))
+      throw err
+    }
+  },
+
+  deleteBill: async (companyId, billId) => {
+    // Optimistic remove
+    set((s) => ({
+      bills: {
+        ...s.bills,
+        [companyId]: (s.bills[companyId] ?? []).filter((b) => b.id !== billId),
+      },
+    }))
+    try {
+      await api.delete(`/bills/${billId}`)
+    } catch (err) {
+      // Revert on failure
+      const { data } = await api.get<Bill[]>(`/companies/${companyId}/bills`)
+      set((s) => ({ bills: { ...s.bills, [companyId]: data } }))
       throw err
     }
   },
