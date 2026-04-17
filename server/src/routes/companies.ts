@@ -158,22 +158,29 @@ companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
 
   const companyId = req.params.id
   const incoming  = result.data
+  console.log(`[StockItems] PUT /${companyId}/stock-items — received ${incoming.length} items`)
 
-  // Upsert each item by (companyId, name) — same id is preserved on update so FK in StockItemAlias stays valid.
-  // Delete only items no longer returned by Tally (cascade-deletes their aliases too).
+  const CHUNK = 200
   await prisma.$transaction(async (tx) => {
-    for (const item of incoming) {
-      await tx.stockItemCache.upsert({
-        where:  { companyId_name: { companyId, name: item.name } },
-        update: { group: item.group, unit: item.unit },
-        create: { companyId, name: item.name, group: item.group, unit: item.unit },
-      })
+    for (let i = 0; i < incoming.length; i += CHUNK) {
+      const chunk = incoming.slice(i, i + CHUNK)
+      await tx.$executeRaw`
+        INSERT INTO "StockItemCache" (id, "companyId", name, "group", unit)
+        SELECT gen_random_uuid(), ${companyId}, s.name, s."group", s.unit
+        FROM json_to_recordset(${JSON.stringify(chunk)}::json) AS s(
+          name text, "group" text, unit text
+        )
+        ON CONFLICT ("companyId", name) DO UPDATE SET
+          "group" = EXCLUDED."group",
+          unit    = EXCLUDED.unit
+      `
     }
     await tx.stockItemCache.deleteMany({
       where: { companyId, name: { notIn: incoming.map((i) => i.name) } },
     })
-  })
+  }, { timeout: 60000 })
 
+  console.log(`[StockItems] Upserted ${incoming.length} items for company ${companyId}`)
   res.json({ saved: incoming.length })
 })
 
