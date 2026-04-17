@@ -45,6 +45,7 @@ model Company {
   ledgerCache      LedgerCache[]
   stockItemCache   StockItemCache[]
   stockGroupCache  StockGroupCache[]
+  stockUnitCache   StockUnitCache[]
   stockItemAliases StockItemAlias[]
   createdAt        DateTime       @default(now())
 }
@@ -121,6 +122,16 @@ model StockGroupCache {
   companyId String
   name      String
   parent    String  @default("")
+
+  @@unique([companyId, name])
+}
+
+model StockUnitCache {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  name      String
+  symbol    String  @default("")
 
   @@unique([companyId, name])
 }

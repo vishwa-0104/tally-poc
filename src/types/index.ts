@@ -154,6 +154,11 @@ export interface TallyStockGroup {
   parent: string
 }
 
+export interface TallyStockUnit {
+  name: string
+  symbol: string
+}
+
 export interface TallySyncResult {
   success: boolean
   created: number
