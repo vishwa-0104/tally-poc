@@ -23,7 +23,7 @@ export default function BillMapping() {
   const [syncDone, setSyncDone] = useState(false)
 
   const { user }     = useAuthStore()
-  const { getBill, updateBillStatus } = useBillStore()
+  const { getBill, updateBillStatus, fetchBills } = useBillStore()
   const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
   const ledgersState       = useCompanyStore((s) => s.ledgers)
   const stockItemsState    = useCompanyStore((s) => s.stockItems)
@@ -207,12 +207,15 @@ export default function BillMapping() {
       const result = await syncToTally(generatedXml, tallyUrl)
 
       if (result.success && result.created > 0) {
-        // Await so the status definitely persists to DB before we show success UI.
+        // Await so status persists to DB, then re-fetch bills so the store
+        // is authoritative from the server — this prevents any race condition
+        // from leaving the status as 'mapped' in the UI.
         await updateBillStatus(companyId, bill.id, 'synced', {
           tallyXml: generatedXml,
           syncedAt: new Date().toISOString(),
           syncError: undefined,
         })
+        await fetchBills(companyId)
 
         persistAliases(dataWithVoucher.lineItems)
         toast.success('Bill synced to Tally successfully!')
