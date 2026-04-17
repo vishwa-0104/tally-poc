@@ -59,6 +59,7 @@ export const mappingSchema = z.object({
   igstLedger_18:         z.string().optional(),
   // Bill meta
   billDate:       z.string().min(1, 'Date is required'),
+  voucherDate:    z.string().optional(),
   billNumber:     z.string().min(1, 'Bill number is required'),
   voucherNumber:  z.string().optional(),
   totalAmount:    z.coerce.number().positive('Amount must be positive'),

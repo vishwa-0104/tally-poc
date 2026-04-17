@@ -118,6 +118,7 @@ export default function BillMapping() {
       igstLedger,
       billNumber:    data.billNumber,
       billDate:      data.billDate,
+      voucherDate:   data.voucherDate?.trim() || undefined,
       voucherNumber: data.voucherNumber?.trim() || undefined,
       totalAmount:   data.totalAmount,
       subtotal:      bill.subtotal,
@@ -246,7 +247,7 @@ export default function BillMapping() {
 
       <div className="p-7 max-w-5xl">
         {/* Success banner */}
-        {syncDone && (
+        {(syncDone || bill.status === 'synced') && (
           <div className="flex items-start gap-3 p-5 bg-emerald-50 border border-emerald-200 rounded-xl mb-6">
             <CheckCircle className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-0.5" />
             <div>
@@ -266,7 +267,7 @@ export default function BillMapping() {
           </div>
         )}
 
-        {!syncDone && (
+        {!syncDone && bill.status !== 'synced' && (
           <div className="card p-6 mb-5">
             <MappingForm
               bill={bill}

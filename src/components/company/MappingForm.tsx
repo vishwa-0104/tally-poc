@@ -139,6 +139,7 @@ export function MappingForm({
       igstLedger_5:  isInterstate  && show5  ? prefillIgst5  || undefined : undefined,
       igstLedger_18: isInterstate  && show18 ? prefillIgst18 || undefined : undefined,
       billDate:       bill.billDate,
+      voucherDate:    new Date().toISOString().split('T')[0],
       billNumber:     bill.billNumber,
       totalAmount:    bill.totalAmount,
       roundOffAmount: hasRoundOff ? roundOffValue! : undefined,
@@ -393,7 +394,7 @@ export function MappingForm({
         </div>
       </div>
 
-      {/* Voucher number + Round Off */}
+      {/* Voucher number + Voucher Date + Round Off */}
       <div className="mt-2 flex gap-6 flex-wrap">
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
@@ -403,6 +404,17 @@ export function MappingForm({
             {nextVoucherNumber ?? `${bill.billNumber}_1`}
           </div>
           <p className="text-xs text-gray-400 mt-1">Auto-assigned on sync</p>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+            Tally Voucher Date
+          </label>
+          <input
+            {...register('voucherDate')}
+            type="date"
+            className="input-base w-40"
+          />
+          <p className="text-xs text-gray-400 mt-1">Entry date in Tally (<span className="font-mono">DATE</span>)</p>
         </div>
         {hasRoundOff && (
           <div>
