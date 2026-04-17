@@ -182,8 +182,10 @@ export default function BillMapping() {
 
       const { generatedXml, tallyMapping } = buildArtifacts(dataWithVoucher)
 
-      // Always persist mapping before attempting sync.
-      updateBillStatus(companyId, bill.id, 'mapped', {
+      // Persist mapping first — await so its DB write completes before the synced
+      // write below. Without this, the 'mapped' response can arrive after the
+      // optimistic 'synced' update and race-overwrite it back to 'mapped'.
+      await updateBillStatus(companyId, bill.id, 'mapped', {
         billDate: data.billDate,
         billNumber: data.billNumber,
         totalAmount: data.totalAmount,
@@ -205,17 +207,19 @@ export default function BillMapping() {
       const result = await syncToTally(generatedXml, tallyUrl)
 
       if (result.success && result.created > 0) {
+        // Await so the status definitely persists to DB before we show success UI.
+        await updateBillStatus(companyId, bill.id, 'synced', {
+          tallyXml: generatedXml,
+          syncedAt: new Date().toISOString(),
+          syncError: undefined,
+        })
+
         persistAliases(dataWithVoucher.lineItems)
         toast.success('Bill synced to Tally successfully!')
         setSyncDone(true)
         incrementSynced(companyId)
         decrementPending(companyId)
         fetchCompanies().catch(() => {})
-        updateBillStatus(companyId, bill.id, 'synced', {
-          tallyXml: generatedXml,
-          syncedAt: new Date().toISOString(),
-          syncError: undefined,
-        }).catch(() => {})
       } else {
         throw new Error(result.message ?? 'Tally returned 0 created vouchers')
       }
