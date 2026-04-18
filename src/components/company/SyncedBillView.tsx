@@ -8,9 +8,9 @@ interface SyncedBillViewProps {
 function Row({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null
   return (
-    <div className="flex gap-2">
-      <span className="text-xs text-gray-500 w-36 shrink-0">{label}</span>
-      <span className="text-xs font-medium text-gray-800">{value}</span>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</span>
+      <span className="text-xs font-medium text-gray-800 break-all">{value}</span>
     </div>
   )
 }
@@ -24,7 +24,7 @@ export function SyncedBillView({ bill }: SyncedBillViewProps) {
       {/* Bill details */}
       <div className="card p-5">
         <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Bill Details</p>
-        <div className="grid grid-cols-3 gap-x-6 gap-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2">
           <Row label="Bill Number"   value={bill.billNumber} />
           <Row label="Bill Date"     value={formatDate(bill.billDate)} />
           <Row label="Vendor"        value={bill.vendorName} />

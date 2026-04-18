@@ -43,7 +43,7 @@ export default function CompanyBills() {
         }
       />
 
-      <div className="p-7">
+      <div className="p-4 md:p-7">
         {/* Stats */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
           <StatCard label="Total Bills" value={bills.length} sub="All time"                accent="blue"  />

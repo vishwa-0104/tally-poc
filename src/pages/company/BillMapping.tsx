@@ -253,7 +253,7 @@ export default function BillMapping() {
         }
       />
 
-      <div className="p-7 max-w-5xl">
+      <div className="p-4 md:p-7 max-w-5xl">
         {/* Synced — read-only view */}
         {(syncDone || bill.status === 'synced') && (
           <>

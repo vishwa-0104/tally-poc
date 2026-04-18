@@ -182,7 +182,7 @@ export default function CompanySettings() {
     <>
       <PageHeader title="Settings" subtitle="Tally connection and AI configuration" />
 
-      <div className="p-7 max-w-lg space-y-5">
+      <div className="p-4 md:p-7 max-w-lg space-y-5">
         {/* Tally connection */}
         <div className="card p-6">
           <h2 className="text-sm font-bold text-gray-800 mb-4">Tally Connection</h2>

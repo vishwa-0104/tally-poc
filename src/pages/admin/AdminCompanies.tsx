@@ -23,7 +23,7 @@ export default function AdminCompanies() {
         }
       />
 
-      <div className="p-7">
+      <div className="p-4 md:p-7">
         <div className="card overflow-hidden">
           <table className="w-full border-collapse" aria-label="Companies">
             <thead>

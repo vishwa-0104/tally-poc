@@ -11,7 +11,7 @@ export default function AdminAnalytics() {
         subtitle="High-level sync performance — counts only, no bill details"
       />
 
-      <div className="p-7">
+      <div className="p-4 md:p-7">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {companies.map((c) => {
             const pct = c.totalBills > 0 ? Math.round((c.syncedBills / c.totalBills) * 100) : 0

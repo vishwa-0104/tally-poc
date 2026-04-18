@@ -24,7 +24,7 @@ export default function CompanySyncLog() {
     <>
       <PageHeader title="Sync Log" subtitle="History of all Tally sync operations" />
 
-      <div className="p-7 space-y-6">
+      <div className="p-4 md:p-7 space-y-6">
 
         {/* Summary stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
