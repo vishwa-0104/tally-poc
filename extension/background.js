@@ -377,7 +377,7 @@ function parseSyncResponse(xml) {
 
 async function handleCreateStockItem(payload, tallyUrl) {
   const xml = buildStockItemXml(payload)
-  console.log('[CreateStockItem] XML (first 500):', xml.slice(0, 500))
+  console.log('[CreateStockItem] Full XML:\n', xml)
   const responseText = await postToTally(xml, tallyUrl)
   console.log('[CreateStockItem] Tally raw response:', responseText.slice(0, 3000))
   return parseSyncResponse(responseText)
