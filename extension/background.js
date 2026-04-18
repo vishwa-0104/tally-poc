@@ -400,15 +400,16 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
     const halfRate  = isTaxable && gstRate ? gstRate / 2 : 0
     if (description) descriptionTag = `<DESCRIPTION>${description}</DESCRIPTION>`
     gstBlock = `
-            <GSTDETAILS.LIST>
+            <HSNDETAILS.LIST>
               <APPLICABLEFROM>${getTodayYYYYMMDD()}</APPLICABLEFROM>
-              <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
+              <HSNSACTYPE>HSN</HSNSACTYPE>
               ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : ''}
-              <TAXABILITY>${taxability}</TAXABILITY>${isTaxable && gstRate ? `
+              <TAXABILITY>${taxability}</TAXABILITY>
+              <CALCULATIONTYPE>On Value</CALCULATIONTYPE>${isTaxable && gstRate ? `
               <IGSTRATE>${gstRate}</IGSTRATE>
               <CGSTRATE>${halfRate}</CGSTRATE>
               <SGSTRATE>${halfRate}</SGSTRATE>` : ''}
-            </GSTDETAILS.LIST>`
+            </HSNDETAILS.LIST>`
   }
 
   const companyVar = tallyCompany
@@ -432,7 +433,9 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
             <PARENT>${group}</PARENT>
             <BASEUNITS>${unit}</BASEUNITS>
             <GSTAPPLICABLE>${applicable}</GSTAPPLICABLE>
-            <GSTTYPEOFSUPPLY>${typeOfSupply}</GSTTYPEOFSUPPLY>${gstBlock}
+            <GSTTYPEOFSUPPLY>${typeOfSupply}</GSTTYPEOFSUPPLY>
+            <HSNDETAILSTYPE>Specify Details Here</HSNDETAILSTYPE>
+            <TAXDETAILSTYPE>Specify Details Here</TAXDETAILSTYPE>${gstBlock}
           </STOCKITEM>
         </TALLYMESSAGE>
       </REQUESTDATA>
