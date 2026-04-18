@@ -226,6 +226,21 @@ export function MappingForm({
   const wC18 = watch('cgstLedger_18'); const wS18 = watch('sgstLedger_18')
   const wI5  = watch('igstLedger_5');  const wI18 = watch('igstLedger_18')
 
+  const watchedLineItems = watch('lineItems')
+  const watchedRoundOff  = watch('roundOffAmount')
+
+  // Round off mismatch check — only when bill has a round off value
+  let roundOffSuggestion: number | null = null
+  if (hasRoundOff) {
+    const recomputedSubtotal = (watchedLineItems ?? bill.lineItems)
+      .reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+    const net      = recomputedSubtotal + bill.cgstAmount + bill.sgstAmount + bill.igstAmount
+    const expected = parseFloat((Math.round(net) - net).toFixed(2))
+    if (Math.abs(expected - Number(watchedRoundOff)) >= 0.01) {
+      roundOffSuggestion = expected
+    }
+  }
+
   const purchaseOk = (!show5 || !!wP5?.trim()) && (!show18 || !!wP18?.trim()) && (!showExempt || !!wPEx?.trim())
   const taxOk = isInterstate
     ? (!show5 || !!wI5?.trim()) && (!show18 || !!wI18?.trim())
@@ -469,6 +484,11 @@ export function MappingForm({
               placeholder="0.00"
               className="input-base w-32"
             />
+            {roundOffSuggestion !== null && (
+              <p className="text-xs text-amber-600 mt-1">
+                Value seems incorrect, try ₹{roundOffSuggestion}
+              </p>
+            )}
           </div>
         )}
       </div>
