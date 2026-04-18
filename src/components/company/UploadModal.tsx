@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
+import type { ChangeEvent } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, CheckCircle, Circle, Loader } from 'lucide-react'
+import { Camera, Upload, CheckCircle, Circle, Loader } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -25,6 +26,13 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
   const [file, setFile]         = useState<File | null>(null)
   const [parsing, setParsing]   = useState(false)
   const [step, setStep]         = useState(-1)
+  const cameraInputRef          = useRef<HTMLInputElement>(null)
+
+  const handleCameraCapture = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) setFile(f)
+    e.target.value = ''
+  }
 
   const { user } = useAuthStore()
   const addBill  = useBillStore((s) => s.addBill)
@@ -108,6 +116,29 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
             </p>
             <p className="text-xs text-gray-400">JPG, PNG, PDF — max 10 MB</p>
           </div>
+
+          {/* Camera capture — opens rear camera on mobile, file picker on desktop */}
+          <div className="flex items-center gap-3 my-3">
+            <div className="flex-1 border-t border-gray-200" />
+            <span className="text-xs text-gray-400">or</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleCameraCapture}
+          />
+          <button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-teal-400 hover:bg-teal-50/50 transition-all text-sm font-semibold text-gray-600 hover:text-teal-700"
+          >
+            <Camera className="w-4 h-4" />
+            Take a Photo
+          </button>
 
           {/* Selected file */}
           {file && (
