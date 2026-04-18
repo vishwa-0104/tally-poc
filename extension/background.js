@@ -387,8 +387,8 @@ function buildStockItemXml({ name, group, unit, gstApplicable, hsnCode, gstRate,
   const applicable = gstApplicable === 'Yes' ? 'Applicable' : 'Not Applicable'
   const halfRate   = gstRate ? gstRate / 2 : 0
 
-  const hsnBlock = (gstApplicable === 'Yes' && hsnCode)
-    ? `\n            <HSNDETAILS.LIST>\n              <HSNCODE>${hsnCode}</HSNCODE>\n              <TAXABILITY>Taxable</TAXABILITY>\n              <IGSTRATE>${gstRate}</IGSTRATE>\n              <CGSTRATE>${halfRate}</CGSTRATE>\n              <SGSTRATE>${halfRate}</SGSTRATE>\n            </HSNDETAILS.LIST>`
+  const hsnBlock = (gstApplicable === 'Yes')
+    ? `\n            <HSNDETAILS.LIST>\n              ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>\n              ` : ''}<TAXABILITY>Taxable</TAXABILITY>\n              <IGSTRATE>${gstRate}</IGSTRATE>\n              <CGSTRATE>${halfRate}</CGSTRATE>\n              <SGSTRATE>${halfRate}</SGSTRATE>\n            </HSNDETAILS.LIST>`
     : ''
 
   const companyVar = tallyCompany
