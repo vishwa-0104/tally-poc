@@ -286,6 +286,9 @@ export default function BillMapping() {
               savedLedgerSets={normalizeLedgerMapping(company?.mapping)}
               nextVoucherNumber={`${bill.billNumber}_${(company?.voucherCounter ?? 0) + 1}`}
               stockItemAliases={storedAliases}
+              companyId={companyId}
+              tallyUrl={tallyUrl}
+              tallyCompany={tallyCompany}
               onSaveMapping={handleSaveMapping}
               onSyncToTally={handleSync}
             />

@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AlertTriangle, CheckCircle, Zap } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Plus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { CreateStockItemModal } from '@/components/company/CreateStockItemModal'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
 import type { Bill, TallyLedger, LedgerMapping, StockItemAlias } from '@/types'
 import { formatCurrency } from '@/lib/utils'
@@ -49,6 +50,39 @@ function LedgerInput({ id, label, required, matched, ledgers, pinnedNames = [], 
   )
 }
 
+interface TallyItemCellProps {
+  index: number
+  register: ReturnType<typeof useForm<MappingInput>>['register']
+  watch: ReturnType<typeof useForm<MappingInput>>['watch']
+  onCreateClick: () => void
+}
+
+function TallyItemCell({ index, register, watch, onCreateClick }: TallyItemCellProps) {
+  const value = watch(`lineItems.${index}.tallyStockItem`)
+  const isEmpty = !value?.trim()
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        {...register(`lineItems.${index}.tallyStockItem`)}
+        list="stock-items-list"
+        autoComplete="off"
+        placeholder="Select stock item…"
+        className="w-36 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+      />
+      {isEmpty && (
+        <button
+          type="button"
+          title="Create new stock item in Tally"
+          onClick={onCreateClick}
+          className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded border border-teal-400 text-teal-600 hover:bg-teal-50 transition-colors"
+        >
+          <Plus className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  )
+}
+
 interface MappingFormProps {
   bill: Bill
   ledgers: TallyLedger[]
@@ -59,6 +93,9 @@ interface MappingFormProps {
   savedLedgerSets?: LedgerMapping | null
   nextVoucherNumber?: string
   stockItemAliases?: StockItemAlias[]
+  companyId: string
+  tallyUrl: string
+  tallyCompany?: string
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -73,9 +110,13 @@ export function MappingForm({
   savedLedgerSets,
   nextVoucherNumber,
   stockItemAliases = [],
+  companyId,
+  tallyUrl,
+  tallyCompany = '',
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
+  const [createItemRowIndex, setCreateItemRowIndex] = useState<number | null>(null)
 
   // ── Determine tax type ──────────────────────────────────────────────────────
   const isInterstate = bill.igstAmount > 0
@@ -473,12 +514,11 @@ export function MappingForm({
                       <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <input
-                        {...register(`lineItems.${i}.tallyStockItem`)}
-                        list="stock-items-list"
-                        autoComplete="off"
-                        placeholder="Select stock item…"
-                        className="w-40 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                      <TallyItemCell
+                        index={i}
+                        register={register}
+                        watch={watch}
+                        onCreateClick={() => setCreateItemRowIndex(i)}
                       />
                     </td>
                   </tr>
@@ -527,6 +567,20 @@ export function MappingForm({
             </table>
           </div>
         </div>
+      )}
+
+      {/* Create stock item modal */}
+      {createItemRowIndex !== null && (
+        <CreateStockItemModal
+          open
+          companyId={companyId}
+          tallyUrl={tallyUrl}
+          tallyCompany={tallyCompany}
+          billItemDescription={bill.lineItems[createItemRowIndex]?.description ?? ''}
+          hsnCode={bill.lineItems[createItemRowIndex]?.hsnCode ?? ''}
+          onSuccess={(itemName) => setValue(`lineItems.${createItemRowIndex}.tallyStockItem`, itemName)}
+          onClose={() => setCreateItemRowIndex(null)}
+        />
       )}
 
       {/* Submit */}

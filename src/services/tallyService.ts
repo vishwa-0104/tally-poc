@@ -1,5 +1,16 @@
 import type { TallyLedger, TallyStockItem, TallyStockGroup, TallyStockUnit, TallySyncResult } from '@/types'
 
+export interface CreateStockItemPayload {
+  name: string
+  group: string
+  unit: string
+  gstApplicable: 'Yes' | 'No'
+  hsnCode: string
+  gstRate?: number
+  typeOfSupply: string
+  tallyCompany?: string
+}
+
 const EXTENSION_MSG_TIMEOUT = 10_000
 
 /**
@@ -60,6 +71,12 @@ export async function fetchTallyStockGroups(tallyUrl: string): Promise<TallyStoc
 export async function fetchTallyStockUnits(tallyUrl: string): Promise<TallyStockUnit[]> {
   const result = await sendToExtension<{ stockUnits: TallyStockUnit[] }>('FETCH_STOCK_UNITS', { tallyUrl })
   return result.stockUnits
+}
+
+export async function createTallyStockItem(payload: CreateStockItemPayload, tallyUrl: string): Promise<TallySyncResult> {
+  const result = await sendToExtension<TallySyncResult>('CREATE_STOCK_ITEM', { ...payload, tallyUrl })
+  console.log('[CreateStockItem] Tally response:', result)
+  return result
 }
 
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {

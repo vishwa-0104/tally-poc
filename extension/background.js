@@ -53,6 +53,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
       return true
 
+    case 'CREATE_STOCK_ITEM':
+      handleCreateStockItem(payload, payload.tallyUrl)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -365,6 +371,53 @@ function parseSyncResponse(xml) {
   }
 
   return { success: true, created, altered, errors }
+}
+
+// ── Create stock item in Tally ────────────────────────────────────────────────
+
+async function handleCreateStockItem(payload, tallyUrl) {
+  const xml = buildStockItemXml(payload)
+  console.log('[CreateStockItem] XML (first 500):', xml.slice(0, 500))
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log('[CreateStockItem] Tally raw response:', responseText.slice(0, 3000))
+  return parseSyncResponse(responseText)
+}
+
+function buildStockItemXml({ name, group, unit, gstApplicable, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
+  const applicable = gstApplicable === 'Yes' ? 'Applicable' : 'Not Applicable'
+  const halfRate   = gstRate ? gstRate / 2 : 0
+
+  const hsnBlock = (gstApplicable === 'Yes' && hsnCode)
+    ? `\n            <HSNDETAILS.LIST>\n              <HSNCODE>${hsnCode}</HSNCODE>\n              <TAXABILITY>Taxable</TAXABILITY>\n              <IGSTRATE>${gstRate}</IGSTRATE>\n              <CGSTRATE>${halfRate}</CGSTRATE>\n              <SGSTRATE>${halfRate}</SGSTRATE>\n            </HSNDETAILS.LIST>`
+    : ''
+
+  const companyVar = tallyCompany
+    ? `\n        <STATICVARIABLES><SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY></STATICVARIABLES>`
+    : ''
+
+  return `<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>All Masters</REPORTNAME>${companyVar}
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <STOCKITEM NAME="${name}" ACTION="Create">
+            <NAME>${name}</NAME>
+            <PARENT>${group}</PARENT>
+            <BASEUNITS>${unit}</BASEUNITS>
+            <GSTAPPLICABLE>${applicable}</GSTAPPLICABLE>
+            <GSTTYPEOFSUPPLY>${typeOfSupply}</GSTTYPEOFSUPPLY>${hsnBlock}
+          </STOCKITEM>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`
 }
 
 // ── HTTP helper ──────────────────────────────────────────────────────────────
