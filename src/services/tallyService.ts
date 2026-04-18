@@ -4,7 +4,9 @@ export interface CreateStockItemPayload {
   name: string
   group: string
   unit: string
+  description?: string
   gstApplicable: 'Yes' | 'No'
+  taxability: string
   hsnCode: string
   gstRate?: number
   typeOfSupply: string

@@ -390,21 +390,24 @@ function getTodayYYYYMMDD() {
   return `${d.getFullYear()}${m}${day}`
 }
 
-function buildStockItemXml({ name, group, unit, gstApplicable, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
+function buildStockItemXml({ name, group, unit, description, gstApplicable, taxability, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
   const applicable = gstApplicable === 'Yes' ? 'Applicable' : 'Not Applicable'
 
   let gstBlock = ''
-  if (gstApplicable === 'Yes' && gstRate) {
-    const halfRate = gstRate / 2
+  let descriptionTag = ''
+  if (gstApplicable === 'Yes') {
+    const isTaxable = taxability === 'Taxable'
+    const halfRate  = isTaxable && gstRate ? gstRate / 2 : 0
+    if (description) descriptionTag = `<DESCRIPTION>${description}</DESCRIPTION>`
     gstBlock = `
             <GSTDETAILS.LIST>
               <APPLICABLEFROM>${getTodayYYYYMMDD()}</APPLICABLEFROM>
               <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
               ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : ''}
-              <TAXABILITY>Taxable</TAXABILITY>
+              <TAXABILITY>${taxability}</TAXABILITY>${isTaxable && gstRate ? `
               <IGSTRATE>${gstRate}</IGSTRATE>
               <CGSTRATE>${halfRate}</CGSTRATE>
-              <SGSTRATE>${halfRate}</SGSTRATE>
+              <SGSTRATE>${halfRate}</SGSTRATE>` : ''}
             </GSTDETAILS.LIST>`
   }
 
@@ -425,6 +428,7 @@ function buildStockItemXml({ name, group, unit, gstApplicable, hsnCode, gstRate,
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
           <STOCKITEM NAME="${name}" ACTION="Create">
             <NAME>${name}</NAME>
+            ${descriptionTag}
             <PARENT>${group}</PARENT>
             <BASEUNITS>${unit}</BASEUNITS>
             <GSTAPPLICABLE>${applicable}</GSTAPPLICABLE>
