@@ -24,15 +24,20 @@ window.addEventListener('message', (event) => {
   }
 
   // All other messages forwarded to background (which has cross-origin fetch access)
-  chrome.runtime.sendMessage(message, (response) => {
-    const err = chrome.runtime.lastError
-    if (err) {
-      console.error('[TallySync] Background error:', err.message)
-    }
-    window.postMessage({
-      __tallyReply: true,
-      __msgId,
-      ...(err ? { error: err.message } : response),
-    }, '*')
-  })
+  try {
+    chrome.runtime.sendMessage(message, (response) => {
+      const err = chrome.runtime.lastError
+      if (err) {
+        console.error('[TallySync] Background error:', err.message)
+      }
+      window.postMessage({
+        __tallyReply: true,
+        __msgId,
+        ...(err ? { error: err.message } : response),
+      }, '*')
+    })
+  } catch (e) {
+    // Extension was reloaded — context is gone; notify the page so it doesn't hang
+    window.postMessage({ __tallyReply: true, __msgId, error: 'Extension reloaded. Please refresh the page.' }, '*')
+  }
 })
