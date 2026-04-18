@@ -383,13 +383,30 @@ async function handleCreateStockItem(payload, tallyUrl) {
   return parseSyncResponse(responseText)
 }
 
+function getTodayYYYYMMDD() {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}${m}${day}`
+}
+
 function buildStockItemXml({ name, group, unit, gstApplicable, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
   const applicable = gstApplicable === 'Yes' ? 'Applicable' : 'Not Applicable'
-  const halfRate   = gstRate ? gstRate / 2 : 0
 
-  const hsnBlock = (gstApplicable === 'Yes')
-    ? `\n            <HSNDETAILS.LIST>\n              ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>\n              ` : ''}<TAXABILITY>Taxable</TAXABILITY>\n              <IGSTRATE>${gstRate}</IGSTRATE>\n              <CGSTRATE>${halfRate}</CGSTRATE>\n              <SGSTRATE>${halfRate}</SGSTRATE>\n            </HSNDETAILS.LIST>`
-    : ''
+  let gstBlock = ''
+  if (gstApplicable === 'Yes' && gstRate) {
+    const halfRate = gstRate / 2
+    gstBlock = `
+            <GSTDETAILS.LIST>
+              <APPLICABLEFROM>${getTodayYYYYMMDD()}</APPLICABLEFROM>
+              <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
+              ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : ''}
+              <TAXABILITY>Taxable</TAXABILITY>
+              <IGSTRATE>${gstRate}</IGSTRATE>
+              <CGSTRATE>${halfRate}</CGSTRATE>
+              <SGSTRATE>${halfRate}</SGSTRATE>
+            </GSTDETAILS.LIST>`
+  }
 
   const companyVar = tallyCompany
     ? `\n        <STATICVARIABLES><SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY></STATICVARIABLES>`
@@ -411,7 +428,7 @@ function buildStockItemXml({ name, group, unit, gstApplicable, hsnCode, gstRate,
             <PARENT>${group}</PARENT>
             <BASEUNITS>${unit}</BASEUNITS>
             <GSTAPPLICABLE>${applicable}</GSTAPPLICABLE>
-            <GSTTYPEOFSUPPLY>${typeOfSupply}</GSTTYPEOFSUPPLY>${hsnBlock}
+            <GSTTYPEOFSUPPLY>${typeOfSupply}</GSTTYPEOFSUPPLY>${gstBlock}
           </STOCKITEM>
         </TALLYMESSAGE>
       </REQUESTDATA>
