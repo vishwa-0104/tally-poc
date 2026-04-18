@@ -33,9 +33,11 @@ export function CreateStockItemModal({
   const [creating, setCreating]               = useState(false)
   const [error, setError]                     = useState<string | null>(null)
   const [name, setName]                       = useState(billItemDescription)
+  const [description, setDescription]         = useState('')
   const [group, setGroup]                     = useState('')
   const [unit, setUnit]                       = useState('')
   const [gstApplicable, setGstApplicable]     = useState<'Yes' | 'No'>('Yes')
+  const [taxability, setTaxability]           = useState('Taxable')
   const [gstRate, setGstRate]                 = useState<'5' | '18'>('18')
   const [typeOfSupply, setTypeOfSupply]       = useState('Goods')
 
@@ -52,11 +54,13 @@ export function CreateStockItemModal({
       const result = await createTallyStockItem(
         {
           name:          name.trim(),
+          description:   description.trim() || undefined,
           group:         group.trim(),
           unit:          unit.trim(),
           gstApplicable,
+          taxability,
           hsnCode,
-          gstRate:       gstApplicable === 'Yes' ? Number(gstRate) : undefined,
+          gstRate:       gstApplicable === 'Yes' && taxability === 'Taxable' ? Number(gstRate) : undefined,
           typeOfSupply,
           tallyCompany,
         },
@@ -157,29 +161,56 @@ export function CreateStockItemModal({
             </select>
           </div>
 
-          {/* HSN No — always shown, read-only */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">HSN No</label>
-            <input
-              value={hsnCode}
-              readOnly
-              className="input-base w-full bg-gray-50 text-gray-500 cursor-not-allowed select-none"
-            />
-          </div>
-
-          {/* GST Rate — only when GST Applicable = Yes */}
+          {/* All GST-dependent fields */}
           {gstApplicable === 'Yes' && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">GST Rate %</label>
-              <select
-                value={gstRate}
-                onChange={(e) => setGstRate(e.target.value as '5' | '18')}
-                className="input-base w-full"
-              >
-                <option value="5">5%</option>
-                <option value="18">18%</option>
-              </select>
-            </div>
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Taxability</label>
+                <select
+                  value={taxability}
+                  onChange={(e) => setTaxability(e.target.value)}
+                  className="input-base w-full"
+                >
+                  <option value="Taxable">Taxable</option>
+                  <option value="Exempt">Exempt</option>
+                  <option value="Nil Rated">Nil Rated</option>
+                  <option value="Non-GST">Non-GST</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">HSN No</label>
+                <input
+                  value={hsnCode}
+                  readOnly
+                  className="input-base w-full bg-gray-50 text-gray-500 cursor-not-allowed select-none"
+                />
+              </div>
+
+              {taxability === 'Taxable' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">GST Rate %</label>
+                  <select
+                    value={gstRate}
+                    onChange={(e) => setGstRate(e.target.value as '5' | '18')}
+                    className="input-base w-full"
+                  >
+                    <option value="5">5%</option>
+                    <option value="18">18%</option>
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Description</label>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="input-base w-full"
+                  placeholder="Optional description"
+                />
+              </div>
+            </>
           )}
 
           {/* Type of Supply */}
