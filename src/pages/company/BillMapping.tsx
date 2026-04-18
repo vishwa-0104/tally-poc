@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
 import { MappingForm } from '@/components/company/MappingForm'
+import { SyncedBillView } from '@/components/company/SyncedBillView'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { useTallyLedgers } from '@/hooks'
 import { syncToTally } from '@/services'
@@ -253,25 +254,20 @@ export default function BillMapping() {
       />
 
       <div className="p-7 max-w-5xl">
-        {/* Success banner */}
+        {/* Synced — read-only view */}
         {(syncDone || bill.status === 'synced') && (
-          <div className="flex items-start gap-3 p-5 bg-emerald-50 border border-emerald-200 rounded-xl mb-6">
-            <CheckCircle className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-bold text-emerald-800">Successfully synced to Tally!</p>
-              <p className="text-xs text-emerald-700 mt-0.5">
-                Voucher created in Tally ERP. This bill is now marked as synced.
-              </p>
-              <Button
-                variant="teal"
-                size="sm"
-                className="mt-3"
-                onClick={() => navigate('/company')}
-              >
-                Back to Bills
-              </Button>
+          <>
+            <div className="flex items-start gap-3 p-5 bg-emerald-50 border border-emerald-200 rounded-xl mb-6">
+              <CheckCircle className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-emerald-800">Successfully synced to Tally!</p>
+                <p className="text-xs text-emerald-700 mt-0.5">
+                  Voucher created in Tally ERP. This bill is now marked as synced.
+                </p>
+              </div>
             </div>
-          </div>
+            <SyncedBillView bill={bill} />
+          </>
         )}
 
         {!syncDone && bill.status !== 'synced' && (
