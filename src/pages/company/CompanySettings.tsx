@@ -15,6 +15,7 @@ export const TALLY_COMPANY_KEY     = 'tally-company-name'
 export const TALLY_VOUCHER_TYPE_KEY = 'tally-voucher-type'
 export const DEFAULT_VOUCHER_TYPE  = 'GST PURCHASE'
 
+
 export function getTallyUrl():         string { return localStorage.getItem(TALLY_URL_KEY)          || DEFAULT_TALLY_URL }
 export function getTallyCompanyName(): string { return localStorage.getItem(TALLY_COMPANY_KEY)      ?? '' }
 export function getTallyVoucherType(): string { return localStorage.getItem(TALLY_VOUCHER_TYPE_KEY) || DEFAULT_VOUCHER_TYPE }
@@ -34,8 +35,8 @@ function LedgerSelect({ label, value, ledgerOptions, onChange }: LedgerSelectPro
   const [id] = useState(() => `ls-${++_ledgerSelectId}`)
 
   return (
-    <div className="flex items-center gap-3 mb-3">
-      <label htmlFor={id} className="text-xs font-medium text-gray-600 w-44 shrink-0">{label}</label>
+    <div className="mb-3">
+      <label htmlFor={id} className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
       <input
         id={id}
         list={`${id}-list`}
@@ -43,11 +44,72 @@ function LedgerSelect({ label, value, ledgerOptions, onChange }: LedgerSelectPro
         onChange={(e) => onChange(e.target.value)}
         autoComplete="off"
         placeholder="Type or select…"
-        className="input-base flex-1 text-sm"
+        className="input-base w-full text-sm"
       />
       <datalist id={`${id}-list`}>
         {ledgerOptions.map((name) => <option key={name} value={name} />)}
       </datalist>
+    </div>
+  )
+}
+
+// ── Sync row ─────────────────────────────────────────────────────────────────
+
+interface SyncRowProps {
+  label: string
+  count: number
+  loading: boolean
+  onSync: () => void
+}
+
+function SyncRow({ label, count, loading, onSync }: SyncRowProps) {
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-semibold text-gray-700">{label}</p>
+        {count > 0 && (
+          <p className="text-[10px] text-teal-600 font-medium flex items-center gap-1 mt-0.5">
+            <CheckCircle className="w-3 h-3" /> {count} synced
+          </p>
+        )}
+      </div>
+      <Button variant="outline" size="sm" loading={loading} onClick={onSync} className="flex-shrink-0">
+        <RefreshCw className="w-3 h-3" />
+        {count > 0 ? 'Refresh' : 'Sync'}
+      </Button>
+    </div>
+  )
+}
+
+// ── Tab bar ───────────────────────────────────────────────────────────────────
+
+type Tab = 'connection' | 'ledgers'
+
+interface TabBarProps {
+  active: Tab
+  onChange: (t: Tab) => void
+}
+
+function TabBar({ active, onChange }: TabBarProps) {
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'connection', label: 'Tally Connection' },
+    { id: 'ledgers',    label: 'Default Ledgers' },
+  ]
+  return (
+    <div className="flex border-b border-gray-200 mb-5">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
+            active === t.id
+              ? 'border-teal-600 text-teal-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
     </div>
   )
 }
@@ -60,13 +122,14 @@ export default function CompanySettings() {
   const company     = user?.companyId ? getCompany(user.companyId) : null
   const companyId   = user?.companyId ?? ''
 
+  const [activeTab,     setActiveTab]     = useState<Tab>('connection')
   const [syncing,       setSyncing]       = useState(false)
   const [syncingItems,  setSyncingItems]  = useState(false)
   const [syncingGroups, setSyncingGroups] = useState(false)
   const [syncingUnits,  setSyncingUnits]  = useState(false)
   const [savingMap,     setSavingMap]     = useState(false)
-  const [tallyUrl,     setTallyUrl]     = useState(getTallyUrl)
-  const [voucherType,  setVoucherType]  = useState(getTallyVoucherType)
+  const [tallyUrl,      setTallyUrl]      = useState(getTallyUrl)
+  const [voucherType,   setVoucherType]   = useState(getTallyVoucherType)
 
   const storedLedgers     = companyId ? getLedgers(companyId)     : []
   const storedStockItems  = companyId ? getStockItems(companyId)  : []
@@ -76,24 +139,15 @@ export default function CompanySettings() {
 
   const [mapping, setMapping] = useState<LedgerMapping>(() => normalizeLedgerMapping(company?.mapping))
 
-  // Refresh mapping when company data loads
   useEffect(() => {
     setMapping(normalizeLedgerMapping(company?.mapping))
   }, [company?.mapping]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (companyId && storedLedgers.length === 0) {
-      fetchLedgersFromDb(companyId).catch(() => {})
-    }
-    if (companyId && storedStockItems.length === 0) {
-      fetchStockItemsFromDb(companyId).catch(() => {})
-    }
-    if (companyId && storedStockGroups.length === 0) {
-      fetchStockGroupsFromDb(companyId).catch(() => {})
-    }
-    if (companyId && storedStockUnits.length === 0) {
-      fetchStockUnitsFromDb(companyId).catch(() => {})
-    }
+    if (companyId && storedLedgers.length === 0)     fetchLedgersFromDb(companyId).catch(() => {})
+    if (companyId && storedStockItems.length === 0)  fetchStockItemsFromDb(companyId).catch(() => {})
+    if (companyId && storedStockGroups.length === 0) fetchStockGroupsFromDb(companyId).catch(() => {})
+    if (companyId && storedStockUnits.length === 0)  fetchStockUnitsFromDb(companyId).catch(() => {})
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveTallyUrl = () => {
@@ -115,9 +169,7 @@ export default function CompanySettings() {
       toast.success(`${ledgers.length} ledgers synced and saved`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch ledgers. Is Tally running?')
-    } finally {
-      setSyncing(false)
-    }
+    } finally { setSyncing(false) }
   }
 
   const handleSyncStockItems = async () => {
@@ -129,23 +181,7 @@ export default function CompanySettings() {
       toast.success(`${items.length} stock items synced and saved`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch stock items. Is Tally running?')
-    } finally {
-      setSyncingItems(false)
-    }
-  }
-
-  const handleSyncStockUnits = async () => {
-    if (!companyId) return
-    setSyncingUnits(true)
-    try {
-      const units = await fetchTallyStockUnits(getTallyUrl())
-      await saveStockUnitsToDb(companyId, units)
-      toast.success(`${units.length} stock units synced and saved`)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock units. Is Tally running?')
-    } finally {
-      setSyncingUnits(false)
-    }
+    } finally { setSyncingItems(false) }
   }
 
   const handleSyncStockGroups = async () => {
@@ -157,9 +193,19 @@ export default function CompanySettings() {
       toast.success(`${groups.length} stock groups synced and saved`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch stock groups. Is Tally running?')
-    } finally {
-      setSyncingGroups(false)
-    }
+    } finally { setSyncingGroups(false) }
+  }
+
+  const handleSyncStockUnits = async () => {
+    if (!companyId) return
+    setSyncingUnits(true)
+    try {
+      const units = await fetchTallyStockUnits(getTallyUrl())
+      await saveStockUnitsToDb(companyId, units)
+      toast.success(`${units.length} stock units synced and saved`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock units. Is Tally running?')
+    } finally { setSyncingUnits(false) }
   }
 
   const set = (key: keyof LedgerMapping) => (v: string) =>
@@ -173,210 +219,128 @@ export default function CompanySettings() {
       toast.success('Default ledger mapping saved')
     } catch {
       toast.error('Failed to save mapping')
-    } finally {
-      setSavingMap(false)
-    }
+    } finally { setSavingMap(false) }
   }
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Tally connection and AI configuration" />
+      <PageHeader title="Settings" subtitle="Tally connection and ledger defaults" />
 
-      <div className="p-4 md:p-7 max-w-lg space-y-5">
-        {/* Tally connection */}
+      <div className="p-4 md:p-7 max-w-3xl">
         <div className="card p-6">
-          <h2 className="text-sm font-bold text-gray-800 mb-4">Tally Connection</h2>
-          <div className="mb-4">
-            <ExtensionStatus />
-          </div>
+          <TabBar active={activeTab} onChange={setActiveTab} />
 
-          {/* Tally server URL */}
-          <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-              Tally Server URL
-            </label>
-            <div className="flex gap-2">
-              <input
-                value={tallyUrl}
-                onChange={(e) => setTallyUrl(e.target.value)}
-                placeholder="http://localhost:9000"
-                className="input-base flex-1"
-              />
-              <Button variant="outline" size="sm" onClick={handleSaveTallyUrl}>
-                Save
+          {/* ── Tab: Tally Connection ── */}
+          {activeTab === 'connection' && (
+            <div className="space-y-5">
+              <div>
+                <ExtensionStatus />
+              </div>
+
+              {/* Server URL */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                  Tally Server URL
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    value={tallyUrl}
+                    onChange={(e) => setTallyUrl(e.target.value)}
+                    placeholder="http://localhost:9000"
+                    className="input-base flex-1"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleSaveTallyUrl}>Save</Button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Use <span className="font-mono">http://localhost:9000</span> for local Tally, or your ngrok URL.
+                </p>
+              </div>
+
+              {/* Voucher type */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                  Purchase Voucher Type
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    value={voucherType}
+                    onChange={(e) => setVoucherType(e.target.value)}
+                    placeholder="GST PURCHASE"
+                    className="input-base flex-1"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleSaveVoucherType}>Save</Button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Must match exactly as it appears in Tally (e.g. <span className="font-mono">GST PURCHASE</span>).
+                </p>
+              </div>
+
+              {/* Tally data sync */}
+              <div>
+                <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Tally Data Sync</p>
+                <p className="text-xs text-gray-400 mb-3">Sync once — data is saved to DB and available without Tally open.</p>
+                <SyncRow label="Ledgers"      count={storedLedgers.length}     loading={syncing}       onSync={handleSyncLedgers} />
+                <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}  onSync={handleSyncStockItems} />
+                <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups} onSync={handleSyncStockGroups} />
+                <SyncRow label="Stock Units"  count={storedStockUnits.length}  loading={syncingUnits}  onSync={handleSyncStockUnits} />
+              </div>
+            </div>
+          )}
+
+          {/* ── Tab: Default Ledgers ── */}
+          {activeTab === 'ledgers' && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                {company?.mapping && (
+                  <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
+                    <CheckCircle className="w-3.5 h-3.5" /> Configured
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mb-5">
+                Assign one Tally ledger to each GST category. Used as defaults when syncing bills.
+              </p>
+
+              {/* Purchase Ledgers */}
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
+                <LedgerSelect label="Interstate 18%"       value={mapping.purchase_interstate_18} ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_18')} />
+                <LedgerSelect label="Interstate 5%"        value={mapping.purchase_interstate_5}  ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_5')} />
+                <LedgerSelect label="Intra-state 18%"      value={mapping.purchase_up_18}         ledgerOptions={ledgerOptions} onChange={set('purchase_up_18')} />
+                <LedgerSelect label="Intra-state 5%"       value={mapping.purchase_up_5}          ledgerOptions={ledgerOptions} onChange={set('purchase_up_5')} />
+                <LedgerSelect label="Exempt"               value={mapping.purchase_exempt}        ledgerOptions={ledgerOptions} onChange={set('purchase_exempt')} />
+              </div>
+
+              {/* CGST / SGST */}
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">CGST / SGST</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
+                <LedgerSelect label="CGST 9% (18% GST)"   value={mapping.input_cgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_cgst_9')} />
+                <LedgerSelect label="SGST 9% (18% GST)"   value={mapping.input_sgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_sgst_9')} />
+                <LedgerSelect label="CGST 2.5% (5% GST)"  value={mapping.input_cgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_cgst_2_5')} />
+                <LedgerSelect label="SGST 2.5% (5% GST)"  value={mapping.input_sgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_sgst_2_5')} />
+              </div>
+
+              {/* IGST */}
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">IGST</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
+                <LedgerSelect label="IGST 5%"  value={mapping.igst_5}  ledgerOptions={ledgerOptions} onChange={set('igst_5')} />
+                <LedgerSelect label="IGST 18%" value={mapping.igst_18} ledgerOptions={ledgerOptions} onChange={set('igst_18')} />
+              </div>
+
+              {/* Round Off */}
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Round Off</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
+                <LedgerSelect label="Round Off Ledger" value={mapping.roundoff_ledger} ledgerOptions={ledgerOptions} onChange={set('roundoff_ledger')} />
+              </div>
+              <p className="text-xs text-gray-400 -mt-3 mb-5">
+                Defaults to <span className="font-mono">Round Off</span> if blank.
+              </p>
+
+              <Button variant="teal" loading={savingMap} onClick={handleSaveMapping}>
+                Save Default Mapping
               </Button>
             </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Use <span className="font-mono">http://localhost:9000</span> for local Tally, or your ngrok URL e.g. <span className="font-mono">https://baz.ngrok.dev</span>
-            </p>
-          </div>
-
-          {/* Purchase voucher type */}
-          <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-              Purchase Voucher Type
-            </label>
-            <div className="flex gap-2">
-              <input
-                value={voucherType}
-                onChange={(e) => setVoucherType(e.target.value)}
-                placeholder="GST PURCHASE"
-                className="input-base flex-1"
-              />
-              <Button variant="outline" size="sm" onClick={handleSaveVoucherType}>
-                Save
-              </Button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Must match exactly as it appears in Tally (e.g. <span className="font-mono">GST PURCHASE</span> or <span className="font-mono">Purchase</span>).
-            </p>
-          </div>
-
-          {/* Ledger sync */}
-          <div className="mt-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-700">Tally Ledgers</span>
-              {storedLedgers.length > 0 && (
-                <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  {storedLedgers.length} ledgers synced
-                </span>
-              )}
-            </div>
-            <Button variant="outline" size="sm" loading={syncing} onClick={handleSyncLedgers} className="w-full">
-              <RefreshCw className="w-3.5 h-3.5" />
-              {storedLedgers.length > 0 ? 'Refresh Ledgers from Tally' : 'Sync Ledgers from Tally'}
-            </Button>
-            {storedLedgers.length === 0 && (
-              <p className="text-xs text-gray-400 mt-1.5">
-                Sync ledgers once — they'll be saved to the database and available without Tally open.
-              </p>
-            )}
-          </div>
-
-          {/* Stock item sync */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-700">Tally Stock Items</span>
-              {storedStockItems.length > 0 && (
-                <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  {storedStockItems.length} items synced
-                </span>
-              )}
-            </div>
-            <Button variant="outline" size="sm" loading={syncingItems} onClick={handleSyncStockItems} className="w-full">
-              <RefreshCw className="w-3.5 h-3.5" />
-              {storedStockItems.length > 0 ? 'Refresh Stock Items from Tally' : 'Sync Stock Items from Tally'}
-            </Button>
-            {storedStockItems.length === 0 && (
-              <p className="text-xs text-gray-400 mt-1.5">
-                Sync stock items to enable per-line-item mapping in purchase bills.
-              </p>
-            )}
-          </div>
-
-          {/* Stock group sync */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-700">Tally Stock Groups</span>
-              {storedStockGroups.length > 0 && (
-                <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  {storedStockGroups.length} groups synced
-                </span>
-              )}
-            </div>
-            <Button variant="outline" size="sm" loading={syncingGroups} onClick={handleSyncStockGroups} className="w-full">
-              <RefreshCw className="w-3.5 h-3.5" />
-              {storedStockGroups.length > 0 ? 'Refresh Stock Groups from Tally' : 'Sync Stock Groups from Tally'}
-            </Button>
-            {storedStockGroups.length === 0 && (
-              <p className="text-xs text-gray-400 mt-1.5">
-                Sync stock groups to enable group-based item classification.
-              </p>
-            )}
-          </div>
-
-          {/* Stock unit sync */}
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-gray-700">Tally Stock Units</span>
-              {storedStockUnits.length > 0 && (
-                <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  {storedStockUnits.length} units synced
-                </span>
-              )}
-            </div>
-            <Button variant="outline" size="sm" loading={syncingUnits} onClick={handleSyncStockUnits} className="w-full">
-              <RefreshCw className="w-3.5 h-3.5" />
-              {storedStockUnits.length > 0 ? 'Refresh Stock Units from Tally' : 'Sync Stock Units from Tally'}
-            </Button>
-            {storedStockUnits.length === 0 && (
-              <p className="text-xs text-gray-400 mt-1.5">
-                Sync stock units to enable unit-of-measure data from Tally.
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Default ledger mapping — 1:1 static dropdowns */}
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-sm font-bold text-gray-800">Default Ledger Mapping</h2>
-            {company?.mapping && (
-              <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
-                <CheckCircle className="w-3.5 h-3.5" /> Configured
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-gray-400 mb-5">
-            Assign one Tally ledger to each GST category. These are used as defaults when syncing bills.
-          </p>
-
-          {/* Purchase Ledgers */}
-          <div className="mb-5">
-            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
-            <LedgerSelect label="Interstate 18%"        value={mapping.purchase_interstate_18} ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_18')} />
-            <LedgerSelect label="Interstate 5%"         value={mapping.purchase_interstate_5}  ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_5')} />
-            <LedgerSelect label="UP (Intra-state) 18%"  value={mapping.purchase_up_18}         ledgerOptions={ledgerOptions} onChange={set('purchase_up_18')} />
-            <LedgerSelect label="UP (Intra-state) 5%"   value={mapping.purchase_up_5}          ledgerOptions={ledgerOptions} onChange={set('purchase_up_5')} />
-            <LedgerSelect label="Exempt"                value={mapping.purchase_exempt}        ledgerOptions={ledgerOptions} onChange={set('purchase_exempt')} />
-          </div>
-
-          {/* CGST / SGST */}
-          <div className="mb-5">
-            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">CGST / SGST</p>
-
-            <p className="text-xs text-gray-500 mb-2 font-medium">@ 9% each (18% GST)</p>
-            <LedgerSelect label="CGST 9%"   value={mapping.input_cgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_cgst_9')} />
-            <LedgerSelect label="SGST 9%"   value={mapping.input_sgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_sgst_9')} />
-
-            <p className="text-xs text-gray-500 mt-3 mb-2 font-medium">@ 2.5% each (5% GST)</p>
-            <LedgerSelect label="CGST 2.5%" value={mapping.input_cgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_cgst_2_5')} />
-            <LedgerSelect label="SGST 2.5%" value={mapping.input_sgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_sgst_2_5')} />
-          </div>
-
-          {/* IGST */}
-          <div className="mb-5">
-            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">IGST</p>
-            <LedgerSelect label="IGST 5%"  value={mapping.igst_5}  ledgerOptions={ledgerOptions} onChange={set('igst_5')} />
-            <LedgerSelect label="IGST 18%" value={mapping.igst_18} ledgerOptions={ledgerOptions} onChange={set('igst_18')} />
-          </div>
-
-          {/* Round Off */}
-          <div className="mb-5">
-            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Round Off</p>
-            <LedgerSelect label="Round Off Ledger" value={mapping.roundoff_ledger} ledgerOptions={ledgerOptions} onChange={set('roundoff_ledger')} />
-            <p className="text-xs text-gray-400 -mt-1">
-              Used as the ledger name in Tally for round-off entries. Defaults to <span className="font-mono">Round Off</span> if blank.
-            </p>
-          </div>
-
-          <Button variant="teal" loading={savingMap} onClick={handleSaveMapping}>
-            Save Default Mapping
-          </Button>
+          )}
         </div>
       </div>
     </>
