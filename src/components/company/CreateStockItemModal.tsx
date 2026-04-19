@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -40,6 +40,11 @@ export function CreateStockItemModal({
   const [taxability, setTaxability]           = useState('Taxable')
   const [gstRate, setGstRate]                 = useState<'5' | '18'>('18')
   const [typeOfSupply, setTypeOfSupply]       = useState('Goods')
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
 
   if (!open) return null
 
@@ -84,17 +89,19 @@ export function CreateStockItemModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        {/* Header — fixed */}
+        <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
           <h2 className="text-base font-bold text-gray-900">Create Stock Item in Tally</h2>
           <button onClick={onClose} disabled={creating} className="text-gray-400 hover:text-gray-600 disabled:opacity-40">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-4">
+        {/* Scrollable content */}
+        <div className="overflow-y-auto px-6 flex-1">
+        <div className="space-y-4 pb-2">
           {/* Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5">Name *</label>
@@ -234,9 +241,10 @@ export function CreateStockItemModal({
             </div>
           )}
         </div>
+        </div>
 
-        {/* Actions */}
-        <div className="flex justify-end gap-3 mt-6">
+        {/* Actions — fixed at bottom */}
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
           <Button type="button" variant="outline" onClick={onClose} disabled={creating}>
             Close
           </Button>
