@@ -55,14 +55,20 @@ function LedgerSelect({ label, value, ledgerOptions, onChange }: LedgerSelectPro
 
 // ── Sync row ─────────────────────────────────────────────────────────────────
 
+function formatSyncTs(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
 interface SyncRowProps {
   label: string
   count: number
   loading: boolean
+  lastSync?: string | null
   onSync: () => void
 }
 
-function SyncRow({ label, count, loading, onSync }: SyncRowProps) {
+function SyncRow({ label, count, loading, lastSync, onSync }: SyncRowProps) {
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
       <div className="flex-1 min-w-0">
@@ -71,6 +77,9 @@ function SyncRow({ label, count, loading, onSync }: SyncRowProps) {
           <p className="text-[10px] text-teal-600 font-medium flex items-center gap-1 mt-0.5">
             <CheckCircle className="w-3 h-3" /> {count} synced
           </p>
+        )}
+        {lastSync && (
+          <p className="text-[10px] text-gray-400 mt-0.5">Last sync: {formatSyncTs(lastSync)}</p>
         )}
       </div>
       <Button variant="outline" size="sm" loading={loading} onClick={onSync} className="flex-shrink-0">
@@ -279,10 +288,10 @@ export default function CompanySettings() {
               <div>
                 <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Tally Data Sync</p>
                 <p className="text-xs text-gray-400 mb-3">Sync once — data is saved to DB and available without Tally open.</p>
-                <SyncRow label="Ledgers"      count={storedLedgers.length}     loading={syncing}       onSync={handleSyncLedgers} />
-                <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}  onSync={handleSyncStockItems} />
-                <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups} onSync={handleSyncStockGroups} />
-                <SyncRow label="Stock Units"  count={storedStockUnits.length}  loading={syncingUnits}  onSync={handleSyncStockUnits} />
+                <SyncRow label="Ledgers"      count={storedLedgers.length}     loading={syncing}       lastSync={company?.syncTimestamps?.ledgers}      onSync={handleSyncLedgers} />
+                <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}  lastSync={company?.syncTimestamps?.stockItems}   onSync={handleSyncStockItems} />
+                <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups} lastSync={company?.syncTimestamps?.stockGroups}  onSync={handleSyncStockGroups} />
+                <SyncRow label="Stock Units"  count={storedStockUnits.length}  loading={syncingUnits}  lastSync={company?.syncTimestamps?.stockUnits}   onSync={handleSyncStockUnits} />
               </div>
             </div>
           )}

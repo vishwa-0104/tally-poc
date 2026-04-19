@@ -126,7 +126,13 @@ companiesRouter.put('/companies/:id/ledgers', async (req, res) => {
   }, { timeout: 60000 })
 
   console.log(`[Ledgers] Upserted ${incoming.length} ledgers for company ${companyId}`)
-  res.json({ saved: incoming.length })
+  const now = new Date().toISOString()
+  await prisma.$executeRaw`
+    UPDATE "Company"
+    SET "syncTimestamps" = COALESCE("syncTimestamps", '{}'::jsonb) || jsonb_build_object('ledgers', ${now}::text)
+    WHERE id = ${companyId}
+  `
+  res.json({ saved: incoming.length, syncedAt: now })
 })
 
 // GET /api/companies/:id/stock-items
@@ -181,7 +187,13 @@ companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
   }, { timeout: 60000 })
 
   console.log(`[StockItems] Upserted ${incoming.length} items for company ${companyId}`)
-  res.json({ saved: incoming.length })
+  const now = new Date().toISOString()
+  await prisma.$executeRaw`
+    UPDATE "Company"
+    SET "syncTimestamps" = COALESCE("syncTimestamps", '{}'::jsonb) || jsonb_build_object('stockItems', ${now}::text)
+    WHERE id = ${companyId}
+  `
+  res.json({ saved: incoming.length, syncedAt: now })
 })
 
 // GET /api/companies/:id/stock-groups
@@ -226,7 +238,13 @@ companiesRouter.put('/companies/:id/stock-groups', async (req, res) => {
     })
   })
 
-  res.json({ saved: incoming.length })
+  const now = new Date().toISOString()
+  await prisma.$executeRaw`
+    UPDATE "Company"
+    SET "syncTimestamps" = COALESCE("syncTimestamps", '{}'::jsonb) || jsonb_build_object('stockGroups', ${now}::text)
+    WHERE id = ${companyId}
+  `
+  res.json({ saved: incoming.length, syncedAt: now })
 })
 
 // GET /api/companies/:id/stock-units
@@ -279,7 +297,13 @@ companiesRouter.put('/companies/:id/stock-units', async (req, res) => {
   }, { timeout: 60000 })
 
   console.log(`[StockUnits] Upserted ${incoming.length} units for company ${companyId}`)
-  res.json({ saved: incoming.length })
+  const now = new Date().toISOString()
+  await prisma.$executeRaw`
+    UPDATE "Company"
+    SET "syncTimestamps" = COALESCE("syncTimestamps", '{}'::jsonb) || jsonb_build_object('stockUnits', ${now}::text)
+    WHERE id = ${companyId}
+  `
+  res.json({ saved: incoming.length, syncedAt: now })
 })
 
 // GET /api/companies/:id/stock-item-aliases

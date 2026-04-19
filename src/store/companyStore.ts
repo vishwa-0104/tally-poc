@@ -92,8 +92,13 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   },
 
   saveStockItemsToDb: async (companyId, items) => {
-    await api.put<{ saved: number }>(`/companies/${companyId}/stock-items`, items)
-    set((s) => ({ stockItems: { ...s.stockItems, [companyId]: items } }))
+    const { data } = await api.put<{ saved: number; syncedAt: string }>(`/companies/${companyId}/stock-items`, items)
+    set((s) => ({
+      stockItems: { ...s.stockItems, [companyId]: items },
+      companies: s.companies.map((c) => c.id === companyId
+        ? { ...c, syncTimestamps: { ...c.syncTimestamps, stockItems: data.syncedAt } }
+        : c),
+    }))
   },
 
   getStockGroups: (companyId) => get().stockGroups[companyId] ?? [],
@@ -104,8 +109,13 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   },
 
   saveStockGroupsToDb: async (companyId, groups) => {
-    await api.put<{ saved: number }>(`/companies/${companyId}/stock-groups`, groups)
-    set((s) => ({ stockGroups: { ...s.stockGroups, [companyId]: groups } }))
+    const { data } = await api.put<{ saved: number; syncedAt: string }>(`/companies/${companyId}/stock-groups`, groups)
+    set((s) => ({
+      stockGroups: { ...s.stockGroups, [companyId]: groups },
+      companies: s.companies.map((c) => c.id === companyId
+        ? { ...c, syncTimestamps: { ...c.syncTimestamps, stockGroups: data.syncedAt } }
+        : c),
+    }))
   },
 
   getStockUnits: (companyId) => get().stockUnits[companyId] ?? [],
@@ -116,8 +126,13 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   },
 
   saveStockUnitsToDb: async (companyId, units) => {
-    await api.put<{ saved: number }>(`/companies/${companyId}/stock-units`, units)
-    set((s) => ({ stockUnits: { ...s.stockUnits, [companyId]: units } }))
+    const { data } = await api.put<{ saved: number; syncedAt: string }>(`/companies/${companyId}/stock-units`, units)
+    set((s) => ({
+      stockUnits: { ...s.stockUnits, [companyId]: units },
+      companies: s.companies.map((c) => c.id === companyId
+        ? { ...c, syncTimestamps: { ...c.syncTimestamps, stockUnits: data.syncedAt } }
+        : c),
+    }))
   },
 
   fetchAliases: async (companyId) => {
@@ -147,8 +162,13 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   },
 
   saveLedgersToDb: async (companyId, ledgers) => {
-    await api.put<{ saved: number }>(`/companies/${companyId}/ledgers`, ledgers)
-    set((s) => ({ ledgers: { ...s.ledgers, [companyId]: ledgers } }))
+    const { data } = await api.put<{ saved: number; syncedAt: string }>(`/companies/${companyId}/ledgers`, ledgers)
+    set((s) => ({
+      ledgers: { ...s.ledgers, [companyId]: ledgers },
+      companies: s.companies.map((c) => c.id === companyId
+        ? { ...c, syncTimestamps: { ...c.syncTimestamps, ledgers: data.syncedAt } }
+        : c),
+    }))
   },
 
   // Local-only counter helpers (optimistic, synced counts come from fetchCompanies)

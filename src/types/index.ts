@@ -63,6 +63,7 @@ export interface Company {
   errorBills: number
   voucherCounter: number
   mapping: LedgerMapping | null
+  syncTimestamps: { ledgers?: string; stockItems?: string; stockGroups?: string; stockUnits?: string } | null
   createdAt: string
 }
 
