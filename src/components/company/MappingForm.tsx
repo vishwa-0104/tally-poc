@@ -459,7 +459,7 @@ export function MappingForm({
           <div className="input-base w-48 bg-gray-50 text-gray-500 cursor-not-allowed select-none">
             {nextVoucherNumber ?? `${bill.billNumber}_1`}
           </div>
-          <p className="text-xs text-gray-400 mt-1">Auto-assigned on sync</p>
+          <p className="text-xs text-gray-500 mt-1">Auto-assigned on sync</p>
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
@@ -470,12 +470,12 @@ export function MappingForm({
             type="date"
             className="input-base w-40"
           />
-          <p className="text-xs text-gray-400 mt-1">Entry date in Tally (<span className="font-mono">DATE</span>)</p>
+          <p className="text-xs text-gray-500 mt-1">Entry date in Tally (<span className="font-mono">DATE</span>)</p>
         </div>
         {hasRoundOff && (
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-              Round Off <span className="font-normal text-gray-400">(₹ — negative to deduct)</span>
+              Round Off <span className="font-normal text-gray-500">(₹ — negative to deduct)</span>
             </label>
             <input
               {...register('roundOffAmount')}
@@ -496,7 +496,7 @@ export function MappingForm({
       {/* Line items */}
       {bill.lineItems.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-sm font-bold text-gray-800 mb-3">Line Items <span className="text-gray-400 font-normal">(editable)</span></h3>
+          <h3 className="text-sm font-bold text-gray-800 mb-3">Line Items <span className="text-gray-500 font-normal">(editable)</span></h3>
           <div className="overflow-x-auto rounded-xl border border-gray-200">
             <table className="w-full border-collapse text-xs" aria-label="Line items">
               <thead>

@@ -26,7 +26,7 @@ export function StatCard({ label, value, sub, accent }: StatCardProps) {
     <div className={cn('card p-5 border-t-4', accentMap[accent])}>
       <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">{label}</p>
       <p className={cn('text-3xl font-bold leading-none', valueColor[accent])}>{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
     </div>
   )
 }

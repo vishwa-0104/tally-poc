@@ -54,10 +54,10 @@ export default function AdminDashboard() {
         {companies.length === 0 ? (
           <div className="card p-14 text-center">
             <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Building2 className="w-6 h-6 text-gray-400" />
+              <Building2 className="w-6 h-6 text-gray-500" />
             </div>
             <p className="text-sm font-semibold text-gray-700 mb-1">No companies yet</p>
-            <p className="text-sm text-gray-400 mb-5">Add your first company to start tracking bills</p>
+            <p className="text-sm text-gray-500 mb-5">Add your first company to start tracking bills</p>
             <Button variant="primary" onClick={() => setShowAddModal(true)}>Add Company</Button>
           </div>
         ) : (
@@ -69,7 +69,7 @@ export default function AdminDashboard() {
               className="card border-2 border-dashed border-gray-200 min-h-[160px] flex flex-col items-center justify-center gap-3 hover:border-brand-400 hover:bg-brand-50/50 transition-all cursor-pointer"
             >
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <Plus className="w-5 h-5 text-gray-400" />
+                <Plus className="w-5 h-5 text-gray-500" />
               </div>
               <p className="text-sm font-semibold text-gray-500">Add Company</p>
             </button>

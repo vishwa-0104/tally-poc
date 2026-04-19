@@ -20,7 +20,7 @@ export default function AdminAnalytics() {
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">{c.name}</h3>
-                    <p className="text-xs font-mono text-gray-400 mt-0.5">{c.gstin}</p>
+                    <p className="text-xs font-mono text-gray-500 mt-0.5">{c.gstin}</p>
                   </div>
                   <span className="text-xs font-semibold text-gray-500">{pct}% synced</span>
                 </div>
@@ -47,7 +47,7 @@ export default function AdminAnalytics() {
           })}
         </div>
 
-        <p className="mt-5 text-xs text-gray-400 italic text-center">
+        <p className="mt-5 text-xs text-gray-500 italic text-center">
           Bill-level data is private to each company. These numbers are counts only.
         </p>
       </div>

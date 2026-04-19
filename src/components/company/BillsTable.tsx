@@ -129,7 +129,7 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
 
             {buildPageNumbers(page, totalPages).map((p, i) =>
               p === '…' ? (
-                <span key={`ellipsis-${i}`} className="px-2 text-xs text-gray-400 select-none">…</span>
+                <span key={`ellipsis-${i}`} className="px-2 text-xs text-gray-500 select-none">…</span>
               ) : (
                 <button
                   key={p}

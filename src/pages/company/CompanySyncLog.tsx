@@ -60,7 +60,7 @@ export default function CompanySyncLog() {
                       <td className="px-4 py-3 text-sm font-medium text-gray-800">{b.vendorName}</td>
                       <td className="px-4 py-3 text-sm font-semibold text-gray-800">{formatCurrency(b.totalAmount)}</td>
                       <td className="px-4 py-3 text-xs text-gray-500">{formatDate(b.billDate)}</td>
-                      <td className="px-4 py-3 text-xs text-gray-400">
+                      <td className="px-4 py-3 text-xs text-gray-500">
                         {b.syncedAt ? new Date(b.syncedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500 font-mono">{b.tallyMapping?.vendorLedger ?? '—'}</td>
@@ -150,7 +150,7 @@ function ErrorRow({ billNumber, vendorName, totalAmount, syncError, onRetry }: E
         className="border-b border-gray-100 hover:bg-red-50/40 cursor-pointer"
         onClick={() => setExpanded((e) => !e)}
       >
-        <td className="px-3 py-3 w-6 text-gray-400">
+        <td className="px-3 py-3 w-6 text-gray-500">
           {expanded
             ? <ChevronDown className="w-3.5 h-3.5" />
             : <ChevronRight className="w-3.5 h-3.5" />

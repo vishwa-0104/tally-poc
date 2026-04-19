@@ -20,14 +20,14 @@ export function CompanyCard({ company }: CompanyCardProps) {
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0">
           <h3 className="text-sm font-bold text-gray-900 truncate">{company.name}</h3>
-          <p className="text-xs text-gray-400 font-mono mt-0.5">{company.gstin}</p>
+          <p className="text-xs text-gray-500 font-mono mt-0.5">{company.gstin}</p>
         </div>
         {badge}
       </div>
 
       {/* Sync progress bar */}
       <div className="mb-1">
-        <p className="text-[10px] text-gray-400 mb-1">Sync progress</p>
+        <p className="text-[10px] text-gray-500 mb-1">Sync progress</p>
         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div
             className="h-full bg-teal-500 rounded-full transition-all duration-500"
@@ -39,7 +39,7 @@ export function CompanyCard({ company }: CompanyCardProps) {
             aria-label={`${pct}% synced`}
           />
         </div>
-        <p className="text-[10px] text-gray-400 mt-1">
+        <p className="text-[10px] text-gray-500 mt-1">
           {company.syncedBills} of {company.totalBills} bills ({pct}%)
         </p>
       </div>
@@ -54,7 +54,7 @@ export function CompanyCard({ company }: CompanyCardProps) {
         ].map((s) => (
           <div key={s.label} className="text-center">
             <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{s.label}</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">{s.label}</p>
           </div>
         ))}
       </div>

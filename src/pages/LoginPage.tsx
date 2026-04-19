@@ -117,7 +117,7 @@ export default function LoginPage() {
           </form>
 
           {hasRole && (
-            <p className="text-xs text-gray-400 text-center mt-4">
+            <p className="text-xs text-gray-500 text-center mt-4">
               Demo: use pre-filled credentials and click Sign in
             </p>
           )}

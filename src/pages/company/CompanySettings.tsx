@@ -78,14 +78,16 @@ function SyncRow({ label, count, loading, lastSync, onSync }: SyncRowProps) {
             <CheckCircle className="w-3 h-3" /> {count} synced
           </p>
         )}
+      </div>
+      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+        <Button variant="outline" size="sm" loading={loading} onClick={onSync}>
+          <RefreshCw className="w-3 h-3" />
+          {count > 0 ? 'Refresh' : 'Sync'}
+        </Button>
         {lastSync && (
-          <p className="text-[10px] text-gray-400 mt-0.5">Last sync: {formatSyncTs(lastSync)}</p>
+          <p className="text-[10px] text-gray-500">{formatSyncTs(lastSync)}</p>
         )}
       </div>
-      <Button variant="outline" size="sm" loading={loading} onClick={onSync} className="flex-shrink-0">
-        <RefreshCw className="w-3 h-3" />
-        {count > 0 ? 'Refresh' : 'Sync'}
-      </Button>
     </div>
   )
 }
@@ -260,7 +262,7 @@ export default function CompanySettings() {
                   />
                   <Button variant="outline" size="sm" onClick={handleSaveTallyUrl}>Save</Button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   Use <span className="font-mono">http://localhost:9000</span> for local Tally, or your ngrok URL.
                 </p>
               </div>
@@ -279,7 +281,7 @@ export default function CompanySettings() {
                   />
                   <Button variant="outline" size="sm" onClick={handleSaveVoucherType}>Save</Button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   Must match exactly as it appears in Tally (e.g. <span className="font-mono">GST PURCHASE</span>).
                 </p>
               </div>
@@ -287,7 +289,7 @@ export default function CompanySettings() {
               {/* Tally data sync */}
               <div>
                 <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Tally Data Sync</p>
-                <p className="text-xs text-gray-400 mb-3">Sync once — data is saved to DB and available without Tally open.</p>
+                <p className="text-xs text-gray-500 mb-3">Sync once — data is saved to DB and available without Tally open.</p>
                 <SyncRow label="Ledgers"      count={storedLedgers.length}     loading={syncing}       lastSync={company?.syncTimestamps?.ledgers}      onSync={handleSyncLedgers} />
                 <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}  lastSync={company?.syncTimestamps?.stockItems}   onSync={handleSyncStockItems} />
                 <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups} lastSync={company?.syncTimestamps?.stockGroups}  onSync={handleSyncStockGroups} />
@@ -306,7 +308,7 @@ export default function CompanySettings() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mb-5">
+              <p className="text-xs text-gray-500 mb-5">
                 Assign one Tally ledger to each GST category. Used as defaults when syncing bills.
               </p>
 
@@ -341,7 +343,7 @@ export default function CompanySettings() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
                 <LedgerSelect label="Round Off Ledger" value={mapping.roundoff_ledger} ledgerOptions={ledgerOptions} onChange={set('roundoff_ledger')} />
               </div>
-              <p className="text-xs text-gray-400 -mt-3 mb-5">
+              <p className="text-xs text-gray-500 -mt-3 mb-5">
                 Defaults to <span className="font-mono">Round Off</span> if blank.
               </p>
 

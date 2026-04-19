@@ -114,13 +114,13 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
             <p className="text-sm font-semibold text-gray-700 mb-1">
               {isDragActive ? 'Drop it here…' : 'Drop file here or click to browse'}
             </p>
-            <p className="text-xs text-gray-400">JPG, PNG, PDF — max 10 MB</p>
+            <p className="text-xs text-gray-500">JPG, PNG, PDF — max 10 MB</p>
           </div>
 
           {/* Camera capture — opens rear camera on mobile, file picker on desktop */}
           <div className="flex items-center gap-3 my-3">
             <div className="flex-1 border-t border-gray-200" />
-            <span className="text-xs text-gray-400">or</span>
+            <span className="text-xs text-gray-500">or</span>
             <div className="flex-1 border-t border-gray-200" />
           </div>
           <input
@@ -145,7 +145,7 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
             <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
               <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0" />
               <span className="text-sm font-medium text-gray-800 flex-1 truncate">{file.name}</span>
-              <span className="text-xs text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
+              <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
             </div>
           )}
         </>
@@ -169,8 +169,8 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
                   {idle   && <Circle className="w-4 h-4 text-gray-300" />}
                 </div>
                 <div>
-                  <p className={cn('text-sm font-semibold', idle ? 'text-gray-400' : 'text-gray-800')}>{s.label}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{s.sub}</p>
+                  <p className={cn('text-sm font-semibold', idle ? 'text-gray-500' : 'text-gray-800')}>{s.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{s.sub}</p>
                 </div>
               </div>
             )

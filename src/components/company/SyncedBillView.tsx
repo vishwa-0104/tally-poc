@@ -9,7 +9,7 @@ function Row({ label, value }: { label: string; value?: string | null }) {
   if (!value) return null
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</span>
+      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
       <span className="text-xs font-medium text-gray-800 break-all">{value}</span>
     </div>
   )
