@@ -1,20 +1,25 @@
 import { useState } from 'react'
-import { Upload } from 'lucide-react'
+import { Upload, Loader } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { StatCard } from '@/components/ui'
 import { Button } from '@/components/ui/Button'
 import { BillsTable, UploadModal } from '@/components/company'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
+import { parseBillWithAI, parsedDataToBill } from '@/services'
 
 export default function CompanyBills() {
   const [showUpload, setShowUpload] = useState(false)
+  const [bulkParsing, setBulkParsing] = useState(false)
+  const [bulkDone, setBulkDone]       = useState(0)
+  const [bulkTotal, setBulkTotal]     = useState(0)
   const navigate = useNavigate()
 
   const { user }  = useAuthStore()
-  const { getBills } = useBillStore()
-  const { getCompany } = useCompanyStore()
+  const { getBills, addBill } = useBillStore()
+  const { getCompany, incrementBillCount } = useCompanyStore()
 
   const company = user?.companyId ? getCompany(user.companyId) : null
   const bills   = user?.companyId ? getBills(user.companyId) : []
@@ -27,6 +32,35 @@ export default function CompanyBills() {
     navigate(`/company/bills/${billId}`)
   }
 
+  const handleMultipleFiles = async (files: File[]) => {
+    if (!user?.companyId) return
+    setBulkTotal(files.length)
+    setBulkDone(0)
+    setBulkParsing(true)
+
+    let succeeded = 0
+    let failed = 0
+    for (const file of files) {
+      try {
+        const parsed = await parseBillWithAI(file)
+        const bill   = parsedDataToBill(parsed, user.companyId)
+        addBill(bill)
+        incrementBillCount(user.companyId)
+        succeeded++
+      } catch {
+        failed++
+      }
+      setBulkDone((d) => d + 1)
+    }
+
+    setBulkParsing(false)
+    if (failed === 0) {
+      toast.success(`${succeeded} bill${succeeded !== 1 ? 's' : ''} parsed successfully`)
+    } else {
+      toast.success(`${succeeded} parsed, ${failed} failed`)
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -35,9 +69,15 @@ export default function CompanyBills() {
         actions={
           <>
             <ExtensionStatus />
-            <Button variant="teal" size="sm" onClick={() => setShowUpload(true)}>
+            {bulkParsing && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-medium rounded-full border border-teal-200">
+                <Loader className="w-3 h-3 animate-spin" />
+                Parsing {bulkDone} / {bulkTotal} bills…
+              </span>
+            )}
+            <Button variant="teal" size="sm" onClick={() => setShowUpload(true)} disabled={bulkParsing}>
               <Upload className="w-3.5 h-3.5" />
-              Upload Bill
+              Upload Bills
             </Button>
           </>
         }
@@ -62,6 +102,7 @@ export default function CompanyBills() {
         open={showUpload}
         onClose={() => setShowUpload(false)}
         onParsed={handleParsed}
+        onMultipleFiles={handleMultipleFiles}
       />
     </>
   )

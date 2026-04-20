@@ -20,13 +20,15 @@ interface UploadModalProps {
   open: boolean
   onClose: () => void
   onParsed: (billId: string) => void
+  onMultipleFiles: (files: File[]) => void
 }
 
-export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
-  const [file, setFile]         = useState<File | null>(null)
-  const [parsing, setParsing]   = useState(false)
-  const [step, setStep]         = useState(-1)
-  const cameraInputRef          = useRef<HTMLInputElement>(null)
+export function UploadModal({ open, onClose, onParsed, onMultipleFiles }: UploadModalProps) {
+  const [file, setFile]           = useState<File | null>(null)
+  const [multiFiles, setMultiFiles] = useState<File[]>([])
+  const [parsing, setParsing]     = useState(false)
+  const [step, setStep]           = useState(-1)
+  const cameraInputRef            = useRef<HTMLInputElement>(null)
 
   const handleCameraCapture = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -39,24 +41,44 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
   const { incrementBillCount } = useCompanyStore()
 
   const onDrop = useCallback((accepted: File[]) => {
-    if (accepted[0]) setFile(accepted[0])
+    if (accepted.length > 1) {
+      setMultiFiles(accepted)
+      setFile(null)
+    } else if (accepted[0]) {
+      setFile(accepted[0])
+      setMultiFiles([])
+    }
   }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/*': [], 'application/pdf': [] },
-    maxFiles: 1,
+    maxFiles: 10,
     maxSize: 10 * 1024 * 1024,
-    onDropRejected: () => toast.error('File too large or unsupported format'),
+    onDropRejected: (rejections) => {
+      if (rejections.some((r) => r.errors.some((e) => e.code === 'too-many-files'))) {
+        toast.error('Maximum 10 bills per upload')
+      } else {
+        toast.error('File too large or unsupported format')
+      }
+    },
   })
 
   const handleParse = async () => {
-    if (!file || !user?.companyId) return
+    if (!user?.companyId) return
+
+    // Multi-file: hand off to parent and close immediately
+    if (multiFiles.length > 1) {
+      onMultipleFiles(multiFiles)
+      handleClose()
+      return
+    }
+
+    if (!file) return
     setParsing(true)
     setStep(0)
     try {
       const parsed = await parseBillWithAI(file, (s) => setStep(s))
-      console.log('parsed', parsed)
       const bill   = parsedDataToBill(parsed, user.companyId)
       addBill(bill)
       incrementBillCount(user.companyId)
@@ -74,6 +96,7 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
   const handleClose = () => {
     if (parsing) return
     setFile(null)
+    setMultiFiles([])
     setStep(-1)
     onClose()
   }
@@ -88,8 +111,8 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
         parsing ? undefined : (
           <>
             <Button variant="outline" onClick={handleClose}>Cancel</Button>
-            <Button variant="teal" onClick={handleParse} disabled={!file}>
-              Read Bill
+            <Button variant="teal" onClick={handleParse} disabled={!file && multiFiles.length === 0}>
+              {multiFiles.length > 1 ? `Upload ${multiFiles.length} Bills` : 'Read Bill'}
             </Button>
           </>
         )
@@ -114,7 +137,7 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
             <p className="text-sm font-semibold text-gray-700 mb-1">
               {isDragActive ? 'Drop it here…' : 'Drop file here or click to browse'}
             </p>
-            <p className="text-xs text-gray-500">JPG, PNG, PDF — max 10 MB</p>
+            <p className="text-xs text-gray-500">JPG, PNG, PDF — max 10 MB · up to 10 files</p>
           </div>
 
           {/* Camera capture — opens rear camera on mobile, file picker on desktop */}
@@ -140,14 +163,20 @@ export function UploadModal({ open, onClose, onParsed }: UploadModalProps) {
             Take a Photo
           </button>
 
-          {/* Selected file */}
-          {file && (
+          {/* Selected file(s) */}
+          {multiFiles.length > 1 ? (
+            <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-teal-50 rounded-lg border border-teal-200">
+              <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0" />
+              <span className="text-sm font-medium text-gray-800 flex-1">{multiFiles.length} files selected</span>
+              <span className="text-xs text-gray-500">{(multiFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)} KB total</span>
+            </div>
+          ) : file ? (
             <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
               <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0" />
               <span className="text-sm font-medium text-gray-800 flex-1 truncate">{file.name}</span>
               <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
             </div>
-          )}
+          ) : null}
         </>
       ) : (
         /* Parsing steps */
