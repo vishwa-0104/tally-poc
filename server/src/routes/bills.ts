@@ -212,6 +212,13 @@ STEP 3 — Extract values
     If there is no discount at all: amount = Qty × unitPrice.
   ⚠ NEVER include GST in lineItem.amount. The amount must be tax-exclusive.
 
+▸ lineItem.unit — STRICT rules (to avoid incorrect Tally quantity tracking):
+  • Valid sources (use in order of preference):
+    1. A separate column in the line-items table that holds the unit of measure — the column may have any header name (e.g. "Unit", "UOM", "U/M", "Pack", "Packing", or no header at all). Read the cell value from that column for each row.
+    2. A unit written directly alongside the quantity value in the quantity cell (e.g. "10 Kg", "33 pc", "216 PCS", "5 Bags").
+  • INVALID source — NEVER extract unit from the item description/name text. Words like "pkt", "kg", "bag", "box" that appear inside the description field are part of the product name, not the transactional quantity unit. Ignore them.
+  • If neither valid source is present for a line, use "Nos".
+
 ▸ lineItem.discountPercent — per-line discount % only. Use null for Pattern B (discount is invoice-level).
 
 ▸ subtotal — read the "Taxable Value", "Net Amount before Tax", or "Taxable Amount" printed on the bill.
@@ -243,7 +250,7 @@ Schema:
       "description": string,
       "hsnCode": string | null,
       "quantity": number,
-      "unit": string,
+      "unit": string,           ← see unit rules below
       "unitPrice": number,
       "discountPercent": number | null,
       "gstRate": number,
