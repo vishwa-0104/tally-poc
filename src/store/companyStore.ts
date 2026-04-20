@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Company, LedgerMapping, TallyLedger, TallyStockItem, TallyStockGroup, TallyStockUnit, StockItemAlias } from '@/types'
+import type { Company, CompanyFeature, LedgerMapping, TallyGodown, TallyLedger, TallyStockItem, TallyStockGroup, TallyStockUnit, StockItemAlias } from '@/types'
 import { api } from '@/lib/api'
 
 interface CompanyStore {
@@ -10,9 +10,11 @@ interface CompanyStore {
   stockGroups: Record<string, TallyStockGroup[]>
   stockUnits: Record<string, TallyStockUnit[]>
   stockItemAliases: Record<string, StockItemAlias[]>
+  godowns: Record<string, TallyGodown[]>
   fetchCompanies: () => Promise<void>
   addCompany: (data: Omit<Company, 'id' | 'totalBills' | 'syncedBills' | 'pendingBills' | 'errorBills' | 'voucherCounter' | 'createdAt'> & { password: string }) => Promise<Company>
   updateMapping: (companyId: string, mapping: LedgerMapping) => Promise<void>
+  updateCompanyFeature: (companyId: string, feature: string, enabled: boolean) => Promise<void>
   getCompany: (id: string) => Company | undefined
   setLedgers: (companyId: string, ledgers: TallyLedger[]) => void
   getLedgers: (companyId: string) => TallyLedger[]
@@ -31,6 +33,9 @@ interface CompanyStore {
   saveStockUnitsToDb: (companyId: string, units: TallyStockUnit[]) => Promise<void>
   fetchAliases: (companyId: string) => Promise<void>
   saveAliases: (companyId: string, aliases: StockItemAlias[]) => Promise<void>
+  getGodowns: (companyId: string) => TallyGodown[]
+  fetchGodownsFromDb: (companyId: string) => Promise<void>
+  saveGodownsToDb: (companyId: string, godowns: TallyGodown[]) => Promise<void>
   incrementBillCount: (companyId: string) => void
   incrementPending: (companyId: string) => void
   incrementSynced: (companyId: string) => void
@@ -47,6 +52,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   stockGroups: {},
   stockUnits: {},
   stockItemAliases: {},
+  godowns: {},
 
   fetchCompanies: async () => {
     set({ loading: true })
@@ -167,6 +173,38 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
       ledgers: { ...s.ledgers, [companyId]: ledgers },
       companies: s.companies.map((c) => c.id === companyId
         ? { ...c, syncTimestamps: { ...c.syncTimestamps, ledgers: data.syncedAt } }
+        : c),
+    }))
+  },
+
+  updateCompanyFeature: async (companyId, feature, enabled) => {
+    await api.put(`/companies/${companyId}/features`, { feature, enabled })
+    set((s) => ({
+      companies: s.companies.map((c) => {
+        if (c.id !== companyId) return c
+        const existing = c.features ?? []
+        const idx = existing.findIndex((f: CompanyFeature) => f.feature === feature)
+        const updated = [...existing]
+        if (idx >= 0) updated[idx] = { feature, enabled }
+        else updated.push({ feature, enabled })
+        return { ...c, features: updated }
+      }),
+    }))
+  },
+
+  getGodowns: (companyId) => get().godowns[companyId] ?? [],
+
+  fetchGodownsFromDb: async (companyId) => {
+    const { data } = await api.get<TallyGodown[]>(`/companies/${companyId}/godowns`)
+    set((s) => ({ godowns: { ...s.godowns, [companyId]: data } }))
+  },
+
+  saveGodownsToDb: async (companyId, godowns) => {
+    const { data } = await api.put<{ saved: number; syncedAt: string }>(`/companies/${companyId}/godowns`, godowns)
+    set((s) => ({
+      godowns: { ...s.godowns, [companyId]: godowns },
+      companies: s.companies.map((c) => c.id === companyId
+        ? { ...c, syncTimestamps: { ...c.syncTimestamps, godowns: data.syncedAt } }
         : c),
     }))
   },

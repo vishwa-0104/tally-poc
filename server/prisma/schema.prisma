@@ -47,8 +47,29 @@ model Company {
   stockGroupCache  StockGroupCache[]
   stockUnitCache   StockUnitCache[]
   stockItemAliases StockItemAlias[]
+  godownCache      GodownCache[]
+  features         CompanyFeature[]
   syncTimestamps   Json?
   createdAt        DateTime       @default(now())
+}
+
+model CompanyFeature {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  feature   String
+  enabled   Boolean @default(false)
+
+  @@unique([companyId, feature])
+}
+
+model GodownCache {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  name      String
+
+  @@unique([companyId, name])
 }
 
 model LedgerCache {

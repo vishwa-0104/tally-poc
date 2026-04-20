@@ -49,7 +49,19 @@ export interface TallyBillMapping {
   cgstLedger?: string
   sgstLedger?: string
   igstLedger?: string
+  godown?: string
 }
+
+// ── Company Feature Flags ─────────────────────────────────────────────────────
+export interface CompanyFeature {
+  feature: string
+  enabled: boolean
+}
+
+/** Stable feature key constants — extend as new features are added */
+export const COMPANY_FEATURES = {
+  GODOWN: 'godown',
+} as const
 
 export interface Company {
   id: string
@@ -63,7 +75,8 @@ export interface Company {
   errorBills: number
   voucherCounter: number
   mapping: LedgerMapping | null
-  syncTimestamps?: { ledgers?: string; stockItems?: string; stockGroups?: string; stockUnits?: string } | null
+  features?: CompanyFeature[]
+  syncTimestamps?: { ledgers?: string; stockItems?: string; stockGroups?: string; stockUnits?: string; godowns?: string } | null
   createdAt: string
 }
 
@@ -135,6 +148,10 @@ export interface StockItemAlias {
 }
 
 // ── Tally ─────────────────────────────────────────────────
+export interface TallyGodown {
+  name: string
+}
+
 export interface TallyLedger {
   name: string
   group: string

@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle, Plus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { CreateStockItemModal } from '@/components/company/CreateStockItemModal'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
-import type { Bill, TallyLedger, LedgerMapping, StockItemAlias } from '@/types'
+import type { Bill, TallyGodown, TallyLedger, LedgerMapping, StockItemAlias } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
 
@@ -96,6 +96,8 @@ interface MappingFormProps {
   companyId: string
   tallyUrl: string
   tallyCompany?: string
+  godownEnabled?: boolean
+  godowns?: TallyGodown[]
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -113,6 +115,8 @@ export function MappingForm({
   companyId,
   tallyUrl,
   tallyCompany = '',
+  godownEnabled = false,
+  godowns = [],
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
@@ -406,6 +410,29 @@ export function MappingForm({
                 registration={register('igstLedger_18')}
               />
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Godown (admin-enabled feature) ── */}
+      {godownEnabled && (
+        <div className="mt-2">
+          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Godown</p>
+          <div className="w-1/2 pr-2">
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Godown Name</label>
+              <input
+                {...register('godownName')}
+                list="godowns-list"
+                autoComplete="off"
+                placeholder="Select or type godown…"
+                className="input-base w-full"
+              />
+              <datalist id="godowns-list">
+                {godowns.map((g) => <option key={g.name} value={g.name} />)}
+              </datalist>
+              <p className="text-xs text-gray-500 mt-1">Applied to all line items in this bill.</p>
+            </div>
           </div>
         </div>
       )}

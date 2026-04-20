@@ -1,4 +1,4 @@
-import type { TallyLedger, TallyStockItem, TallyStockGroup, TallyStockUnit, TallySyncResult } from '@/types'
+import type { TallyGodown, TallyLedger, TallyStockItem, TallyStockGroup, TallyStockUnit, TallySyncResult } from '@/types'
 
 export interface CreateStockItemPayload {
   name: string
@@ -73,6 +73,11 @@ export async function fetchTallyStockGroups(tallyUrl: string): Promise<TallyStoc
 export async function fetchTallyStockUnits(tallyUrl: string): Promise<TallyStockUnit[]> {
   const result = await sendToExtension<{ stockUnits: TallyStockUnit[] }>('FETCH_STOCK_UNITS', { tallyUrl })
   return result.stockUnits
+}
+
+export async function fetchTallyGodowns(tallyUrl: string): Promise<TallyGodown[]> {
+  const result = await sendToExtension<{ godowns: TallyGodown[] }>('FETCH_GODOWNS', { tallyUrl })
+  return result.godowns
 }
 
 export async function createTallyStockItem(payload: CreateStockItemPayload, tallyUrl: string): Promise<TallySyncResult> {

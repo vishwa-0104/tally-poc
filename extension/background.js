@@ -47,6 +47,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ stockUnits: [], error: err.message }))
       return true
 
+    case 'FETCH_GODOWNS':
+      handleFetchGodowns(payload.tallyUrl)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ godowns: [], error: err.message }))
+      return true
+
     case 'SYNC_TO_TALLY':
       handleSyncToTally(payload.xml, payload.tallyUrl)
         .then(sendResponse)
@@ -316,6 +322,56 @@ function parseStockUnits(xml) {
     units.push({ name, symbol })
   }
   return units
+}
+
+// ── Fetch godowns from Tally ─────────────────────────────────────────────────
+
+async function handleFetchGodowns(tallyUrl) {
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSGodowns</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSGodowns" ISMODIFY="No">
+            <TYPE>Godown</TYPE>
+            <NATIVEMETHOD>Name</NATIVEMETHOD>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  const godowns = parseGodowns(responseText)
+  console.log('[Tally godowns] count:', godowns.length)
+  return { godowns }
+}
+
+function parseGodowns(xml) {
+  const seen = new Set()
+  const godowns = []
+  const blocks = [...xml.matchAll(/<GODOWN\b[^>]*>([\s\S]*?)<\/GODOWN>/gi)]
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+
+  for (const match of blocks) {
+    const block = match[0]
+    let name = block.match(/<GODOWN\s+NAME="([^"]+)"/i)?.[1]?.trim()
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    godowns.push({ name })
+  }
+  return godowns
 }
 
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────

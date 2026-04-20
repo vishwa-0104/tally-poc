@@ -5,8 +5,8 @@ import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits } from '@/services/tallyService'
-import { normalizeLedgerMapping } from '@/types'
+import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits } from '@/services/tallyService'
+import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { LedgerMapping } from '@/types'
 
 export const TALLY_URL_KEY         = 'tally-server-url'
@@ -129,23 +129,27 @@ function TabBar({ active, onChange }: TabBarProps) {
 
 export default function CompanySettings() {
   const { user }    = useAuthStore()
-  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb } = useCompanyStore()
   const company     = user?.companyId ? getCompany(user.companyId) : null
   const companyId   = user?.companyId ?? ''
 
-  const [activeTab,     setActiveTab]     = useState<Tab>('connection')
-  const [syncing,       setSyncing]       = useState(false)
-  const [syncingItems,  setSyncingItems]  = useState(false)
-  const [syncingGroups, setSyncingGroups] = useState(false)
-  const [syncingUnits,  setSyncingUnits]  = useState(false)
-  const [savingMap,     setSavingMap]     = useState(false)
-  const [tallyUrl,      setTallyUrl]      = useState(getTallyUrl)
-  const [voucherType,   setVoucherType]   = useState(getTallyVoucherType)
+  const godownEnabled = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN && f.enabled) ?? false
+
+  const [activeTab,      setActiveTab]      = useState<Tab>('connection')
+  const [syncing,        setSyncing]        = useState(false)
+  const [syncingItems,   setSyncingItems]   = useState(false)
+  const [syncingGroups,  setSyncingGroups]  = useState(false)
+  const [syncingUnits,   setSyncingUnits]   = useState(false)
+  const [syncingGodowns, setSyncingGodowns] = useState(false)
+  const [savingMap,      setSavingMap]      = useState(false)
+  const [tallyUrl,       setTallyUrl]       = useState(getTallyUrl)
+  const [voucherType,    setVoucherType]    = useState(getTallyVoucherType)
 
   const storedLedgers     = companyId ? getLedgers(companyId)     : []
   const storedStockItems  = companyId ? getStockItems(companyId)  : []
   const storedStockGroups = companyId ? getStockGroups(companyId) : []
   const storedStockUnits  = companyId ? getStockUnits(companyId)  : []
+  const storedGodowns     = companyId ? getGodowns(companyId)     : []
   const ledgerOptions     = storedLedgers.map((l) => l.name)
 
   const [mapping, setMapping] = useState<LedgerMapping>(() => normalizeLedgerMapping(company?.mapping))
@@ -159,7 +163,8 @@ export default function CompanySettings() {
     if (companyId && storedStockItems.length === 0)  fetchStockItemsFromDb(companyId).catch(() => {})
     if (companyId && storedStockGroups.length === 0) fetchStockGroupsFromDb(companyId).catch(() => {})
     if (companyId && storedStockUnits.length === 0)  fetchStockUnitsFromDb(companyId).catch(() => {})
-  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (companyId && godownEnabled && storedGodowns.length === 0) fetchGodownsFromDb(companyId).catch(() => {})
+  }, [companyId, godownEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveTallyUrl = () => {
     localStorage.setItem(TALLY_URL_KEY, tallyUrl.trim() || DEFAULT_TALLY_URL)
@@ -217,6 +222,18 @@ export default function CompanySettings() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch stock units. Is Tally running?')
     } finally { setSyncingUnits(false) }
+  }
+
+  const handleSyncGodowns = async () => {
+    if (!companyId) return
+    setSyncingGodowns(true)
+    try {
+      const godowns = await fetchTallyGodowns(getTallyUrl())
+      await saveGodownsToDb(companyId, godowns)
+      toast.success(`${godowns.length} godowns synced and saved`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch godowns. Is Tally running?')
+    } finally { setSyncingGodowns(false) }
   }
 
   const set = (key: keyof LedgerMapping) => (v: string) =>
@@ -290,10 +307,13 @@ export default function CompanySettings() {
               <div>
                 <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Tally Data Sync</p>
                 <p className="text-xs text-gray-500 mb-3">Sync once — data is saved to DB and available without Tally open.</p>
-                <SyncRow label="Ledgers"      count={storedLedgers.length}     loading={syncing}       lastSync={company?.syncTimestamps?.ledgers}      onSync={handleSyncLedgers} />
-                <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}  lastSync={company?.syncTimestamps?.stockItems}   onSync={handleSyncStockItems} />
-                <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups} lastSync={company?.syncTimestamps?.stockGroups}  onSync={handleSyncStockGroups} />
-                <SyncRow label="Stock Units"  count={storedStockUnits.length}  loading={syncingUnits}  lastSync={company?.syncTimestamps?.stockUnits}   onSync={handleSyncStockUnits} />
+                <SyncRow label="Ledgers"      count={storedLedgers.length}     loading={syncing}         lastSync={company?.syncTimestamps?.ledgers}     onSync={handleSyncLedgers} />
+                <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}    lastSync={company?.syncTimestamps?.stockItems}  onSync={handleSyncStockItems} />
+                <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups}   lastSync={company?.syncTimestamps?.stockGroups} onSync={handleSyncStockGroups} />
+                <SyncRow label="Stock Units"  count={storedStockUnits.length}  loading={syncingUnits}    lastSync={company?.syncTimestamps?.stockUnits}  onSync={handleSyncStockUnits} />
+                {godownEnabled && (
+                  <SyncRow label="Godowns" count={storedGodowns.length} loading={syncingGodowns} lastSync={company?.syncTimestamps?.godowns} onSync={handleSyncGodowns} />
+                )}
               </div>
             </div>
           )}

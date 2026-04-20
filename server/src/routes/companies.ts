@@ -10,9 +10,10 @@ companiesRouter.use(requireAuth)
 
 // GET /api/companies — admin sees all, company user sees own
 companiesRouter.get('/companies', async (req, res) => {
+  const include = { features: { select: { feature: true, enabled: true } } }
   const companies = req.auth.role === 'ADMIN'
-    ? await prisma.company.findMany({ orderBy: { createdAt: 'desc' } })
-    : await prisma.company.findMany({ where: { id: req.auth.companyId! } })
+    ? await prisma.company.findMany({ orderBy: { createdAt: 'desc' }, include })
+    : await prisma.company.findMany({ where: { id: req.auth.companyId! }, include })
 
   // Attach bill counts
   const withCounts = await Promise.all(
@@ -375,4 +376,82 @@ companiesRouter.put('/companies/:id/mapping', async (req, res) => {
     data: { mapping: req.body },
   })
   res.json(company)
+})
+
+// GET /api/companies/:id/features
+companiesRouter.get('/companies/:id/features', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const features = await prisma.companyFeature.findMany({
+    where: { companyId: req.params.id },
+    select: { feature: true, enabled: true },
+  })
+  res.json(features)
+})
+
+// PUT /api/companies/:id/features — admin only, upserts a single feature flag
+companiesRouter.put('/companies/:id/features', requireAdmin, async (req, res) => {
+  const schema = z.object({
+    feature: z.string().min(1),
+    enabled: z.boolean(),
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const { feature, enabled } = result.data
+  await prisma.companyFeature.upsert({
+    where:  { companyId_feature: { companyId: req.params.id, feature } },
+    update: { enabled },
+    create: { companyId: req.params.id, feature, enabled },
+  })
+  res.json({ feature, enabled })
+})
+
+// GET /api/companies/:id/godowns
+companiesRouter.get('/companies/:id/godowns', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const godowns = await prisma.godownCache.findMany({
+    where: { companyId: req.params.id },
+    orderBy: { name: 'asc' },
+    select: { name: true },
+  })
+  res.json(godowns)
+})
+
+// PUT /api/companies/:id/godowns — replace all cached godowns
+companiesRouter.put('/companies/:id/godowns', async (req, res) => {
+  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.array(z.object({ name: z.string() }))
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const companyId = req.params.id
+  const incoming  = result.data
+  console.log(`[Godowns] PUT /${companyId}/godowns — received ${incoming.length} godowns`)
+
+  await prisma.$transaction(async (tx) => {
+    for (const g of incoming) {
+      await tx.godownCache.upsert({
+        where:  { companyId_name: { companyId, name: g.name } },
+        update: {},
+        create: { companyId, name: g.name },
+      })
+    }
+    await tx.godownCache.deleteMany({
+      where: { companyId, name: { notIn: incoming.map((g) => g.name) } },
+    })
+  })
+
+  const now = new Date().toISOString()
+  await prisma.$executeRaw`
+    UPDATE "Company"
+    SET "syncTimestamps" = COALESCE("syncTimestamps", '{}'::jsonb) || jsonb_build_object('godowns', ${now}::text)
+    WHERE id = ${companyId}
+  `
+  res.json({ saved: incoming.length, syncedAt: now })
 })

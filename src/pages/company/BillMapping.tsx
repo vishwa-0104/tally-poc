@@ -12,7 +12,7 @@ import { syncToTally } from '@/services'
 import { buildTallyXml } from '@/lib/utils'
 import { getNextVoucherCounter } from '@/lib/api'
 import { getTallyUrl, getTallyCompanyName, getTallyVoucherType } from './CompanySettings'
-import { normalizeLedgerMapping } from '@/types'
+import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { MappingInput } from '@/lib/validators'
 import type { Bill } from '@/types'
 
@@ -25,11 +25,11 @@ export default function BillMapping() {
 
   const { user }     = useAuthStore()
   const { getBill, updateBillStatus, fetchBills } = useBillStore()
-  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError } = useCompanyStore()
-  const ledgersState       = useCompanyStore((s) => s.ledgers)
-  const stockItemsState    = useCompanyStore((s) => s.stockItems)
+  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb } = useCompanyStore()
+  const ledgersState          = useCompanyStore((s) => s.ledgers)
+  const stockItemsState       = useCompanyStore((s) => s.stockItems)
   const stockItemAliasesState = useCompanyStore((s) => s.stockItemAliases)
-  const companies          = useCompanyStore((s) => s.companies)
+  const companies             = useCompanyStore((s) => s.companies)
 
   const companyId = user?.companyId ?? ''
   const company   = companyId ? getCompany(companyId) : null
@@ -38,6 +38,8 @@ export default function BillMapping() {
   const storedLedgers    = companyId ? (ledgersState[companyId] ?? []) : []
   const storedStockItems = companyId ? (stockItemsState[companyId] ?? []) : []
   const storedAliases    = companyId ? (stockItemAliasesState[companyId] ?? []) : []
+  const storedGodowns    = companyId ? getGodowns(companyId) : []
+  const godownEnabled    = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN && f.enabled) ?? false
 
   useEffect(() => {
     if (companyId && companies.length === 0) {
@@ -52,7 +54,10 @@ export default function BillMapping() {
     if (companyId && storedAliases.length === 0) {
       fetchAliases(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load aliases from DB:', err))
     }
-  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (companyId && godownEnabled && storedGodowns.length === 0) {
+      fetchGodownsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load godowns from DB:', err))
+    }
+  }, [companyId, godownEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist stock item aliases for any line item that has a tallyStockItem mapped
   const persistAliases = (lineItems: MappingInput['lineItems']) => {
@@ -95,12 +100,15 @@ export default function BillMapping() {
     const sgstLedger     = trim(data.sgstLedger_18)     ?? trim(data.sgstLedger_5)
     const igstLedger     = trim(data.igstLedger_18)     ?? trim(data.igstLedger_5)
 
+    const godown = godownEnabled ? trim(data.godownName) : undefined
+
     const tallyMapping = {
       vendorLedger: trim(data.vendorLedger),
       purchaseLedger,
       cgstLedger,
       sgstLedger,
       igstLedger,
+      godown,
     }
 
     // Use the form's round-off value (user-editable, pre-filled from AI parse or computed).
@@ -117,6 +125,7 @@ export default function BillMapping() {
       cgstLedger,
       sgstLedger,
       igstLedger,
+      godown,
       billNumber:    data.billNumber,
       billDate:      data.billDate,
       voucherDate:   data.voucherDate?.trim() || undefined,
@@ -285,6 +294,8 @@ export default function BillMapping() {
               companyId={companyId}
               tallyUrl={tallyUrl}
               tallyCompany={tallyCompany}
+              godownEnabled={godownEnabled}
+              godowns={storedGodowns}
               onSaveMapping={handleSaveMapping}
               onSyncToTally={handleSync}
             />

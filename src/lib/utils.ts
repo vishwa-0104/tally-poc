@@ -86,6 +86,7 @@ export function buildTallyXml(params: {
   roundOffLedger?: string   // defaults to 'Round Off'
   tallyCompany?: string
   voucherType?: string
+  godown?: string
   lineItems?: LineItemParam[]
 }): string {
   const esc = escapeXml
@@ -124,7 +125,7 @@ export function buildTallyXml(params: {
               <ACTUALQTY> ${quantity} ${unit}</ACTUALQTY>
               <BILLEDQTY> ${quantity} ${unit}</BILLEDQTY>
               <BATCHALLOCATIONS.LIST>
-                <GODOWNNAME>Main Location</GODOWNNAME>
+                <GODOWNNAME>${esc(params.godown?.trim() || 'Main Location')}</GODOWNNAME>
                 <BATCHNAME>Primary Batch</BATCHNAME>
                 <AMOUNT>-${itemAmt}</AMOUNT>
                 <ACTUALQTY> ${quantity} ${unit}</ACTUALQTY>

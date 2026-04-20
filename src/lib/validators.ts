@@ -68,6 +68,7 @@ export const mappingSchema = z.object({
     z.number().optional()
   ),
   lineItems:      z.array(lineItemEditSchema).optional(),
+  godownName:     z.string().optional(),
 })
 
 export type LoginInput      = z.infer<typeof loginSchema>
