@@ -164,12 +164,13 @@ export function MappingForm({
   const resolvedVendor  = gstinMatch?.name ?? (vendorNameMatch ? bill.vendorName : '')
 
   // ── Round-off ───────────────────────────────────────────────────────────────
-  // Only use the AI-parsed value from the bill. Never derive from totals — the
-  // difference can be non-zero due to floating point even when no round-off exists.
   const roundOffValue = (bill.roundOffAmount != null && Math.abs(bill.roundOffAmount) >= 0.01)
     ? bill.roundOffAmount
     : null
   const hasRoundOff = roundOffValue !== null
+
+  // ── Invoice-level discount ───────────────────────────────────────────────────
+  const hasInvoiceDiscount = bill.invoiceDiscountAmount != null && bill.invoiceDiscountAmount > 0
 
   // ── Form ────────────────────────────────────────────────────────────────────
   const { register, handleSubmit, setValue, watch } = useForm<MappingInput>({
@@ -530,6 +531,24 @@ export function MappingForm({
                 Value seems incorrect, try ₹{roundOffSuggestion}
               </p>
             )}
+          </div>
+        )}
+        {hasInvoiceDiscount && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+              Discount Ledger <span className="font-normal text-gray-500">(₹{bill.invoiceDiscountAmount?.toFixed(2)})</span>
+            </label>
+            <input
+              {...register('discountLedger')}
+              list="discount-ledger-list"
+              autoComplete="off"
+              placeholder="Select discount ledger…"
+              className="input-base w-52"
+            />
+            <datalist id="discount-ledger-list">
+              {allLedgerNames.map((name) => <option key={name} value={name} />)}
+            </datalist>
+            <p className="text-xs text-gray-500 mt-1">Invoice-level discount of ₹{bill.invoiceDiscountAmount?.toFixed(2)}</p>
           </div>
         )}
       </div>

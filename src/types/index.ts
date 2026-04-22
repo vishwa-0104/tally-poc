@@ -96,6 +96,8 @@ export interface ParsedBillData {
   igstAmount: number
   totalAmount: number
   roundOffAmount?: number
+  /** Invoice-level discount amount — null when discount is only per-line (Pattern A) */
+  invoiceDiscountAmount?: number | null
   lineItems: Omit<LineItem, 'id'>[]
 }
 
@@ -133,6 +135,7 @@ export interface Bill {
   rawAiJson?: Record<string, unknown>
   imageUrl?: string
   roundOffAmount?: number
+  invoiceDiscountAmount?: number | null
   status: BillStatus
   tallyXml?: string
   tallyMapping?: TallyBillMapping

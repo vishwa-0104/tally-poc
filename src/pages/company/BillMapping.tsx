@@ -154,6 +154,8 @@ export default function BillMapping() {
       igstAmount:    bill.igstAmount,
       roundOffAmount: roundOffAmt,
       roundOffLedger: company?.mapping?.roundoff_ledger?.trim() || undefined,
+      invoiceDiscountAmount: bill.invoiceDiscountAmount ?? undefined,
+      discountLedger: trim(data.discountLedger),
       tallyCompany:  tallyCompany || undefined,
       voucherType:   voucherType,
       lineItems:     resolvedLineItems,

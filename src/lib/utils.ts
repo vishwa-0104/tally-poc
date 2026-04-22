@@ -84,6 +84,8 @@ export function buildTallyXml(params: {
   igstAmount: number
   roundOffAmount?: number   // positive = debit round-off (e.g. 0.50), negative = credit
   roundOffLedger?: string   // defaults to 'Round Off'
+  invoiceDiscountAmount?: number | null
+  discountLedger?: string
   tallyCompany?: string
   voucherType?: string
   godown?: string
@@ -208,6 +210,20 @@ export function buildTallyXml(params: {
             </LEDGERENTRIES.LIST>`
     : ''
 
+  // Invoice-level discount — credit entry that reduces the amount payable to vendor.
+  // ISDEEMEDPOSITIVE=No means credit side.
+  const discountEntry = params.discountLedger?.trim() && params.invoiceDiscountAmount && params.invoiceDiscountAmount > 0
+    ? `
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(params.discountLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>${amt(params.invoiceDiscountAmount)}</AMOUNT>
+            </LEDGERENTRIES.LIST>`
+    : ''
+
   // Round-off — ROUNDTYPE and ROUNDLIMIT match real Tally export.
   // ISDEEMEDPOSITIVE=Yes means debit (positive roundoff reduces vendor payable).
   const roundOffEntry = params.roundOffAmount && params.roundOffAmount !== 0
@@ -249,7 +265,7 @@ export function buildTallyXml(params: {
             <REFERENCE>${esc(params.billNumber)}</REFERENCE>
             <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
             <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
-            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${partyEntry}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${roundOffEntry}
+            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${partyEntry}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${discountEntry}${roundOffEntry}
           </VOUCHER>
         </TALLYMESSAGE>
       </REQUESTDATA>

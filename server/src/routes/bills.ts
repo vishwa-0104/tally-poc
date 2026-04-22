@@ -152,6 +152,7 @@ billsRouter.post('/bills/parse', async (req, res) => {
     res.json({
       ...parsed,
       roundOffAmount: parsed.roundOffAmount ?? null,
+      invoiceDiscountAmount: parsed.invoiceDiscountAmount ?? null,
       lineItems: (parsed.lineItems ?? []).map((item: Record<string, unknown>) => ({
         ...item,
         hsnCode: item.hsnCode ?? '',
@@ -200,6 +201,10 @@ PATTERN B — Invoice-level discount + GST:
   GST (CGST+SGST or IGST) is applied on the subtotal.
   Round-off (if any) is applied after tax to reach the final payable amount.
 
+PATTERN C — Mixed (per-line + invoice-level discount):
+  Some lines have individual discounts AND there is also an invoice-level discount at the bottom.
+  Treat as Pattern B for invoiceDiscountAmount — extract the invoice-level discount amount.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 3 — Extract values
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -236,10 +241,17 @@ STEP 3 — Extract values
 ▸ igstAmount — read from label "IGST". Use 0 if not present.
 ▸ roundOffAmount — read from "Round Off", "Rounding", "Rounded". Use null if not present.
 ▸ totalAmount — the final grand total payable (bottom-line number on the bill).
+▸ invoiceDiscountAmount — the invoice-level (overall) discount deducted from the gross total:
+  • Pattern A only (all discounts are per-line): set to null.
+  • Pattern B or C (discount on overall/total amount exists): read the discount amount from the bill footer (labels like "Discount", "Trade Discount", "Special Discount", "Less Discount"). Use the rupee amount, not the percentage.
+  • If no invoice-level discount is present: null.
 
 VERIFY before outputting:
   subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount
-  If this does not hold, re-check your subtotal and tax amounts.
+  Note: invoiceDiscountAmount is NOT added back here. subtotal is already the post-discount
+  taxable value (for Pattern B/C: subtotal = grossTotal − invoiceDiscountAmount). The discount
+  is embedded in subtotal, not a separate addend. If the equation does not balance, re-check
+  that subtotal is the net-of-discount figure, not the gross total.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 4 — Output ONLY a valid JSON object
@@ -268,7 +280,8 @@ Schema:
   "sgstAmount": number,
   "igstAmount": number,
   "totalAmount": number,        ← final grand total including all taxes and round-off
-  "roundOffAmount": number | null
+  "roundOffAmount": number | null,
+  "invoiceDiscountAmount": number | null  ← invoice-level discount amount; null if only per-line discounts or no discount
 }
 
 CRITICAL numeric rules:
