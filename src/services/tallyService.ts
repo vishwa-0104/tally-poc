@@ -53,30 +53,30 @@ async function sendToExtension<T>(type: string, payload: Record<string, unknown>
 
 // ── Public API ─────────────────────────────────────────────
 
-export async function fetchTallyLedgers(tallyUrl: string): Promise<TallyLedger[]> {
-  console.log('[Step 1] Fetching ledgers from Tally:', tallyUrl)
-  const result = await sendToExtension<{ ledgers: TallyLedger[] }>('FETCH_LEDGERS', { tallyUrl })
+export async function fetchTallyLedgers(tallyUrl: string, tallyCompany?: string): Promise<TallyLedger[]> {
+  console.log('[Step 1] Fetching ledgers from Tally:', tallyUrl, 'company:', tallyCompany)
+  const result = await sendToExtension<{ ledgers: TallyLedger[] }>('FETCH_LEDGERS', { tallyUrl, tallyCompany })
   console.log('[Step 2] Ledgers received from Tally extension. Count:', result.ledgers.length, '| Sample:', result.ledgers.slice(0, 3))
   return result.ledgers
 }
 
-export async function fetchTallyStockItems(tallyUrl: string): Promise<TallyStockItem[]> {
-  const result = await sendToExtension<{ stockItems: TallyStockItem[] }>('FETCH_STOCK_ITEMS', { tallyUrl })
+export async function fetchTallyStockItems(tallyUrl: string, tallyCompany?: string): Promise<TallyStockItem[]> {
+  const result = await sendToExtension<{ stockItems: TallyStockItem[] }>('FETCH_STOCK_ITEMS', { tallyUrl, tallyCompany })
   return result.stockItems
 }
 
-export async function fetchTallyStockGroups(tallyUrl: string): Promise<TallyStockGroup[]> {
-  const result = await sendToExtension<{ stockGroups: TallyStockGroup[] }>('FETCH_STOCK_GROUPS', { tallyUrl })
+export async function fetchTallyStockGroups(tallyUrl: string, tallyCompany?: string): Promise<TallyStockGroup[]> {
+  const result = await sendToExtension<{ stockGroups: TallyStockGroup[] }>('FETCH_STOCK_GROUPS', { tallyUrl, tallyCompany })
   return result.stockGroups
 }
 
-export async function fetchTallyStockUnits(tallyUrl: string): Promise<TallyStockUnit[]> {
-  const result = await sendToExtension<{ stockUnits: TallyStockUnit[] }>('FETCH_STOCK_UNITS', { tallyUrl })
+export async function fetchTallyStockUnits(tallyUrl: string, tallyCompany?: string): Promise<TallyStockUnit[]> {
+  const result = await sendToExtension<{ stockUnits: TallyStockUnit[] }>('FETCH_STOCK_UNITS', { tallyUrl, tallyCompany })
   return result.stockUnits
 }
 
-export async function fetchTallyGodowns(tallyUrl: string): Promise<TallyGodown[]> {
-  const result = await sendToExtension<{ godowns: TallyGodown[] }>('FETCH_GODOWNS', { tallyUrl })
+export async function fetchTallyGodowns(tallyUrl: string, tallyCompany?: string): Promise<TallyGodown[]> {
+  const result = await sendToExtension<{ godowns: TallyGodown[] }>('FETCH_GODOWNS', { tallyUrl, tallyCompany })
   return result.godowns
 }
 

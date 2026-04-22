@@ -72,7 +72,7 @@ export default function BillMapping() {
     if (toSave.length > 0) saveAliases(companyId, toSave).catch(() => {})
   }
 
-  const tallyUrl     = getTallyUrl()
+  const tallyUrl     = getTallyUrl(company?.port)
   const tallyCompany = getTallyCompanyName()
   const voucherType  = getTallyVoucherType()
 

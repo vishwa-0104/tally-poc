@@ -16,7 +16,14 @@ export const TALLY_VOUCHER_TYPE_KEY = 'tally-voucher-type'
 export const DEFAULT_VOUCHER_TYPE  = 'GST PURCHASE'
 
 
-export function getTallyUrl():         string { return localStorage.getItem(TALLY_URL_KEY)          || DEFAULT_TALLY_URL }
+/** Returns the effective Tally URL.
+ *  Priority: localStorage manual override → company port from DB → localhost:9000 */
+export function getTallyUrl(companyPort?: number): string {
+  const override = localStorage.getItem(TALLY_URL_KEY)
+  if (override) return override
+  if (companyPort) return `http://localhost:${companyPort}`
+  return DEFAULT_TALLY_URL
+}
 export function getTallyCompanyName(): string { return localStorage.getItem(TALLY_COMPANY_KEY)      ?? '' }
 export function getTallyVoucherType(): string { return localStorage.getItem(TALLY_VOUCHER_TYPE_KEY) || DEFAULT_VOUCHER_TYPE }
 
@@ -143,6 +150,7 @@ export default function CompanySettings() {
   const [syncingGodowns, setSyncingGodowns] = useState(false)
   const [savingMap,      setSavingMap]      = useState(false)
   const [tallyUrl,       setTallyUrl]       = useState(getTallyUrl)
+  const [tallyCompany,   setTallyCompany]   = useState(getTallyCompanyName)
   const [voucherType,    setVoucherType]    = useState(getTallyVoucherType)
 
   const storedLedgers     = companyId ? getLedgers(companyId)     : []
@@ -171,6 +179,11 @@ export default function CompanySettings() {
     toast.success('Tally server URL saved')
   }
 
+  const handleSaveTallyCompany = () => {
+    localStorage.setItem(TALLY_COMPANY_KEY, tallyCompany.trim())
+    toast.success('Tally company name saved')
+  }
+
   const handleSaveVoucherType = () => {
     localStorage.setItem(TALLY_VOUCHER_TYPE_KEY, voucherType.trim() || DEFAULT_VOUCHER_TYPE)
     toast.success('Voucher type saved')
@@ -180,7 +193,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncing(true)
     try {
-      const ledgers = await fetchTallyLedgers(getTallyUrl())
+      const ledgers = await fetchTallyLedgers(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
       await saveLedgersToDb(companyId, ledgers)
       toast.success(`${ledgers.length} ledgers synced and saved`)
     } catch (err) {
@@ -192,7 +205,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncingItems(true)
     try {
-      const items = await fetchTallyStockItems(getTallyUrl())
+      const items = await fetchTallyStockItems(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
       await saveStockItemsToDb(companyId, items)
       toast.success(`${items.length} stock items synced and saved`)
     } catch (err) {
@@ -204,7 +217,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncingGroups(true)
     try {
-      const groups = await fetchTallyStockGroups(getTallyUrl())
+      const groups = await fetchTallyStockGroups(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
       await saveStockGroupsToDb(companyId, groups)
       toast.success(`${groups.length} stock groups synced and saved`)
     } catch (err) {
@@ -216,7 +229,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncingUnits(true)
     try {
-      const units = await fetchTallyStockUnits(getTallyUrl())
+      const units = await fetchTallyStockUnits(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
       await saveStockUnitsToDb(companyId, units)
       toast.success(`${units.length} stock units synced and saved`)
     } catch (err) {
@@ -228,7 +241,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncingGodowns(true)
     try {
-      const godowns = await fetchTallyGodowns(getTallyUrl())
+      const godowns = await fetchTallyGodowns(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
       await saveGodownsToDb(companyId, godowns)
       toast.success(`${godowns.length} godowns synced and saved`)
     } catch (err) {
@@ -280,7 +293,26 @@ export default function CompanySettings() {
                   <Button variant="outline" size="sm" onClick={handleSaveTallyUrl}>Save</Button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Use <span className="font-mono">http://localhost:9000</span> for local Tally, or your ngrok URL.
+                  Leave blank to use company port <span className="font-mono">(localhost:{company?.port ?? 9000})</span>. Set only for ngrok or remote Tally.
+                </p>
+              </div>
+
+              {/* Tally Company Name */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                  Tally Company Name
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    value={tallyCompany}
+                    onChange={(e) => setTallyCompany(e.target.value)}
+                    placeholder="e.g. Sharma Groceries"
+                    className="input-base flex-1"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleSaveTallyCompany}>Save</Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Must match exactly as it appears in Tally. Scopes ledger and stock syncs to this company only.
                 </p>
               </div>
 

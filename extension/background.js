@@ -24,31 +24,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   switch (type) {
     case 'FETCH_LEDGERS':
-      handleFetchLedgers(payload.tallyUrl)
+      handleFetchLedgers(payload.tallyUrl, payload.tallyCompany)
         .then(sendResponse)
         .catch((err) => sendResponse({ ledgers: [], error: err.message }))
       return true // keep channel open for async
 
     case 'FETCH_STOCK_ITEMS':
-      handleFetchStockItems(payload.tallyUrl)
+      handleFetchStockItems(payload.tallyUrl, payload.tallyCompany)
         .then(sendResponse)
         .catch((err) => sendResponse({ stockItems: [], error: err.message }))
       return true
 
     case 'FETCH_STOCK_GROUPS':
-      handleFetchStockGroups(payload.tallyUrl)
+      handleFetchStockGroups(payload.tallyUrl, payload.tallyCompany)
         .then(sendResponse)
         .catch((err) => sendResponse({ stockGroups: [], error: err.message }))
       return true
 
     case 'FETCH_STOCK_UNITS':
-      handleFetchStockUnits(payload.tallyUrl)
+      handleFetchStockUnits(payload.tallyUrl, payload.tallyCompany)
         .then(sendResponse)
         .catch((err) => sendResponse({ stockUnits: [], error: err.message }))
       return true
 
     case 'FETCH_GODOWNS':
-      handleFetchGodowns(payload.tallyUrl)
+      handleFetchGodowns(payload.tallyUrl, payload.tallyCompany)
         .then(sendResponse)
         .catch((err) => sendResponse({ godowns: [], error: err.message }))
       return true
@@ -72,7 +72,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 // ── Fetch ledger names from Tally ────────────────────────────────────────────
 
-async function handleFetchLedgers(tallyUrl) {
+function companyVar(tallyCompany) {
+  return tallyCompany ? `\n        <SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>` : ''
+}
+
+async function handleFetchLedgers(tallyUrl, tallyCompany) {
   // IMPORTANT: the collection name in <ID> and <COLLECTION NAME> must be the same
   // custom name — if it matches a Tally built-in (e.g. "List of Ledgers"), Tally
   // uses its own definition and ignores our NATIVEMETHODs.
@@ -86,7 +90,7 @@ async function handleFetchLedgers(tallyUrl) {
   <BODY>
     <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -157,7 +161,7 @@ function parseLedgers(xml) {
 
 // ── Fetch stock items from Tally ─────────────────────────────────────────────
 
-async function handleFetchStockItems(tallyUrl) {
+async function handleFetchStockItems(tallyUrl, tallyCompany) {
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -168,7 +172,7 @@ async function handleFetchStockItems(tallyUrl) {
   <BODY>
     <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -216,7 +220,7 @@ function parseStockItems(xml) {
 
 // ── Fetch stock groups from Tally ─────────────────────────────────────────────
 
-async function handleFetchStockGroups(tallyUrl) {
+async function handleFetchStockGroups(tallyUrl, tallyCompany) {
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -227,7 +231,7 @@ async function handleFetchStockGroups(tallyUrl) {
   <BODY>
     <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -273,7 +277,7 @@ function parseStockGroups(xml) {
 
 // ── Fetch stock units from Tally ─────────────────────────────────────────────
 
-async function handleFetchStockUnits(tallyUrl) {
+async function handleFetchStockUnits(tallyUrl, tallyCompany) {
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -284,7 +288,7 @@ async function handleFetchStockUnits(tallyUrl) {
   <BODY>
     <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -326,7 +330,7 @@ function parseStockUnits(xml) {
 
 // ── Fetch godowns from Tally ─────────────────────────────────────────────────
 
-async function handleFetchGodowns(tallyUrl) {
+async function handleFetchGodowns(tallyUrl, tallyCompany) {
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -337,7 +341,7 @@ async function handleFetchGodowns(tallyUrl) {
   <BODY>
     <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
