@@ -212,12 +212,18 @@ STEP 3 — Extract values
     If there is no discount at all: amount = Qty × unitPrice.
   ⚠ NEVER include GST in lineItem.amount. The amount must be tax-exclusive.
 
-▸ lineItem.unit — STRICT rules (to avoid incorrect Tally quantity tracking):
-  • Valid sources (use in order of preference):
-    1. A separate column in the line-items table that holds the unit of measure — the column may have any header name (e.g. "Unit", "UOM", "U/M", "Pack", "Packing", or no header at all). Read the cell value from that column for each row.
-    2. A unit written directly alongside the quantity value in the quantity cell (e.g. "10 Kg", "33 pc", "216 PCS", "5 Bags").
-  • INVALID source — NEVER extract unit from the item description/name text. Words like "pkt", "kg", "bag", "box" that appear inside the description field are part of the product name, not the transactional quantity unit. Ignore them.
-  • If neither valid source is present for a line, use "Nos".
+▸ lineItem.unit — determine using this exact priority order:
+  1. Dedicated column: a separate column in the line-items table for the unit of measure — may have any header ("Unit", "UOM", "U/M", "Pack", "Packing", etc.) or no header. Use the cell value for that row.
+  2. Alongside quantity: a unit written directly next to the quantity value in the qty cell (e.g. "33 pc", "216 PCS", "10 Kg", "5 Bags").
+  3. Inside description/name: if and only if no value was found in steps 1–2, look inside the item description or product name for a unit abbreviation (e.g. "Sugar 5 Kg Bag" → "Kg", "Ariel 1 Ltr" → "Ltr", "Pipe 200mm pkt" → "Pkt"). Extract only the unit word, not the quantity or rest of the name.
+  4. Smart inference: if no unit is found anywhere on the bill for this line, infer the most appropriate standard unit from the product type or name:
+     - Liquids / oils / beverages → "Ltr" or "Ml"
+     - Grains / flour / sugar / powder by weight → "Kg"
+     - Tablets / capsules / medicines → "Strip" or "Box"
+     - Pipes / rods / bars / tubes → "Pc"
+     - Packets / pouches / sachets → "Pkt"
+     - Cartons / cases / bundles → "Ctn"
+     - General items with no clear type → "blank"
 
 ▸ lineItem.discountPercent — per-line discount % only. Use null for Pattern B (discount is invoice-level).
 

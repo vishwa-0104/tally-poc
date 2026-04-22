@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle, Plus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { CreateStockItemModal } from '@/components/company/CreateStockItemModal'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
-import type { Bill, TallyGodown, TallyLedger, LedgerMapping, StockItemAlias } from '@/types'
+import type { Bill, TallyGodown, TallyLedger, TallyStockUnit, LedgerMapping, StockItemAlias } from '@/types'
 import { formatCurrency } from '@/lib/utils'
 
 
@@ -98,6 +98,7 @@ interface MappingFormProps {
   tallyCompany?: string
   godownEnabled?: boolean
   godowns?: TallyGodown[]
+  stockUnits?: TallyStockUnit[]
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -117,6 +118,7 @@ export function MappingForm({
   tallyCompany = '',
   godownEnabled = false,
   godowns = [],
+  stockUnits = [],
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
@@ -210,6 +212,18 @@ export function MappingForm({
       if (show18 && prefillIgst18) setValue('igstLedger_18', prefillIgst18)
     }
   }, [resolvedVendor, savedLedgerSets]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pre-fill unit for each line item:
+  // keep the AI-parsed value if present, otherwise default to the first Tally stock unit.
+  useEffect(() => {
+    if (!stockUnits.length) return
+    bill.lineItems.forEach((_item, i) => {
+      const current = (watch(`lineItems.${i}.unit`) ?? '').trim()
+      if (!current) {
+        setValue(`lineItems.${i}.unit`, stockUnits[0].name)
+      }
+    })
+  }, [stockUnits]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-populate tallyStockItem from saved aliases (case-insensitive match on description)
   useEffect(() => {
@@ -546,7 +560,18 @@ export function MappingForm({
                       <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <input {...register(`lineItems.${i}.unit`)} className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <select
+                        {...register(`lineItems.${i}.unit`)}
+                        className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 bg-white"
+                      >
+                        {stockUnits.map((u) => (
+                          <option key={u.name} value={u.name}>{u.name}</option>
+                        ))}
+                        {/* keep AI-parsed value selectable even if not in synced list */}
+                        {watch(`lineItems.${i}.unit`) && !stockUnits.some((u) => u.name === watch(`lineItems.${i}.unit`)) && (
+                          <option value={watch(`lineItems.${i}.unit`)}>{watch(`lineItems.${i}.unit`)}</option>
+                        )}
+                      </select>
                     </td>
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
@@ -574,7 +599,7 @@ export function MappingForm({
               <datalist id="stock-items-list">
                 {stockItems.map((item) => <option key={item.name} value={item.name} />)}
               </datalist>
-              <datalist id="all-ledgers-list">
+<datalist id="all-ledgers-list">
                 {allLedgerNames.map((name) => <option key={name} value={name} />)}
               </datalist>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">

@@ -25,7 +25,7 @@ export default function BillMapping() {
 
   const { user }     = useAuthStore()
   const { getBill, updateBillStatus, fetchBills } = useBillStore()
-  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb } = useCompanyStore()
+  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb, getStockUnits, fetchStockUnitsFromDb } = useCompanyStore()
   const ledgersState          = useCompanyStore((s) => s.ledgers)
   const stockItemsState       = useCompanyStore((s) => s.stockItems)
   const stockItemAliasesState = useCompanyStore((s) => s.stockItemAliases)
@@ -39,6 +39,7 @@ export default function BillMapping() {
   const storedStockItems = companyId ? (stockItemsState[companyId] ?? []) : []
   const storedAliases    = companyId ? (stockItemAliasesState[companyId] ?? []) : []
   const storedGodowns    = companyId ? getGodowns(companyId) : []
+  const storedStockUnits = companyId ? getStockUnits(companyId) : []
   const godownEnabled    = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN && f.enabled) ?? false
 
   useEffect(() => {
@@ -53,6 +54,9 @@ export default function BillMapping() {
     }
     if (companyId && storedAliases.length === 0) {
       fetchAliases(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load aliases from DB:', err))
+    }
+    if (companyId && storedStockUnits.length === 0) {
+      fetchStockUnitsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load stock units from DB:', err))
     }
     if (companyId && godownEnabled && storedGodowns.length === 0) {
       fetchGodownsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load godowns from DB:', err))
@@ -119,6 +123,19 @@ export default function BillMapping() {
 
     console.log('[buildArtifacts] amounts — subtotal:', bill.subtotal, 'cgst:', bill.cgstAmount, 'sgst:', bill.sgstAmount, 'igst:', bill.igstAmount, 'roundOff:', roundOffAmt)
 
+    // Resolve each line item's unit from the Tally stock item cache when mapped.
+    // Tally requires the unit in the XML to exactly match the stock item master —
+    // a mismatch causes Tally to accept the voucher but silently drop the quantity.
+    const rawLineItems = data.lineItems ?? bill.lineItems
+    const resolvedLineItems = rawLineItems.map((item) => {
+      const mapped = item.tallyStockItem?.trim()
+      if (!mapped) return item
+      const cached = storedStockItems.find(
+        (s) => s.name.toLowerCase() === mapped.toLowerCase()
+      )
+      return cached?.unit ? { ...item, unit: cached.unit } : item
+    })
+
     const generatedXml = buildTallyXml({
       vendorLedger:   trim(data.vendorLedger),
       purchaseLedger,
@@ -139,7 +156,7 @@ export default function BillMapping() {
       roundOffLedger: company?.mapping?.roundoff_ledger?.trim() || undefined,
       tallyCompany:  tallyCompany || undefined,
       voucherType:   voucherType,
-      lineItems:     data.lineItems ?? bill.lineItems,
+      lineItems:     resolvedLineItems,
     })
 
     return { generatedXml, tallyMapping }
@@ -296,6 +313,7 @@ export default function BillMapping() {
               tallyCompany={tallyCompany}
               godownEnabled={godownEnabled}
               godowns={storedGodowns}
+              stockUnits={storedStockUnits}
               onSaveMapping={handleSaveMapping}
               onSyncToTally={handleSync}
             />
