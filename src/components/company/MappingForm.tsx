@@ -160,8 +160,33 @@ export function MappingForm({
   const gstinMatch = bill.vendorGstin
     ? ledgers.find((l) => l.gstin && l.gstin.trim().toUpperCase() === bill.vendorGstin!.trim().toUpperCase())
     : null
-  const vendorNameMatch = !gstinMatch && ledgers.some((l) => l.name === bill.vendorName)
-  const resolvedVendor  = gstinMatch?.name ?? (vendorNameMatch ? bill.vendorName : '')
+
+  const exactNameMatch = !gstinMatch
+    ? ledgers.find((l) => l.name.toLowerCase() === bill.vendorName.toLowerCase())
+    : null
+
+  // Word-overlap fuzzy match — used when no GSTIN or exact name match exists.
+  // Normalise both names to lowercase alpha-numeric words (>2 chars), then score
+  // by: overlap_count / max(bill_word_count, ledger_word_count). Threshold 0.3.
+  const fuzzyVendorMatch = !gstinMatch && !exactNameMatch && ledgers.length > 0
+    ? (() => {
+        const words = (s: string) =>
+          s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().split(/\s+/).filter((w) => w.length > 2)
+        const billWords = words(bill.vendorName)
+        if (!billWords.length) return null
+        let best: { ledger: TallyLedger; score: number } | null = null
+        for (const l of ledgers) {
+          const ledgerWords = words(l.name)
+          if (!ledgerWords.length) continue
+          const matched = billWords.filter((w) => ledgerWords.includes(w)).length
+          const score   = matched / Math.max(billWords.length, ledgerWords.length)
+          if (score >= 0.3 && (!best || score > best.score)) best = { ledger: l, score }
+        }
+        return best
+      })()
+    : null
+
+  const resolvedVendor = gstinMatch?.name ?? exactNameMatch?.name ?? fuzzyVendorMatch?.ledger.name ?? ''
 
   // ── Round-off ───────────────────────────────────────────────────────────────
   const roundOffValue = (bill.roundOffAmount != null && Math.abs(bill.roundOffAmount) >= 0.01)
@@ -284,14 +309,26 @@ export function MappingForm({
         </div>
       )}
 
-      {!gstinMatch && vendorNameMatch && (
+      {!gstinMatch && exactNameMatch && (
         <div className="flex gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-5">
           <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
           <p className="text-sm font-medium text-emerald-800">Vendor ledger matched by name in Tally</p>
         </div>
       )}
 
-      {!gstinMatch && !vendorNameMatch && !ledgersLoading && (
+      {!gstinMatch && !exactNameMatch && fuzzyVendorMatch && (
+        <div className="flex gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl mb-5">
+          <CheckCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800">Vendor ledger fuzzy-matched by name</p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              "{bill.vendorName}" → <span className="font-medium">"{fuzzyVendorMatch.ledger.name}"</span>. Verify this is correct.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!gstinMatch && !exactNameMatch && !fuzzyVendorMatch && !ledgersLoading && (
         <div className="flex gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl mb-5">
           <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div>
