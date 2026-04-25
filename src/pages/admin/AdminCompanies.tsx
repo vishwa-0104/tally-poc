@@ -213,7 +213,7 @@ export default function AdminCompanies() {
           <table className="w-full border-collapse" aria-label="Companies">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                {['Company', 'GSTIN', 'Login Email', 'Bills', 'Port', 'Tally Mapping', 'Features', ''].map((h) => (
+                {['Company', 'GSTIN', 'Bills', 'Port', 'Tally Mapping', 'Features', ''].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                     {h}
                   </th>
@@ -227,7 +227,6 @@ export default function AdminCompanies() {
                   <tr key={c.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-semibold text-gray-800">{c.name}</td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-500">{c.gstin || '—'}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{c.email}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{c.totalBills}</td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-500">:{c.port}</td>
                     <td className="px-4 py-3">

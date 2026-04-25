@@ -1,10 +1,10 @@
 import type { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
+import { prisma } from '../db'
 
 export interface AuthPayload {
   userId: string
   role: 'ADMIN' | 'COMPANY'
-  companyId?: string
 }
 
 declare global {
@@ -37,4 +37,13 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return
   }
   next()
+}
+
+/** Returns true if the authenticated user can access the given companyId. */
+export async function canAccessCompany(auth: AuthPayload, companyId: string): Promise<boolean> {
+  if (auth.role === 'ADMIN') return true
+  const link = await prisma.userCompany.findUnique({
+    where: { userId_companyId: { userId: auth.userId, companyId } },
+  })
+  return !!link
 }

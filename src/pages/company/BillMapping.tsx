@@ -11,7 +11,7 @@ import { useTallyLedgers } from '@/hooks'
 import { syncToTally } from '@/services'
 import { buildTallyXml } from '@/lib/utils'
 import { getNextVoucherCounter } from '@/lib/api'
-import { getTallyUrl, getTallyCompanyName, getTallyVoucherType } from './CompanySettings'
+import { getTallyUrl, getTallyVoucherType } from './CompanySettings'
 import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { MappingInput } from '@/lib/validators'
 import type { Bill } from '@/types'
@@ -23,7 +23,7 @@ export default function BillMapping() {
   const [syncing, setSyncing]   = useState(false)
   const [syncDone, setSyncDone] = useState(false)
 
-  const { user }     = useAuthStore()
+  const { activeCompanyId, companies: authCompanies } = useAuthStore()
   const { getBill, updateBillStatus, fetchBills } = useBillStore()
   const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb, getStockUnits, fetchStockUnitsFromDb } = useCompanyStore()
   const ledgersState          = useCompanyStore((s) => s.ledgers)
@@ -31,8 +31,9 @@ export default function BillMapping() {
   const stockItemAliasesState = useCompanyStore((s) => s.stockItemAliases)
   const companies             = useCompanyStore((s) => s.companies)
 
-  const companyId = user?.companyId ?? ''
-  const company   = companyId ? getCompany(companyId) : null
+  const companyId   = activeCompanyId ?? ''
+  const company     = companyId ? getCompany(companyId) : null
+  const companyName = company?.name ?? authCompanies.find((c) => c.id === activeCompanyId)?.name ?? ''
   const bill      = companyId && billId ? getBill(companyId, billId) : null
 
   const storedLedgers    = companyId ? (ledgersState[companyId] ?? []) : []
@@ -72,9 +73,9 @@ export default function BillMapping() {
     if (toSave.length > 0) saveAliases(companyId, toSave).catch(() => {})
   }
 
-  const tallyUrl     = getTallyUrl(company?.port)
-  const tallyCompany = getTallyCompanyName()
-  const voucherType  = getTallyVoucherType()
+  const tallyUrl     = getTallyUrl(companyId, company?.port)
+  const tallyCompany = companyName
+  const voucherType  = getTallyVoucherType(companyId)
 
   // Only live-fetch from Tally if no ledgers are stored yet
   const { ledgers: liveLedgers, loading: ledgersLoading } = useTallyLedgers(

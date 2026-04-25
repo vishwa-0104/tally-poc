@@ -8,11 +8,11 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { useAuthStore, useBillStore } from '@/store'
 
 export default function CompanySyncLog() {
-  const { user }     = useAuthStore()
-  const { getBills } = useBillStore()
-  const navigate     = useNavigate()
+  const { activeCompanyId } = useAuthStore()
+  const { getBills }        = useBillStore()
+  const navigate            = useNavigate()
 
-  const bills  = user?.companyId ? getBills(user.companyId) : []
+  const bills  = activeCompanyId ? getBills(activeCompanyId) : []
   const synced = bills.filter((b) => b.status === 'synced')
   const errors = bills.filter((b) => b.status === 'error')
 

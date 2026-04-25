@@ -24,9 +24,15 @@ export const newCompanySchema = z.object({
     .string()
     .regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, 'Invalid GSTIN format')
     .or(z.literal('')),
-  email: z.string().email('Valid email required for company login'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
   port: z.number().min(1).max(65535),
+  userId: z.string().optional(),
+})
+
+export const newUserSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Please enter a valid email'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  enterpriseName: z.string().optional(),
 })
 
 const lineItemEditSchema = z.object({
@@ -75,4 +81,5 @@ export const mappingSchema = z.object({
 export type LoginInput      = z.infer<typeof loginSchema>
 export type RegisterInput   = z.infer<typeof registerSchema>
 export type NewCompanyInput = z.infer<typeof newCompanySchema>
+export type NewUserInput    = z.infer<typeof newUserSchema>
 export type MappingInput    = z.infer<typeof mappingSchema>

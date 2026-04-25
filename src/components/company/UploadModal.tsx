@@ -36,7 +36,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles }: Upload
     e.target.value = ''
   }
 
-  const { user } = useAuthStore()
+  const { activeCompanyId } = useAuthStore()
   const addBill  = useBillStore((s) => s.addBill)
   const { incrementBillCount } = useCompanyStore()
 
@@ -65,7 +65,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles }: Upload
   })
 
   const handleParse = async () => {
-    if (!user?.companyId) return
+    if (!activeCompanyId) return
 
     // Multi-file: hand off to parent and close immediately
     if (multiFiles.length > 1) {
@@ -79,9 +79,9 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles }: Upload
     setStep(0)
     try {
       const parsed = await parseBillWithAI(file, (s) => setStep(s))
-      const bill   = parsedDataToBill(parsed, user.companyId)
+      const bill   = parsedDataToBill(parsed, activeCompanyId)
       addBill(bill)
-      incrementBillCount(user.companyId)
+      incrementBillCount(activeCompanyId)
       toast.success('Bill parsed successfully!')
       onParsed(bill.id)
       handleClose()

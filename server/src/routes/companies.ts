@@ -1,19 +1,21 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import bcrypt from 'bcryptjs'
 import { prisma } from '../db'
-import { requireAuth, requireAdmin } from '../middleware/auth'
+import { requireAuth, requireAdmin, canAccessCompany } from '../middleware/auth'
 
 export const companiesRouter = Router()
 
 companiesRouter.use(requireAuth)
 
-// GET /api/companies — admin sees all, company user sees own
+// GET /api/companies — admin sees all, company user sees linked companies only
 companiesRouter.get('/companies', async (req, res) => {
   const include = { features: { select: { feature: true, enabled: true } } }
   const companies = req.auth.role === 'ADMIN'
     ? await prisma.company.findMany({ orderBy: { createdAt: 'desc' }, include })
-    : await prisma.company.findMany({ where: { id: req.auth.companyId! }, include })
+    : await prisma.company.findMany({
+        where: { linkedUsers: { some: { userId: req.auth.userId } } },
+        include,
+      })
 
   // Attach bill counts
   const withCounts = await Promise.all(
@@ -33,9 +35,8 @@ companiesRouter.get('/companies', async (req, res) => {
 
 // GET /api/companies/:id
 companiesRouter.get('/companies/:id', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
-    res.status(403).json({ error: 'Forbidden' })
-    return
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
   }
   const company = await prisma.company.findUnique({ where: { id: req.params.id } })
   if (!company) { res.status(404).json({ error: 'Not found' }); return }
@@ -47,30 +48,31 @@ companiesRouter.post('/companies', requireAdmin, async (req, res) => {
   const schema = z.object({
     name: z.string().min(3),
     gstin: z.string().optional(),
-    email: z.string().email(),
-    password: z.string().min(8),
+    email: z.string().email().optional(),
     port: z.number().min(1).max(65535).default(9000),
+    userId: z.string().optional(), // enterprise user to link at creation time
   })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input', details: result.error.flatten() }); return }
 
-  const { name, gstin, email, password, port } = result.data
+  const { name, gstin, email, port, userId } = result.data
 
-  const exists = await prisma.company.findUnique({ where: { email } })
-  if (exists) { res.status(409).json({ error: 'Company email already registered' }); return }
+  const company = await prisma.company.create({ data: { name, gstin, email: email ?? undefined, port } })
 
-  const company = await prisma.company.create({ data: { name, gstin, email, port } })
-
-  // Create company user account
-  const passwordHash = await bcrypt.hash(password, 10)
-  await prisma.user.create({ data: { name, email, passwordHash, role: 'COMPANY', companyId: company.id } })
+  // Optionally link to an enterprise user
+  if (userId) {
+    const existingCount = await prisma.userCompany.count({ where: { userId } })
+    await prisma.userCompany.create({
+      data: { userId, companyId: company.id, isDefault: existingCount === 0 },
+    }).catch(() => {}) // ignore if already linked
+  }
 
   res.status(201).json(company)
 })
 
 // GET /api/companies/:id/ledgers
 companiesRouter.get('/companies/:id/ledgers', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const ledgers = await prisma.ledgerCache.findMany({
@@ -82,7 +84,7 @@ companiesRouter.get('/companies/:id/ledgers', async (req, res) => {
 
 // PUT /api/companies/:id/ledgers — replace all cached ledgers
 companiesRouter.put('/companies/:id/ledgers', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const schema = z.array(z.object({
@@ -138,7 +140,7 @@ companiesRouter.put('/companies/:id/ledgers', async (req, res) => {
 
 // GET /api/companies/:id/stock-items
 companiesRouter.get('/companies/:id/stock-items', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const items = await prisma.stockItemCache.findMany({
@@ -150,7 +152,7 @@ companiesRouter.get('/companies/:id/stock-items', async (req, res) => {
 
 // PUT /api/companies/:id/stock-items — upsert by name (preserves IDs so aliases survive)
 companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const schema = z.array(z.object({
@@ -199,7 +201,7 @@ companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
 
 // GET /api/companies/:id/stock-groups
 companiesRouter.get('/companies/:id/stock-groups', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const groups = await prisma.stockGroupCache.findMany({
@@ -211,7 +213,7 @@ companiesRouter.get('/companies/:id/stock-groups', async (req, res) => {
 
 // PUT /api/companies/:id/stock-groups — replace all cached stock groups
 companiesRouter.put('/companies/:id/stock-groups', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const schema = z.array(z.object({
@@ -250,7 +252,7 @@ companiesRouter.put('/companies/:id/stock-groups', async (req, res) => {
 
 // GET /api/companies/:id/stock-units
 companiesRouter.get('/companies/:id/stock-units', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const units = await prisma.stockUnitCache.findMany({
@@ -262,7 +264,7 @@ companiesRouter.get('/companies/:id/stock-units', async (req, res) => {
 
 // PUT /api/companies/:id/stock-units — replace all cached stock units
 companiesRouter.put('/companies/:id/stock-units', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const schema = z.array(z.object({
@@ -309,7 +311,7 @@ companiesRouter.put('/companies/:id/stock-units', async (req, res) => {
 
 // GET /api/companies/:id/stock-item-aliases
 companiesRouter.get('/companies/:id/stock-item-aliases', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const aliases = await prisma.stockItemAlias.findMany({
@@ -321,7 +323,7 @@ companiesRouter.get('/companies/:id/stock-item-aliases', async (req, res) => {
 
 // POST /api/companies/:id/stock-item-aliases — bulk upsert
 companiesRouter.post('/companies/:id/stock-item-aliases', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const schema = z.array(z.object({
@@ -355,7 +357,7 @@ companiesRouter.post('/companies/:id/stock-item-aliases', async (req, res) => {
 
 // POST /api/companies/:id/voucher-counter/next — atomically increment and return next counter
 companiesRouter.post('/companies/:id/voucher-counter/next', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const company = await prisma.company.update({
@@ -368,7 +370,7 @@ companiesRouter.post('/companies/:id/voucher-counter/next', async (req, res) => 
 
 // PUT /api/companies/:id/mapping
 companiesRouter.put('/companies/:id/mapping', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const company = await prisma.company.update({
@@ -380,7 +382,7 @@ companiesRouter.put('/companies/:id/mapping', async (req, res) => {
 
 // GET /api/companies/:id/features
 companiesRouter.get('/companies/:id/features', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const features = await prisma.companyFeature.findMany({
@@ -410,7 +412,7 @@ companiesRouter.put('/companies/:id/features', requireAdmin, async (req, res) =>
 
 // GET /api/companies/:id/godowns
 companiesRouter.get('/companies/:id/godowns', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const godowns = await prisma.godownCache.findMany({
@@ -423,7 +425,7 @@ companiesRouter.get('/companies/:id/godowns', async (req, res) => {
 
 // PUT /api/companies/:id/godowns — replace all cached godowns
 companiesRouter.put('/companies/:id/godowns', async (req, res) => {
-  if (req.auth.role !== 'ADMIN' && req.auth.companyId !== req.params.id) {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
   const schema = z.array(z.object({ name: z.string() }))
@@ -455,3 +457,4 @@ companiesRouter.put('/companies/:id/godowns', async (req, res) => {
   `
   res.json({ saved: incoming.length, syncedAt: now })
 })
+

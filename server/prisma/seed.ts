@@ -19,64 +19,91 @@ async function main() {
     },
   })
 
-  // Companies + their users
-  const companies = [
-    {
+  const companyPassword = await bcrypt.hash('company123', 10)
+
+  // Enterprise users (no companyId — all access via UserCompany)
+  const sharmaUser = await prisma.user.upsert({
+    where: { email: 'sharma@enterprise.com' },
+    update: {},
+    create: {
+      name: 'Sharma Group',
+      email: 'sharma@enterprise.com',
+      passwordHash: companyPassword,
+      role: 'COMPANY',
+      enterpriseName: 'Sharma Group',
+    },
+  })
+
+  const rajUser = await prisma.user.upsert({
+    where: { email: 'raj@enterprise.com' },
+    update: {},
+    create: {
+      name: 'Raj Group',
+      email: 'raj@enterprise.com',
+      passwordHash: companyPassword,
+      role: 'COMPANY',
+      enterpriseName: 'Raj Group',
+    },
+  })
+
+  // Companies (no email/user account)
+  const sharmaGroceries = await prisma.company.upsert({
+    where: { id: 'c1' },
+    update: {},
+    create: {
       id: 'c1',
       name: 'Sharma Groceries Pvt Ltd',
       gstin: '07AABCS1429B1Z1',
-      email: 'groceries@sharma.com',
       port: 9000,
       mapping: { purchase: 'Grocery Purchases', cgst: 'Input CGST @2.5%', sgst: 'Input SGST @2.5%', igst: 'Input IGST' },
-      userEmail: 'groceries@sharma.com',
-      userName: 'Sharma Groceries',
     },
-    {
+  })
+
+  const sharmaWholesale = await prisma.company.upsert({
+    where: { id: 'c2' },
+    update: {},
+    create: {
       id: 'c2',
-      name: 'Electronics Hub',
-      gstin: '27AAFCS5859R1Z4',
-      email: 'accounts@ehub.in',
-      port: 9000,
-      mapping: { purchase: 'Electronics Purchase', cgst: 'Input CGST @9%', sgst: 'Input SGST @9%', igst: 'Input IGST' },
-      userEmail: 'accounts@ehub.in',
-      userName: 'Electronics Hub',
+      name: 'Sharma Wholesale',
+      gstin: '07AABCS1429B1Z2',
+      port: 9001,
     },
-    {
+  })
+
+  const rajPharma = await prisma.company.upsert({
+    where: { id: 'c3' },
+    update: {},
+    create: {
       id: 'c3',
       name: 'Raj Pharma Store',
       gstin: '09AAACR5055K1Z5',
-      email: 'raj@pharmastore.com',
       port: 9000,
-      mapping: null,
-      userEmail: 'raj@pharmastore.com',
-      userName: 'Raj Pharma',
     },
-  ]
+  })
 
-  for (const c of companies) {
-    const company = await prisma.company.upsert({
-      where: { id: c.id },
-      update: {},
-      create: { id: c.id, name: c.name, gstin: c.gstin, email: c.email, port: c.port, mapping: c.mapping ?? undefined },
-    })
+  // UserCompany links
+  await prisma.userCompany.upsert({
+    where: { userId_companyId: { userId: sharmaUser.id, companyId: sharmaGroceries.id } },
+    update: {},
+    create: { userId: sharmaUser.id, companyId: sharmaGroceries.id, isDefault: true },
+  })
 
-    const hash = await bcrypt.hash('company123', 10)
-    await prisma.user.upsert({
-      where: { email: c.userEmail },
-      update: {},
-      create: {
-        name: c.userName,
-        email: c.userEmail,
-        passwordHash: hash,
-        role: 'COMPANY',
-        companyId: company.id,
-      },
-    })
-  }
+  await prisma.userCompany.upsert({
+    where: { userId_companyId: { userId: sharmaUser.id, companyId: sharmaWholesale.id } },
+    update: {},
+    create: { userId: sharmaUser.id, companyId: sharmaWholesale.id, isDefault: false },
+  })
+
+  await prisma.userCompany.upsert({
+    where: { userId_companyId: { userId: rajUser.id, companyId: rajPharma.id } },
+    update: {},
+    create: { userId: rajUser.id, companyId: rajPharma.id, isDefault: true },
+  })
 
   console.log('Seed complete.')
-  console.log('Admin login:   admin@tallysync.com / admin123')
-  console.log('Company login: groceries@sharma.com / company123')
+  console.log('Admin login:       admin@tallysync.com / admin123')
+  console.log('Enterprise login:  sharma@enterprise.com / company123  (Sharma Groceries + Sharma Wholesale)')
+  console.log('Enterprise login:  raj@enterprise.com / company123  (Raj Pharma)')
 }
 
 main()

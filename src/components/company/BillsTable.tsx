@@ -45,15 +45,15 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
   const [dayFilter, setDayFilter] = useState<DayFilter>(7)
   const [statusFilter, setStatusFilter] = useState<Set<StatusFilter>>(new Set(['unsynced', 'failed']))
 
-  const { user }      = useAuthStore()
-  const { deleteBill } = useBillStore()
+  const { activeCompanyId } = useAuthStore()
+  const { deleteBill }      = useBillStore()
 
   const handleDelete = async (bill: Bill) => {
-    if (!user?.companyId) return
+    if (!activeCompanyId) return
     if (!window.confirm(`Delete bill "${bill.billNumber}" from ${bill.vendorName}? This cannot be undone.`)) return
     setDeleting(bill.id)
     try {
-      await deleteBill(user.companyId, bill.id)
+      await deleteBill(activeCompanyId, bill.id)
       toast.success('Bill deleted')
     } catch {
       toast.error('Failed to delete bill')

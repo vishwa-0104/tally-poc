@@ -17,12 +17,12 @@ export default function CompanyBills() {
   const [bulkTotal, setBulkTotal]     = useState(0)
   const navigate = useNavigate()
 
-  const { user }  = useAuthStore()
+  const { activeCompanyId }  = useAuthStore()
   const { getBills, addBill } = useBillStore()
   const { getCompany, incrementBillCount } = useCompanyStore()
 
-  const company = user?.companyId ? getCompany(user.companyId) : null
-  const bills   = user?.companyId ? getBills(user.companyId) : []
+  const company = activeCompanyId ? getCompany(activeCompanyId) : null
+  const bills   = activeCompanyId ? getBills(activeCompanyId) : []
 
   const synced  = bills.filter((b) => b.status === 'synced').length
   const pending = bills.filter((b) => ['parsed', 'mapped'].includes(b.status)).length
@@ -33,7 +33,7 @@ export default function CompanyBills() {
   }
 
   const handleMultipleFiles = async (files: File[]) => {
-    if (!user?.companyId) return
+    if (!activeCompanyId) return
     setBulkTotal(files.length)
     setBulkDone(0)
     setBulkParsing(true)
@@ -43,9 +43,9 @@ export default function CompanyBills() {
     for (const file of files) {
       try {
         const parsed = await parseBillWithAI(file)
-        const bill   = parsedDataToBill(parsed, user.companyId)
+        const bill   = parsedDataToBill(parsed, activeCompanyId!)
         addBill(bill)
-        incrementBillCount(user.companyId)
+        incrementBillCount(activeCompanyId!)
         succeeded++
       } catch {
         failed++

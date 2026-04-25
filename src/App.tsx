@@ -8,6 +8,7 @@ import LoginPage    from '@/pages/LoginPage'
 import AdminLayout    from '@/pages/admin/AdminLayout'
 import AdminDashboard from '@/pages/admin/AdminDashboard'
 import AdminCompanies from '@/pages/admin/AdminCompanies'
+import AdminUsers     from '@/pages/admin/AdminUsers'
 import AdminAnalytics from '@/pages/admin/AdminAnalytics'
 
 // Company layout + pages
@@ -29,6 +30,7 @@ export default function App() {
       <Route path="/admin" element={<AdminLayout />}>
         <Route index                  element={<AdminDashboard />} />
         <Route path="companies"       element={<AdminCompanies />} />
+        <Route path="users"           element={<AdminUsers />} />
         <Route path="analytics"       element={<AdminAnalytics />} />
       </Route>
 

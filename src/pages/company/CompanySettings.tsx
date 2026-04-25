@@ -11,21 +11,19 @@ import type { LedgerMapping } from '@/types'
 
 export const TALLY_URL_KEY         = 'tally-server-url'
 export const DEFAULT_TALLY_URL     = 'http://localhost:9000'
-export const TALLY_COMPANY_KEY     = 'tally-company-name'
 export const TALLY_VOUCHER_TYPE_KEY = 'tally-voucher-type'
 export const DEFAULT_VOUCHER_TYPE  = 'GST PURCHASE'
 
 
 /** Returns the effective Tally URL.
  *  Priority: localStorage manual override → company port from DB → localhost:9000 */
-export function getTallyUrl(companyPort?: number): string {
-  const override = localStorage.getItem(TALLY_URL_KEY)
+export function getTallyUrl(companyId: string, companyPort?: number): string {
+  const override = localStorage.getItem(`${TALLY_URL_KEY}-${companyId}`)
   if (override) return override
   if (companyPort) return `http://localhost:${companyPort}`
   return DEFAULT_TALLY_URL
 }
-export function getTallyCompanyName(): string { return localStorage.getItem(TALLY_COMPANY_KEY)      ?? '' }
-export function getTallyVoucherType(): string { return localStorage.getItem(TALLY_VOUCHER_TYPE_KEY) || DEFAULT_VOUCHER_TYPE }
+export function getTallyVoucherType(companyId: string): string { return localStorage.getItem(`${TALLY_VOUCHER_TYPE_KEY}-${companyId}`) || DEFAULT_VOUCHER_TYPE }
 
 // ── Single ledger combobox (input + datalist) ─────────────────────────────────
 
@@ -135,10 +133,11 @@ function TabBar({ active, onChange }: TabBarProps) {
 // ── Main settings page ────────────────────────────────────────────────────────
 
 export default function CompanySettings() {
-  const { user }    = useAuthStore()
+  const { activeCompanyId, companies: authCompanies } = useAuthStore()
   const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb } = useCompanyStore()
-  const company     = user?.companyId ? getCompany(user.companyId) : null
-  const companyId   = user?.companyId ?? ''
+  const company     = activeCompanyId ? getCompany(activeCompanyId) : null
+  const companyId   = activeCompanyId ?? ''
+  const companyName = company?.name ?? authCompanies.find((c) => c.id === activeCompanyId)?.name ?? ''
 
   const godownEnabled = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN && f.enabled) ?? false
 
@@ -149,9 +148,8 @@ export default function CompanySettings() {
   const [syncingUnits,   setSyncingUnits]   = useState(false)
   const [syncingGodowns, setSyncingGodowns] = useState(false)
   const [savingMap,      setSavingMap]      = useState(false)
-  const [tallyUrl,       setTallyUrl]       = useState(getTallyUrl)
-  const [tallyCompany,   setTallyCompany]   = useState(getTallyCompanyName)
-  const [voucherType,    setVoucherType]    = useState(getTallyVoucherType)
+  const [tallyUrl,    setTallyUrl]    = useState(() => getTallyUrl(companyId, company?.port))
+  const [voucherType, setVoucherType] = useState(() => getTallyVoucherType(companyId))
 
   const storedLedgers     = companyId ? getLedgers(companyId)     : []
   const storedStockItems  = companyId ? getStockItems(companyId)  : []
@@ -175,17 +173,12 @@ export default function CompanySettings() {
   }, [companyId, godownEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveTallyUrl = () => {
-    localStorage.setItem(TALLY_URL_KEY, tallyUrl.trim() || DEFAULT_TALLY_URL)
+    localStorage.setItem(`${TALLY_URL_KEY}-${companyId}`, tallyUrl.trim() || DEFAULT_TALLY_URL)
     toast.success('Tally server URL saved')
   }
 
-  const handleSaveTallyCompany = () => {
-    localStorage.setItem(TALLY_COMPANY_KEY, tallyCompany.trim())
-    toast.success('Tally company name saved')
-  }
-
   const handleSaveVoucherType = () => {
-    localStorage.setItem(TALLY_VOUCHER_TYPE_KEY, voucherType.trim() || DEFAULT_VOUCHER_TYPE)
+    localStorage.setItem(`${TALLY_VOUCHER_TYPE_KEY}-${companyId}`, voucherType.trim() || DEFAULT_VOUCHER_TYPE)
     toast.success('Voucher type saved')
   }
 
@@ -193,7 +186,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncing(true)
     try {
-      const ledgers = await fetchTallyLedgers(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
+      const ledgers = await fetchTallyLedgers(getTallyUrl(companyId, company?.port), companyName || undefined)
       await saveLedgersToDb(companyId, ledgers)
       toast.success(`${ledgers.length} ledgers synced and saved`)
     } catch (err) {
@@ -205,7 +198,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncingItems(true)
     try {
-      const items = await fetchTallyStockItems(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
+      const items = await fetchTallyStockItems(getTallyUrl(companyId, company?.port), companyName || undefined)
       await saveStockItemsToDb(companyId, items)
       toast.success(`${items.length} stock items synced and saved`)
     } catch (err) {
@@ -217,7 +210,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncingGroups(true)
     try {
-      const groups = await fetchTallyStockGroups(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
+      const groups = await fetchTallyStockGroups(getTallyUrl(companyId, company?.port), companyName || undefined)
       await saveStockGroupsToDb(companyId, groups)
       toast.success(`${groups.length} stock groups synced and saved`)
     } catch (err) {
@@ -229,7 +222,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncingUnits(true)
     try {
-      const units = await fetchTallyStockUnits(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
+      const units = await fetchTallyStockUnits(getTallyUrl(companyId, company?.port), companyName || undefined)
       await saveStockUnitsToDb(companyId, units)
       toast.success(`${units.length} stock units synced and saved`)
     } catch (err) {
@@ -241,7 +234,7 @@ export default function CompanySettings() {
     if (!companyId) return
     setSyncingGodowns(true)
     try {
-      const godowns = await fetchTallyGodowns(getTallyUrl(company?.port), getTallyCompanyName() || undefined)
+      const godowns = await fetchTallyGodowns(getTallyUrl(companyId, company?.port), companyName || undefined)
       await saveGodownsToDb(companyId, godowns)
       toast.success(`${godowns.length} godowns synced and saved`)
     } catch (err) {
@@ -302,17 +295,13 @@ export default function CompanySettings() {
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
                   Tally Company Name
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    value={tallyCompany}
-                    onChange={(e) => setTallyCompany(e.target.value)}
-                    placeholder="e.g. Sharma Groceries"
-                    className="input-base flex-1"
-                  />
-                  <Button variant="outline" size="sm" onClick={handleSaveTallyCompany}>Save</Button>
-                </div>
+                <input
+                  value={companyName}
+                  disabled
+                  className="input-base w-full bg-gray-100 text-gray-500 cursor-not-allowed"
+                />
                 <p className="text-xs text-gray-500 mt-1">
-                  Must match exactly as it appears in Tally. Scopes ledger and stock syncs to this company only.
+                  Automatically set from the selected company. Scopes ledger and stock syncs to this company only.
                 </p>
               </div>
 

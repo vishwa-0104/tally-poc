@@ -18,11 +18,13 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ navItems, children, role }: AppLayoutProps) {
-  const { user, logout } = useAuthStore()
+  const { user, logout, companies, activeCompanyId, switchCompany } = useAuthStore()
   const navigate  = useNavigate()
   const location  = useLocation()
   const isAdmin   = role === 'admin'
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const activeCompany = companies.find((c) => c.id === activeCompanyId)
 
   const handleLogout = () => {
     logout()
@@ -78,6 +80,25 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
           )
         })}
       </div>
+
+      {/* Company switcher — shown for company role */}
+      {companies.length > 0 && (
+        <div className="mb-3 px-1">
+          <select
+            value={activeCompanyId ?? ''}
+            onChange={(e) => switchCompany(e.target.value)}
+            className="w-full text-xs bg-white/10 text-white rounded-lg px-2 py-1.5 border border-white/20 focus:outline-none cursor-pointer md:hidden lg:block"
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id} className="text-gray-900">{c.name}</option>
+            ))}
+          </select>
+          {/* Icon rail (tablet md): 2-letter abbreviation */}
+          <div className="hidden md:flex lg:hidden justify-center text-[10px] font-bold text-teal-300 py-1" title={activeCompany?.name}>
+            {activeCompany?.name?.slice(0, 2).toUpperCase()}
+          </div>
+        </div>
+      )}
 
       {/* User tile */}
       <div className="mt-auto">

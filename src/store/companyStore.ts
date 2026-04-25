@@ -12,7 +12,7 @@ interface CompanyStore {
   stockItemAliases: Record<string, StockItemAlias[]>
   godowns: Record<string, TallyGodown[]>
   fetchCompanies: () => Promise<void>
-  addCompany: (data: Omit<Company, 'id' | 'totalBills' | 'syncedBills' | 'pendingBills' | 'errorBills' | 'voucherCounter' | 'createdAt'> & { password: string }) => Promise<Company>
+  addCompany: (data: { name: string; gstin?: string; email?: string; port: number; userId?: string }) => Promise<Company>
   updateMapping: (companyId: string, mapping: LedgerMapping) => Promise<void>
   updateCompanyFeature: (companyId: string, feature: string, enabled: boolean) => Promise<void>
   getCompany: (id: string) => Company | undefined

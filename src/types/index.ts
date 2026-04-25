@@ -6,7 +6,7 @@ export interface User {
   name: string
   email: string
   role: Role
-  companyId?: string
+  enterpriseName?: string
   avatar: string
 }
 
@@ -14,6 +14,8 @@ export interface AuthState {
   user: User | null
   token: string | null
   isAuthenticated: boolean
+  companies: Company[]
+  activeCompanyId: string | null
 }
 
 // ── Company ───────────────────────────────────────────────

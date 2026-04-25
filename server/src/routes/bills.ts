@@ -1,19 +1,15 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, canAccessCompany } from '../middleware/auth'
 
 export const billsRouter = Router()
 
 billsRouter.use(requireAuth)
 
-function canAccessCompany(req: Express.Request, companyId: string) {
-  return req.auth.role === 'ADMIN' || req.auth.companyId === companyId
-}
-
 // GET /api/companies/:companyId/bills
 billsRouter.get('/companies/:companyId/bills', async (req, res) => {
-  if (!canAccessCompany(req, req.params.companyId)) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!(await canAccessCompany(req.auth, req.params.companyId))) { res.status(403).json({ error: 'Forbidden' }); return }
 
   const bills = await prisma.bill.findMany({
     where: { companyId: req.params.companyId },
@@ -28,13 +24,13 @@ billsRouter.get('/companies/:companyId/bills', async (req, res) => {
 billsRouter.get('/bills/:id', async (req, res) => {
   const bill = await prisma.bill.findUnique({ where: { id: req.params.id }, include: { lineItems: true } })
   if (!bill) { res.status(404).json({ error: 'Not found' }); return }
-  if (!canAccessCompany(req, bill.companyId)) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!(await canAccessCompany(req.auth, bill.companyId))) { res.status(403).json({ error: 'Forbidden' }); return }
   res.json(normalizeBill(bill))
 })
 
 // POST /api/companies/:companyId/bills
 billsRouter.post('/companies/:companyId/bills', async (req, res) => {
-  if (!canAccessCompany(req, req.params.companyId)) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!(await canAccessCompany(req.auth, req.params.companyId))) { res.status(403).json({ error: 'Forbidden' }); return }
 
   const { lineItems, ...billData } = req.body
 
@@ -55,7 +51,7 @@ billsRouter.post('/companies/:companyId/bills', async (req, res) => {
 billsRouter.put('/bills/:id', async (req, res) => {
   const existing = await prisma.bill.findUnique({ where: { id: req.params.id } })
   if (!existing) { res.status(404).json({ error: 'Not found' }); return }
-  if (!canAccessCompany(req, existing.companyId)) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!(await canAccessCompany(req.auth, existing.companyId))) { res.status(403).json({ error: 'Forbidden' }); return }
 
   const { lineItems, ...body } = req.body
 
@@ -99,7 +95,7 @@ billsRouter.put('/bills/:id', async (req, res) => {
 billsRouter.delete('/bills/:id', async (req, res) => {
   const existing = await prisma.bill.findUnique({ where: { id: req.params.id } })
   if (!existing) { res.status(404).json({ error: 'Not found' }); return }
-  if (!canAccessCompany(req, existing.companyId)) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!(await canAccessCompany(req.auth, existing.companyId))) { res.status(403).json({ error: 'Forbidden' }); return }
 
   await prisma.bill.delete({ where: { id: req.params.id } })
   res.status(204).send()
@@ -310,5 +306,3 @@ function MOCK_PARSED_BILL() {
   }
 }
 
-// Workaround: Express.Request type needs auth in this file too
-import type Express from 'express'

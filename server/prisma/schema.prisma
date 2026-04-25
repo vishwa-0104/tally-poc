@@ -22,26 +22,38 @@ enum BillStatus {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(COMPANY)
-  company      Company? @relation(fields: [companyId], references: [id])
-  companyId    String?
-  createdAt    DateTime @default(now())
+  id              String        @id @default(cuid())
+  name            String
+  email           String        @unique
+  passwordHash    String
+  role            Role          @default(COMPANY)
+  enterpriseName  String?
+  linkedCompanies UserCompany[]
+  createdAt       DateTime      @default(now())
+}
+
+model UserCompany {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, companyId])
 }
 
 model Company {
   id             String         @id @default(cuid())
   name           String
   gstin          String?
-  email          String         @unique
+  email          String?
   port           Int            @default(9000)
   mapping        Json?
   voucherCounter Int            @default(0)
   bills            Bill[]
-  users            User[]
+  linkedUsers      UserCompany[]
   ledgerCache      LedgerCache[]
   stockItemCache   StockItemCache[]
   stockGroupCache  StockGroupCache[]

@@ -14,16 +14,16 @@ const NAV: NavItem[] = [
 ]
 
 export default function CompanyLayout() {
-  const { user } = useAuthStore()
+  const { activeCompanyId } = useAuthStore()
   const { fetchBills } = useBillStore()
   const { fetchCompanies } = useCompanyStore()
 
   useEffect(() => {
-    if (user?.companyId) {
-      fetchBills(user.companyId)
+    if (activeCompanyId) {
+      fetchBills(activeCompanyId)
       fetchCompanies()
     }
-  }, [user?.companyId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeCompanyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ProtectedRoute allowedRole="company">
