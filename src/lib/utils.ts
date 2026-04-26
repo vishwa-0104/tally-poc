@@ -284,7 +284,7 @@ export function buildTallyXml(params: {
             <NARRATION>${esc(params.narration)}</NARRATION>` : ''}
             <VCHENTRYMODE>${hasInventory ? 'Item Invoice' : 'Accounting Invoice'}</VCHENTRYMODE>
             <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
-            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${miscEntries}${partyEntry}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${discountEntry}${roundOffEntry}
+            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${partyEntry}${miscEntries}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${discountEntry}${roundOffEntry}
           </VOUCHER>
         </TALLYMESSAGE>
       </REQUESTDATA>
