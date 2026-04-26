@@ -70,6 +70,23 @@ companiesRouter.post('/companies', requireAdmin, async (req, res) => {
   res.status(201).json(company)
 })
 
+// PATCH /api/companies/:id — update name, gstin, port (admin only)
+companiesRouter.patch('/companies/:id', requireAdmin, async (req, res) => {
+  const schema = z.object({
+    name:  z.string().min(3).optional(),
+    gstin: z.string().optional().nullable(),
+    port:  z.number().min(1).max(65535).optional(),
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const company = await prisma.company.update({
+    where: { id: req.params.id },
+    data:  result.data,
+  })
+  res.json(company)
+})
+
 // GET /api/companies/:id/ledgers
 companiesRouter.get('/companies/:id/ledgers', async (req, res) => {
   if (!(await canAccessCompany(req.auth, req.params.id))) {

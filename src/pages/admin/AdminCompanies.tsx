@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Warehouse, X, ChevronRight, Zap } from 'lucide-react'
+import { Plus, Warehouse, X, ChevronRight, Zap, Pencil } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
@@ -99,8 +99,29 @@ interface FeaturePanelProps {
 }
 
 function FeaturePanel({ company, onClose }: FeaturePanelProps) {
-  const { updateCompanyFeature } = useCompanyStore()
+  const { updateCompanyFeature, updateCompany } = useCompanyStore()
   const [toggling, setToggling] = useState<string | null>(null)
+
+  const [editName,  setEditName]  = useState(company.name)
+  const [editGstin, setEditGstin] = useState(company.gstin ?? '')
+  const [editPort,  setEditPort]  = useState(String(company.port ?? 9000))
+  const [saving,    setSaving]    = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await updateCompany(company.id, {
+        name:  editName.trim() || company.name,
+        gstin: editGstin.trim() || null,
+        port:  parseInt(editPort, 10) || company.port,
+      })
+      toast.success('Company updated')
+    } catch {
+      toast.error('Failed to update company')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const isEnabled = (key: string) =>
     (company.features ?? []).some((f: CompanyFeature) => f.feature === key && f.enabled)
@@ -154,6 +175,45 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
 
           {/* subtle decorative orb */}
           <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-teal-500/5 rounded-full blur-2xl pointer-events-none" />
+        </div>
+
+        {/* edit details */}
+        <div className="px-5 py-5 border-b border-gray-700/50">
+          <div className="flex items-center gap-2 mb-3">
+            <Pencil size={13} className="text-gray-400" />
+            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Edit Details</p>
+          </div>
+          <div className="space-y-2">
+            <div>
+              <label className="block text-[10px] text-gray-400 mb-1">Company Name</label>
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-400 mb-1">GSTIN</label>
+              <input
+                value={editGstin}
+                onChange={(e) => setEditGstin(e.target.value)}
+                placeholder="—"
+                className="w-full text-xs font-mono bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500 placeholder:text-gray-600"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-400 mb-1">Tally Port</label>
+              <input
+                value={editPort}
+                onChange={(e) => setEditPort(e.target.value)}
+                type="number"
+                className="w-full text-xs font-mono bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+          </div>
+          <Button variant="outline" size="sm" loading={saving} onClick={handleSave} className="mt-3 w-full">
+            Save Changes
+          </Button>
         </div>
 
         {/* feature flags */}

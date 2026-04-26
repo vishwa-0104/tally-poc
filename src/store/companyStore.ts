@@ -13,6 +13,7 @@ interface CompanyStore {
   godowns: Record<string, TallyGodown[]>
   fetchCompanies: () => Promise<void>
   addCompany: (data: { name: string; gstin?: string; email?: string; port: number; userId?: string }) => Promise<Company>
+  updateCompany: (companyId: string, data: { name?: string; gstin?: string | null; port?: number }) => Promise<void>
   updateMapping: (companyId: string, mapping: LedgerMapping) => Promise<void>
   updateCompanyFeature: (companyId: string, feature: string, enabled: boolean) => Promise<void>
   getCompany: (id: string) => Company | undefined
@@ -68,6 +69,13 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
     const { data } = await api.post<Company>('/companies', payload)
     set((s) => ({ companies: [...s.companies, data] }))
     return data
+  },
+
+  updateCompany: async (companyId, payload) => {
+    const { data } = await api.patch<Company>(`/companies/${companyId}`, payload)
+    set((s) => ({
+      companies: s.companies.map((c) => (c.id === companyId ? { ...c, ...data } : c)),
+    }))
   },
 
   updateMapping: async (companyId, mapping) => {
