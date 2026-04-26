@@ -170,6 +170,7 @@ export default function BillMapping() {
       voucherType:   voucherType,
       lineItems:     bill.billType === 'misc' ? undefined : resolvedLineItems,
       miscLedgerItems,
+      narration:     data.narration?.trim() || undefined,
     })
 
     return { generatedXml, tallyMapping }

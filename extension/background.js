@@ -136,16 +136,16 @@ function parseLedgers(xml) {
   // TallyPrime: <LEDGER NAME="Cash"><PARENT.LIST ...><PARENT>Capital Account</PARENT>...
   const ledgerBlocks = [...xml.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)]
 
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+
   for (const match of ledgerBlocks) {
     const block = match[0]
 
-    // Name: try attribute first, then inner tag
-    let name = block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1]?.trim()
-    if (!name) name = block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1]?.trim()
+    // Name: try attribute first, then inner tag — decode HTML entities before storing
+    let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name || seen.has(name)) continue
     seen.add(name)
-
-    const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
 
     // Parent group — TallyPrime wraps in PARENT.LIST, older Tally uses bare <PARENT>
     const group = decode(
@@ -208,8 +208,8 @@ function parseStockItems(xml) {
 
   for (const match of blocks) {
     const block = match[0]
-    let name = block.match(/<STOCKITEM\s+NAME="([^"]+)"/i)?.[1]?.trim()
-    if (!name) name = block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1]?.trim()
+    let name = decode(block.match(/<STOCKITEM\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name || seen.has(name)) continue
     seen.add(name)
 
@@ -266,8 +266,8 @@ function parseStockGroups(xml) {
 
   for (const match of blocks) {
     const block = match[0]
-    let name = block.match(/<STOCKGROUP\s+NAME="([^"]+)"/i)?.[1]?.trim()
-    if (!name) name = block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1]?.trim()
+    let name = decode(block.match(/<STOCKGROUP\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name || seen.has(name)) continue
     seen.add(name)
 
@@ -323,8 +323,8 @@ function parseStockUnits(xml) {
 
   for (const match of blocks) {
     const block = match[0]
-    let name = block.match(/<UNIT\s+NAME="([^"]+)"/i)?.[1]?.trim()
-    if (!name) name = block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1]?.trim()
+    let name = decode(block.match(/<UNIT\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name || seen.has(name)) continue
     seen.add(name)
 
@@ -375,7 +375,7 @@ function parseGodowns(xml) {
 
   for (const match of blocks) {
     const block = match[0]
-    let name = block.match(/<GODOWN\s+NAME="([^"]+)"/i)?.[1]?.trim()
+    let name = decode(block.match(/<GODOWN\s+NAME="([^"]+)"/i)?.[1] ?? '')
     if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name || seen.has(name)) continue
     seen.add(name)
@@ -425,7 +425,7 @@ function parseVoucherTypes(xml) {
 
   for (const match of blocks) {
     const block = match[0]
-    let name = block.match(/<VOUCHERTYPE\s+NAME="([^"]+)"/i)?.[1]?.trim()
+    let name = decode(block.match(/<VOUCHERTYPE\s+NAME="([^"]+)"/i)?.[1] ?? '')
     if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name || seen.has(name)) continue
     seen.add(name)

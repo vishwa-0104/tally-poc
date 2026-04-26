@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Upload, Loader, Receipt } from 'lucide-react'
+import { Upload, Loader } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
@@ -76,13 +76,12 @@ export default function CompanyBills() {
                 Parsing {bulkDone} / {bulkTotal} bills…
               </span>
             )}
-            <Button variant="outline" size="sm" onClick={() => setShowMiscUpload(true)} disabled={bulkParsing}>
-              <Receipt className="w-3.5 h-3.5" />
-              Upload Misc Bill
-            </Button>
             <Button variant="teal" size="sm" onClick={() => setShowUpload(true)} disabled={bulkParsing}>
               <Upload className="w-3.5 h-3.5" />
               Upload Bills
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowMiscUpload(true)} disabled={bulkParsing}>
+              Upload Misc Bill
             </Button>
           </>
         }

@@ -135,8 +135,8 @@ export function MappingForm({
   let show18     = billType !== 'misc' && ratesPresent.has(18)
   let showExempt = billType !== 'misc' && ratesPresent.has(0)
 
-  // Fallback: when line items are absent or carry no recognised rate (always for misc), infer from bill totals
-  if (!show5 && !show18 && !showExempt) {
+  // Fallback: when line items are absent or carry no recognised rate, infer from bill totals (not for misc)
+  if (billType !== 'misc' && !show5 && !show18 && !showExempt) {
     const totalTax    = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
     const effectiveRate = bill.subtotal > 0 ? Math.round(totalTax / bill.subtotal * 100) : 0
     if (totalTax === 0)        showExempt = true
@@ -144,8 +144,8 @@ export function MappingForm({
     else                         show18   = true   // ~18 %
   }
 
-  // Safety: always show at least one field
-  if (!show5 && !show18 && !showExempt) showExempt = true
+  // Safety: always show at least one field (non-misc only)
+  if (billType !== 'misc' && !show5 && !show18 && !showExempt) showExempt = true
 
   // ── Pre-fill values from company mapping ────────────────────────────────────
   const prefillPurchase5      = isInterstate ? savedLedgerSets?.purchase_interstate_5  : savedLedgerSets?.purchase_up_5
@@ -266,11 +266,15 @@ export function MappingForm({
     }
   }
 
-  const purchaseOk = (!show5 || !!wP5?.trim()) && (!show18 || !!wP18?.trim()) && (!showExempt || !!wPEx?.trim())
+  const purchaseOk = billType === 'misc'
+    ? true
+    : (!show5 || !!wP5?.trim()) && (!show18 || !!wP18?.trim()) && (!showExempt || !!wPEx?.trim())
   const taxOk = isInterstate
     ? (!show5 || !!wI5?.trim()) && (!show18 || !!wI18?.trim())
     : (!show5 || (!!wC5?.trim() && !!wS5?.trim())) && (!show18 || (!!wC18?.trim() && !!wS18?.trim()))
-  const canSync = purchaseOk && ((!show5 && !show18) || taxOk)
+  const miscExpenseLedgersOk = billType !== 'misc'
+    || (watchedLineItems ?? bill.lineItems).every((item) => item.tallyLedger?.trim())
+  const canSync = purchaseOk && ((!show5 && !show18) || taxOk) && miscExpenseLedgersOk
 
   // All ledger options for datalist
   const allLedgerNames = ledgers.map((l) => l.name)
@@ -459,7 +463,9 @@ export function MappingForm({
 
       {!canSync && !ledgersLoading && (
         <p className="text-xs text-amber-600 mt-1">
-          Fill all required purchase and tax ledgers to enable sync.
+          {billType === 'misc' && !miscExpenseLedgersOk
+            ? 'Select an expense ledger for each row to enable sync.'
+            : 'Fill all required purchase and tax ledgers to enable sync.'}
         </p>
       )}
 
@@ -755,6 +761,19 @@ export function MappingForm({
           onClose={() => setCreateItemRowIndex(null)}
         />
       )}
+
+      {/* Narration */}
+      <div className="mt-5">
+        <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+          Narration <span className="font-normal text-gray-400">(optional)</span>
+        </label>
+        <textarea
+          {...register('narration')}
+          rows={2}
+          placeholder="Add a note or narration for this voucher…"
+          className="input-base w-full resize-none"
+        />
+      </div>
 
       {/* Submit */}
       <div className="flex justify-end mt-6">

@@ -91,6 +91,7 @@ export function buildTallyXml(params: {
   godown?: string
   lineItems?: LineItemParam[]
   miscLedgerItems?: { description: string; amount: number; ledger?: string }[]
+  narration?: string
 }): string {
   const esc = escapeXml
   // Avoid floating-point noise like -90.00000000001
@@ -279,7 +280,8 @@ export function buildTallyXml(params: {
             <VOUCHERTYPENAME>${voucherTypeName}</VOUCHERTYPENAME>${params.vendorLedger ? `
             <PARTYLEDGERNAME>${esc(params.vendorLedger)}</PARTYLEDGERNAME>
             <PARTYMAILINGNAME>${esc(params.vendorLedger)}</PARTYMAILINGNAME>` : ''}
-            <REFERENCE>${esc(params.billNumber)}</REFERENCE>
+            <REFERENCE>${esc(params.billNumber)}</REFERENCE>${params.narration ? `
+            <NARRATION>${esc(params.narration)}</NARRATION>` : ''}
             <VCHENTRYMODE>${hasInventory ? 'Item Invoice' : 'Accounting Invoice'}</VCHENTRYMODE>
             <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
             <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${miscEntries}${partyEntry}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${discountEntry}${roundOffEntry}
