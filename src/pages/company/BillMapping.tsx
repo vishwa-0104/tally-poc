@@ -107,6 +107,15 @@ export default function BillMapping() {
 
     const godown = godownEnabled ? trim(data.godownName) : undefined
 
+    // For misc bills: extract expense ledger items from line items
+    const miscLedgerItems = bill.billType === 'misc'
+      ? (data.lineItems ?? bill.lineItems).map((item) => ({
+          description: item.description,
+          amount: Number(item.amount),
+          ledger: item.tallyLedger?.trim() || undefined,
+        }))
+      : undefined
+
     const tallyMapping = {
       vendorLedger: trim(data.vendorLedger),
       purchaseLedger,
@@ -159,7 +168,8 @@ export default function BillMapping() {
       discountLedger: trim(data.discountLedger),
       tallyCompany:  tallyCompany || undefined,
       voucherType:   voucherType,
-      lineItems:     resolvedLineItems,
+      lineItems:     bill.billType === 'misc' ? undefined : resolvedLineItems,
+      miscLedgerItems,
     })
 
     return { generatedXml, tallyMapping }
@@ -317,6 +327,7 @@ export default function BillMapping() {
               godownEnabled={godownEnabled}
               godowns={storedGodowns}
               stockUnits={storedStockUnits}
+              billType={bill.billType}
               onSaveMapping={handleSaveMapping}
               onSyncToTally={handleSync}
             />

@@ -99,6 +99,7 @@ interface MappingFormProps {
   godownEnabled?: boolean
   godowns?: TallyGodown[]
   stockUnits?: TallyStockUnit[]
+  billType?: 'purchase' | 'misc'
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -119,6 +120,7 @@ export function MappingForm({
   godownEnabled = false,
   godowns = [],
   stockUnits = [],
+  billType = 'purchase' as const,
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
@@ -129,11 +131,11 @@ export function MappingForm({
 
   // ── Derive rate buckets from line items ─────────────────────────────────────
   const ratesPresent = new Set(bill.lineItems.map((i) => i.gstRate))
-  let show5      = ratesPresent.has(5)
-  let show18     = ratesPresent.has(18)
-  let showExempt = ratesPresent.has(0)
+  let show5      = billType !== 'misc' && ratesPresent.has(5)
+  let show18     = billType !== 'misc' && ratesPresent.has(18)
+  let showExempt = billType !== 'misc' && ratesPresent.has(0)
 
-  // Fallback: when line items are absent or carry no recognised rate, infer from bill totals
+  // Fallback: when line items are absent or carry no recognised rate (always for misc), infer from bill totals
   if (!show5 && !show18 && !showExempt) {
     const totalTax    = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
     const effectiveRate = bill.subtotal > 0 ? Math.round(totalTax / bill.subtotal * 100) : 0
@@ -319,7 +321,6 @@ export function MappingForm({
         />
       </div>
 
-      {/* ── Purchase Ledgers ── */}
       <div className="mt-2">
         <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
         <div className="grid grid-cols-2 gap-x-4">
@@ -434,7 +435,7 @@ export function MappingForm({
       )}
 
       {/* ── Godown (admin-enabled feature) ── */}
-      {godownEnabled && (
+      {billType !== 'misc' && godownEnabled && (
         <div className="mt-2">
           <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Godown</p>
           <div className="w-1/2 pr-2">
@@ -557,8 +558,8 @@ export function MappingForm({
         )}
       </div>
 
-      {/* Line items */}
-      {bill.lineItems.length > 0 && (
+      {/* Line items — purchase bill: editable stock item table */}
+      {billType !== 'misc' && bill.lineItems.length > 0 && (
         <div className="mt-5">
           <h3 className="text-sm font-bold text-gray-800 mb-3">Line Items <span className="text-gray-500 font-normal">(editable)</span></h3>
           <div className="overflow-x-auto rounded-xl border border-gray-200">
@@ -590,7 +591,6 @@ export function MappingForm({
                         {stockUnits.map((u) => (
                           <option key={u.name} value={u.name}>{u.name}</option>
                         ))}
-                        {/* keep AI-parsed value selectable even if not in synced list */}
                         {watch(`lineItems.${i}.unit`) && !stockUnits.some((u) => u.name === watch(`lineItems.${i}.unit`)) && (
                           <option value={watch(`lineItems.${i}.unit`)}>{watch(`lineItems.${i}.unit`)}</option>
                         )}
@@ -622,7 +622,7 @@ export function MappingForm({
               <datalist id="stock-items-list">
                 {stockItems.map((item) => <option key={item.name} value={item.name} />)}
               </datalist>
-<datalist id="all-ledgers-list">
+              <datalist id="all-ledgers-list">
                 {allLedgerNames.map((name) => <option key={name} value={name} />)}
               </datalist>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
@@ -664,8 +664,86 @@ export function MappingForm({
         </div>
       )}
 
+      {/* Expense ledger rows — misc bill only */}
+      {billType === 'misc' && bill.lineItems.length > 0 && (
+        <div className="mt-5">
+          <h3 className="text-sm font-bold text-gray-800 mb-3">Expense Ledgers <span className="text-gray-500 font-normal">(select a ledger for each expense)</span></h3>
+          <div className="overflow-x-auto rounded-xl border border-gray-200">
+            <table className="w-full border-collapse text-xs" aria-label="Expense ledger rows">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Description</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Expense Ledger *</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bill.lineItems.map((_item, i) => (
+                  <tr key={i} className="border-b border-gray-100 last:border-0">
+                    <td className="px-3 py-2 text-sm text-gray-700">{bill.lineItems[i].description}</td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        {...register(`lineItems.${i}.tallyLedger`)}
+                        list="all-ledgers-list"
+                        autoComplete="off"
+                        placeholder="Select expense ledger…"
+                        className="w-56 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-sm font-semibold text-gray-800">{formatCurrency(bill.lineItems[i].amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <datalist id="all-ledgers-list">
+                {allLedgerNames.map((name) => <option key={name} value={name} />)}
+              </datalist>
+              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                <tr className="border-t border-gray-100">
+                  <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Subtotal</td>
+                  <td></td>
+                  <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
+                </tr>
+                {!isInterstate && (
+                  <>
+                    <tr className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
+                      <td></td>
+                      <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.cgstAmount)}</td>
+                    </tr>
+                    <tr className="border-t border-gray-100">
+                      <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
+                      <td></td>
+                      <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.sgstAmount)}</td>
+                    </tr>
+                  </>
+                )}
+                {isInterstate && (
+                  <tr className="border-t border-gray-100">
+                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
+                    <td></td>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.igstAmount)}</td>
+                  </tr>
+                )}
+                {hasRoundOff && (
+                  <tr className="border-t border-gray-100">
+                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                    <td></td>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(roundOffValue!)}</td>
+                  </tr>
+                )}
+                <tr className="border-t-2 border-gray-300">
+                  <td className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
+                  <td></td>
+                  <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Create stock item modal */}
-      {createItemRowIndex !== null && (
+      {billType !== 'misc' && createItemRowIndex !== null && (
         <CreateStockItemModal
           open
           companyId={companyId}

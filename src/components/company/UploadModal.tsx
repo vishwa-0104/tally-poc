@@ -21,9 +21,10 @@ interface UploadModalProps {
   onClose: () => void
   onParsed: (billId: string) => void
   onMultipleFiles: (files: File[]) => void
+  billType?: 'purchase' | 'misc'
 }
 
-export function UploadModal({ open, onClose, onParsed, onMultipleFiles }: UploadModalProps) {
+export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType = 'purchase' }: UploadModalProps) {
   const [file, setFile]           = useState<File | null>(null)
   const [multiFiles, setMultiFiles] = useState<File[]>([])
   const [parsing, setParsing]     = useState(false)
@@ -78,12 +79,12 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles }: Upload
     setParsing(true)
     setStep(0)
     try {
-      const parsed = await parseBillWithAI(file, (s) => setStep(s))
-      const bill   = parsedDataToBill(parsed, activeCompanyId)
-      addBill(bill)
+      const parsed = await parseBillWithAI(file, (s) => setStep(s), billType)
+      const bill   = parsedDataToBill(parsed, activeCompanyId, undefined, billType)
+      const saved  = await addBill(bill)
       incrementBillCount(activeCompanyId)
       toast.success('Bill parsed successfully!')
-      onParsed(bill.id)
+      onParsed(saved.id)
       handleClose()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Parsing failed')
@@ -105,8 +106,10 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles }: Upload
     <Modal
       open={open}
       onClose={handleClose}
-      title="Upload Bill"
-      subtitle="Upload a photo or PDF of your purchase bill and we'll read it for you"
+      title={billType === 'misc' ? 'Upload Misc Bill' : 'Upload Bill'}
+      subtitle={billType === 'misc'
+        ? 'Upload expense bills (stationery, repairs, utilities) — items map to expense ledgers'
+        : "Upload a photo or PDF of your purchase bill and we'll read it for you"}
       footer={
         parsing ? undefined : (
           <>

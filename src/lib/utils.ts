@@ -90,6 +90,7 @@ export function buildTallyXml(params: {
   voucherType?: string
   godown?: string
   lineItems?: LineItemParam[]
+  miscLedgerItems?: { description: string; amount: number; ledger?: string }[]
 }): string {
   const esc = escapeXml
   // Avoid floating-point noise like -90.00000000001
@@ -101,7 +102,8 @@ export function buildTallyXml(params: {
 
   // Itemised mode whenever line items are present.
   // Falls back to item description when tallyStockItem is not mapped.
-  const hasInventory = !!(params.lineItems?.length)
+  const isMisc      = !!(params.miscLedgerItems?.length)
+  const hasInventory = !!(params.lineItems?.length) && !isMisc
 
   // ── Inventory entries (VOUCHER level) ─────────────────────────────────────
   // Matches real Tally export: ALLINVENTORYENTRIES.LIST at voucher level,
@@ -145,6 +147,21 @@ export function buildTallyXml(params: {
       }).join('')
     : ''
 
+  // Misc expense ledger entries — one debit entry per expense line (no inventory)
+  const miscEntries = isMisc
+    ? params.miscLedgerItems!
+        .filter((item) => item.ledger?.trim() && item.amount)
+        .map((item) => `
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(item.ledger!.trim())}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>-${amt(item.amount)}</AMOUNT>
+            </LEDGERENTRIES.LIST>`).join('')
+    : ''
+
   // ── Ledger entries — using LEDGERENTRIES.LIST as per real Tally XML ────────
 
   // Party ledger (vendor) — credit
@@ -160,8 +177,8 @@ export function buildTallyXml(params: {
             </LEDGERENTRIES.LIST>`
     : ''
 
-  // Purchase ledger — only when NOT in itemised mode (no line items)
-  const purchaseEntry = !hasInventory && params.purchaseLedger
+  // Purchase ledger — only when NOT in itemised mode and NOT a misc bill
+  const purchaseEntry = !hasInventory && !isMisc && params.purchaseLedger
     ? `
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
@@ -263,9 +280,9 @@ export function buildTallyXml(params: {
             <PARTYLEDGERNAME>${esc(params.vendorLedger)}</PARTYLEDGERNAME>
             <PARTYMAILINGNAME>${esc(params.vendorLedger)}</PARTYMAILINGNAME>` : ''}
             <REFERENCE>${esc(params.billNumber)}</REFERENCE>
-            <VCHENTRYMODE>Item Invoice</VCHENTRYMODE>
+            <VCHENTRYMODE>${hasInventory ? 'Item Invoice' : 'Accounting Invoice'}</VCHENTRYMODE>
             <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
-            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${partyEntry}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${discountEntry}${roundOffEntry}
+            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${miscEntries}${partyEntry}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${discountEntry}${roundOffEntry}
           </VOUCHER>
         </TALLYMESSAGE>
       </REQUESTDATA>

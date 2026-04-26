@@ -113,6 +113,7 @@ model Bill {
   igstAmount   Float      @default(0)
   totalAmount  Float
   status       BillStatus @default(PARSED)
+  billType     String     @default("purchase")
   imageUrl     String?
   originalData Json?
   isEdited     Boolean    @default(false)

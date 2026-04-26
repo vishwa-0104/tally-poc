@@ -144,6 +144,7 @@ export interface Bill {
   syncedAt?: string
   syncError?: string
   lineItems: LineItem[]
+  billType?: 'purchase' | 'misc'
   createdAt: string
 }
 

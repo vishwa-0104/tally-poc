@@ -175,7 +175,12 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
               <tbody>
                 {pageBills.map((bill) => (
                   <tr key={bill.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{bill.billNumber}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-600">
+                      {bill.billNumber}
+                      {bill.billType === 'misc' && (
+                        <span className="ml-1.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-semibold">Misc</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-800">{bill.vendorName}</td>
                     <td className="px-4 py-3 text-xs text-gray-500">{formatDate(bill.billDate)}</td>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-800">{formatCurrency(bill.totalAmount)}</td>

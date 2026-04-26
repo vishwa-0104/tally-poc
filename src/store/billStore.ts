@@ -8,7 +8,7 @@ interface BillStore {
   fetchBills: (companyId: string) => Promise<void>
   getBills: (companyId: string) => Bill[]
   getBill: (companyId: string, billId: string) => Bill | undefined
-  addBill: (bill: Bill) => Promise<void>
+  addBill: (bill: Bill) => Promise<Bill>
   updateBillStatus: (companyId: string, billId: string, status: BillStatus, extra?: Partial<Bill>) => Promise<void>
   deleteBill: (companyId: string, billId: string) => Promise<void>
 }
@@ -40,6 +40,7 @@ export const useBillStore = create<BillStore>((set, get) => ({
         [bill.companyId]: [data, ...(s.bills[bill.companyId] ?? [])],
       },
     }))
+    return data
   },
 
   updateBillStatus: async (companyId, billId, status, extra = {}) => {

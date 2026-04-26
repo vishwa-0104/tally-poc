@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Upload, Loader } from 'lucide-react'
+import { Upload, Loader, Receipt } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
@@ -11,7 +11,8 @@ import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { parseBillWithAI, parsedDataToBill } from '@/services'
 
 export default function CompanyBills() {
-  const [showUpload, setShowUpload] = useState(false)
+  const [showUpload, setShowUpload]         = useState(false)
+  const [showMiscUpload, setShowMiscUpload] = useState(false)
   const [bulkParsing, setBulkParsing] = useState(false)
   const [bulkDone, setBulkDone]       = useState(0)
   const [bulkTotal, setBulkTotal]     = useState(0)
@@ -32,7 +33,7 @@ export default function CompanyBills() {
     navigate(`/company/bills/${billId}`)
   }
 
-  const handleMultipleFiles = async (files: File[]) => {
+  const handleMultipleFiles = async (files: File[], billType: 'purchase' | 'misc' = 'purchase') => {
     if (!activeCompanyId) return
     setBulkTotal(files.length)
     setBulkDone(0)
@@ -42,8 +43,8 @@ export default function CompanyBills() {
     let failed = 0
     for (const file of files) {
       try {
-        const parsed = await parseBillWithAI(file)
-        const bill   = parsedDataToBill(parsed, activeCompanyId!)
+        const parsed = await parseBillWithAI(file, undefined, billType)
+        const bill   = parsedDataToBill(parsed, activeCompanyId!, undefined, billType)
         addBill(bill)
         incrementBillCount(activeCompanyId!)
         succeeded++
@@ -75,6 +76,10 @@ export default function CompanyBills() {
                 Parsing {bulkDone} / {bulkTotal} bills…
               </span>
             )}
+            <Button variant="outline" size="sm" onClick={() => setShowMiscUpload(true)} disabled={bulkParsing}>
+              <Receipt className="w-3.5 h-3.5" />
+              Upload Misc Bill
+            </Button>
             <Button variant="teal" size="sm" onClick={() => setShowUpload(true)} disabled={bulkParsing}>
               <Upload className="w-3.5 h-3.5" />
               Upload Bills
@@ -102,7 +107,15 @@ export default function CompanyBills() {
         open={showUpload}
         onClose={() => setShowUpload(false)}
         onParsed={handleParsed}
-        onMultipleFiles={handleMultipleFiles}
+        onMultipleFiles={(files) => handleMultipleFiles(files, 'purchase')}
+      />
+
+      <UploadModal
+        open={showMiscUpload}
+        onClose={() => setShowMiscUpload(false)}
+        onParsed={handleParsed}
+        onMultipleFiles={(files) => handleMultipleFiles(files, 'misc')}
+        billType="misc"
       />
     </>
   )

@@ -7,6 +7,7 @@ export type { ParsedBillData }
 export async function parseBillWithAI(
   file: File,
   onProgress?: (step: number) => void,
+  billType: 'purchase' | 'misc' = 'purchase',
 ): Promise<ParsedBillData> {
   onProgress?.(0)
   const base64 = await fileToBase64(file)
@@ -15,6 +16,7 @@ export async function parseBillWithAI(
   const { data } = await api.post<ParsedBillData>('/bills/parse', {
     base64,
     mediaType: file.type,
+    billType,
   })
 
   onProgress?.(2)
@@ -29,6 +31,7 @@ export function parsedDataToBill(
   data: ParsedBillData,
   companyId: string,
   imageUrl?: string,
+  billType: 'purchase' | 'misc' = 'purchase',
 ): Bill {
   const lineItems = data.lineItems.map((item, i) => ({ ...item, id: `li_${Date.now()}_${i}` }))
   return {
@@ -49,6 +52,7 @@ export function parsedDataToBill(
     lineItems,
     originalData: data,
     isEdited: false,
+    billType,
     createdAt: new Date().toISOString(),
   }
 }

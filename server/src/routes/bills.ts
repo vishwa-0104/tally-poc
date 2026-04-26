@@ -1,5 +1,4 @@
 import { Router } from 'express'
-import { z } from 'zod'
 import { prisma } from '../db'
 import { requireAuth, canAccessCompany } from '../middleware/auth'
 
@@ -60,7 +59,7 @@ billsRouter.put('/bills/:id', async (req, res) => {
     'billNumber', 'vendorName', 'vendorGstin', 'buyerGstin', 'billDate',
     'subtotal', 'cgstAmount', 'sgstAmount', 'igstAmount', 'totalAmount',
     'imageUrl', 'originalData', 'isEdited', 'rawAiJson',
-    'tallyXml', 'tallyMapping', 'roundOffAmount', 'syncError',
+    'tallyXml', 'tallyMapping', 'roundOffAmount', 'syncError', 'billType',
   ] as const
   const safeData: Record<string, unknown> = {}
   for (const key of updatable) {
@@ -103,7 +102,8 @@ billsRouter.delete('/bills/:id', async (req, res) => {
 
 // POST /api/bills/parse — AI parse a bill image/PDF (Anthropic key stays server-side)
 billsRouter.post('/bills/parse', async (req, res) => {
-  const { base64, mediaType } = req.body as { base64: string; mediaType: string }
+  const { base64, mediaType, billType } = req.body as { base64: string; mediaType: string; billType?: string }
+  const prompt = billType === 'misc' ? MISC_PARSE_PROMPT : PARSE_PROMPT
 
   const apiKey = process.env.ANTHROPIC_API_KEY
 
@@ -118,19 +118,26 @@ billsRouter.post('/bills/parse', async (req, res) => {
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
     : { type: 'image',    source: { type: 'base64', media_type: mediaType,          data: base64 } }
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: PARSE_PROMPT }] }],
-    }),
-  })
+  let response: Response
+  try {
+    response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: prompt }] }],
+      }),
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Network error'
+    res.status(503).json({ error: 'Could not reach Anthropic API. Check internet connectivity.', details: msg })
+    return
+  }
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
@@ -287,6 +294,64 @@ CRITICAL numeric rules:
 - If a field is not present on the bill, use null (not 0 for optional fields).
 
 End your response with the JSON object wrapped in \`\`\`json ... \`\`\`.`
+
+
+const MISC_PARSE_PROMPT = `You are extracting structured data from an Indian GST expense/misc bill (purchases not directly related to primary business inventory — e.g. stationery, printer, repairs, office supplies).
+
+Extract the following fields and return ONLY a valid JSON object wrapped in \`\`\`json ... \`\`\`.
+
+Rules:
+- vendorName: name of the supplier
+- vendorGstin: supplier GSTIN (15 chars) or null
+- buyerGstin: buyer GSTIN or null
+- billNumber: invoice/bill number
+- billDate: "YYYY-MM-DD"
+- lineItems: one entry per expense line on the bill. Each entry has:
+  - description: expense item name (e.g. "Printer Paper A4", "HP Toner Cartridge")
+  - amount: the pre-tax amount for this line (number). If tax is only at bill level, distribute proportionally.
+  - quantity: 1 (default — not important for expense bills)
+  - unit: "Nos" (default)
+  - unitPrice: same as amount
+  - hsnCode: "" (empty string)
+  - gstRate: 0 (default — tax is captured at bill level)
+  - discountPercent: null
+- subtotal: total pre-tax amount (sum of all lineItem amounts)
+- cgstAmount: CGST total (number, 0 if not present)
+- sgstAmount: SGST total (number, 0 if not present)
+- igstAmount: IGST total (number, 0 if not present)
+- totalAmount: final grand total payable
+- roundOffAmount: round off amount or null
+- invoiceDiscountAmount: null
+
+CRITICAL: subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount
+
+Schema:
+{
+  "vendorName": string,
+  "vendorGstin": string | null,
+  "buyerGstin": string | null,
+  "billNumber": string,
+  "billDate": "YYYY-MM-DD",
+  "lineItems": [
+    {
+      "description": string,
+      "amount": number,
+      "quantity": 1,
+      "unit": "Nos",
+      "unitPrice": number,
+      "hsnCode": "",
+      "gstRate": 0,
+      "discountPercent": null
+    }
+  ],
+  "subtotal": number,
+  "cgstAmount": number,
+  "sgstAmount": number,
+  "igstAmount": number,
+  "totalAmount": number,
+  "roundOffAmount": number | null,
+  "invoiceDiscountAmount": null
+}`
 
 function MOCK_PARSED_BILL() {
   return {
