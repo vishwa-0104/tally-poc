@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, ChevronRight, Star } from 'lucide-react'
+import { Plus, X, ChevronRight, Star, KeyRound } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
@@ -30,6 +30,8 @@ function UserPanel({ user, onClose, onChanged }: UserPanelProps) {
   const [linked, setLinked]            = useState(user.companies)
   const [selectedCompany, setSelected] = useState('')
   const [linking, setLinking]          = useState(false)
+  const [newPassword, setNewPassword]  = useState('')
+  const [resetting, setResetting]      = useState(false)
 
   const unlinked = allCompanies.filter((c) => !linked.some((l) => l.id === c.id))
 
@@ -77,6 +79,20 @@ function UserPanel({ user, onClose, onChanged }: UserPanelProps) {
       toast.success('Default company updated')
     } catch {
       toast.error('Failed to set default company')
+    }
+  }
+
+  const handleResetPassword = async () => {
+    if (newPassword.length < 8) { toast.error('Password must be at least 8 characters'); return }
+    setResetting(true)
+    try {
+      await api.patch(`/users/${user.id}/reset-password`, { password: newPassword })
+      setNewPassword('')
+      toast.success('Password reset successfully')
+    } catch {
+      toast.error('Failed to reset password')
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -168,6 +184,25 @@ function UserPanel({ user, onClose, onChanged }: UserPanelProps) {
               </p>
             </div>
           )}
+
+          {/* Reset password */}
+          <div className="mt-6 pt-5 border-t border-gray-700/50">
+            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+              <KeyRound size={11} /> Reset Password
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New password (min 8 chars)"
+                className="flex-1 text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500 placeholder:text-gray-600"
+              />
+              <Button variant="outline" size="sm" loading={resetting} onClick={handleResetPassword}>
+                Reset
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

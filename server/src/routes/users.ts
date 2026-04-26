@@ -149,6 +149,20 @@ usersRouter.patch('/users/:userId/default-company', requireAdmin, async (req, re
   res.json({ ok: true })
 })
 
+// PATCH /api/users/:userId/reset-password — admin resets a user's password (admin only)
+usersRouter.patch('/users/:userId/reset-password', requireAdmin, async (req, res) => {
+  const schema = z.object({ password: z.string().min(8) })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Password must be at least 8 characters' }); return }
+
+  const user = await prisma.user.findUnique({ where: { id: req.params.userId } })
+  if (!user) { res.status(404).json({ error: 'User not found' }); return }
+
+  const passwordHash = await bcrypt.hash(result.data.password, 10)
+  await prisma.user.update({ where: { id: req.params.userId }, data: { passwordHash } })
+  res.json({ ok: true })
+})
+
 // DELETE /api/users/:userId/link-company/:companyId — unlink company from user (admin only)
 usersRouter.delete('/users/:userId/link-company/:companyId', requireAdmin, async (req, res) => {
   const { userId, companyId } = req.params
