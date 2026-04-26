@@ -129,23 +129,37 @@ export function MappingForm({
   // ── Determine tax type ──────────────────────────────────────────────────────
   const isInterstate = bill.igstAmount > 0
 
-  // ── Derive rate buckets from line items ─────────────────────────────────────
-  const ratesPresent = new Set(bill.lineItems.map((i) => i.gstRate))
-  let show5      = ratesPresent.has(5)
-  let show18     = ratesPresent.has(18)
-  let showExempt = ratesPresent.has(0)
+  // ── Derive rate buckets ──────────────────────────────────────────────────────
+  // Misc bill line items always carry gstRate=0 (expense entries) so line item
+  // rates are unreliable for misc — always use bill-level tax totals instead.
+  let show5: boolean
+  let show18: boolean
+  let showExempt: boolean
 
-  // Fallback: when line items carry no recognised rate, infer from bill totals
-  if (!show5 && !show18 && !showExempt) {
-    const totalTax    = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
+  if (billType === 'misc') {
+    const totalTax      = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
     const effectiveRate = bill.subtotal > 0 ? Math.round(totalTax / bill.subtotal * 100) : 0
-    if (totalTax === 0)        showExempt = true
-    else if (effectiveRate <= 7) show5    = true   // ~5 %
-    else                         show18   = true   // ~18 %
-  }
+    show5      = totalTax > 0 && effectiveRate <= 7
+    show18     = totalTax > 0 && effectiveRate > 7
+    showExempt = totalTax === 0
+  } else {
+    const ratesPresent = new Set(bill.lineItems.map((i) => i.gstRate))
+    show5      = ratesPresent.has(5)
+    show18     = ratesPresent.has(18)
+    showExempt = ratesPresent.has(0)
 
-  // Safety: always show at least one field
-  if (!show5 && !show18 && !showExempt) showExempt = true
+    // Fallback: when line items carry no recognised rate, infer from bill totals
+    if (!show5 && !show18 && !showExempt) {
+      const totalTax      = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
+      const effectiveRate = bill.subtotal > 0 ? Math.round(totalTax / bill.subtotal * 100) : 0
+      if (totalTax === 0)          showExempt = true
+      else if (effectiveRate <= 7) show5      = true
+      else                         show18     = true
+    }
+
+    // Safety: always show at least one field
+    if (!show5 && !show18 && !showExempt) showExempt = true
+  }
 
   // ── Pre-fill values from company mapping ────────────────────────────────────
   const prefillPurchase5      = isInterstate ? savedLedgerSets?.purchase_interstate_5  : savedLedgerSets?.purchase_up_5
