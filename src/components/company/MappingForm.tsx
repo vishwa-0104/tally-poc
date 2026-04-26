@@ -131,12 +131,12 @@ export function MappingForm({
 
   // ── Derive rate buckets from line items ─────────────────────────────────────
   const ratesPresent = new Set(bill.lineItems.map((i) => i.gstRate))
-  let show5      = billType !== 'misc' && ratesPresent.has(5)
-  let show18     = billType !== 'misc' && ratesPresent.has(18)
-  let showExempt = billType !== 'misc' && ratesPresent.has(0)
+  let show5      = ratesPresent.has(5)
+  let show18     = ratesPresent.has(18)
+  let showExempt = ratesPresent.has(0)
 
-  // Fallback: when line items are absent or carry no recognised rate, infer from bill totals (not for misc)
-  if (billType !== 'misc' && !show5 && !show18 && !showExempt) {
+  // Fallback: when line items carry no recognised rate, infer from bill totals
+  if (!show5 && !show18 && !showExempt) {
     const totalTax    = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
     const effectiveRate = bill.subtotal > 0 ? Math.round(totalTax / bill.subtotal * 100) : 0
     if (totalTax === 0)        showExempt = true
@@ -144,8 +144,8 @@ export function MappingForm({
     else                         show18   = true   // ~18 %
   }
 
-  // Safety: always show at least one field (non-misc only)
-  if (billType !== 'misc' && !show5 && !show18 && !showExempt) showExempt = true
+  // Safety: always show at least one field
+  if (!show5 && !show18 && !showExempt) showExempt = true
 
   // ── Pre-fill values from company mapping ────────────────────────────────────
   const prefillPurchase5      = isInterstate ? savedLedgerSets?.purchase_interstate_5  : savedLedgerSets?.purchase_up_5
@@ -325,40 +325,42 @@ export function MappingForm({
         />
       </div>
 
-      <div className="mt-2">
-        <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
-        <div className="grid grid-cols-2 gap-x-4">
-          {show5 && (
-            <LedgerInput
-              id="purchase-5"
-              label="Purchase Ledger (5%)"
-              required
-              ledgers={ledgers}
-              pinnedNames={prefillPurchase5 ? [prefillPurchase5] : []}
-              registration={register('purchaseLedger_5')}
-            />
-          )}
-          {show18 && (
-            <LedgerInput
-              id="purchase-18"
-              label="Purchase Ledger (18%)"
-              required
-              ledgers={ledgers}
-              pinnedNames={prefillPurchase18 ? [prefillPurchase18] : []}
-              registration={register('purchaseLedger_18')}
-            />
-          )}
-          {showExempt && (
-            <LedgerInput
-              id="purchase-exempt"
-              label="Purchase Ledger (Exempt)"
-              ledgers={ledgers}
-              pinnedNames={prefillPurchaseExempt ? [prefillPurchaseExempt] : []}
-              registration={register('purchaseLedger_exempt')}
-            />
-          )}
+      {billType !== 'misc' && (
+        <div className="mt-2">
+          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
+          <div className="grid grid-cols-2 gap-x-4">
+            {show5 && (
+              <LedgerInput
+                id="purchase-5"
+                label="Purchase Ledger (5%)"
+                required
+                ledgers={ledgers}
+                pinnedNames={prefillPurchase5 ? [prefillPurchase5] : []}
+                registration={register('purchaseLedger_5')}
+              />
+            )}
+            {show18 && (
+              <LedgerInput
+                id="purchase-18"
+                label="Purchase Ledger (18%)"
+                required
+                ledgers={ledgers}
+                pinnedNames={prefillPurchase18 ? [prefillPurchase18] : []}
+                registration={register('purchaseLedger_18')}
+              />
+            )}
+            {showExempt && (
+              <LedgerInput
+                id="purchase-exempt"
+                label="Purchase Ledger (Exempt)"
+                ledgers={ledgers}
+                pinnedNames={prefillPurchaseExempt ? [prefillPurchaseExempt] : []}
+                registration={register('purchaseLedger_exempt')}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── CGST / SGST (intra-state) ── */}
       {!isInterstate && (show5 || show18) && (
