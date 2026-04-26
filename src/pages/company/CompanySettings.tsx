@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits } from '@/services/tallyService'
+import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits, fetchTallyVoucherTypes } from '@/services/tallyService'
 import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { LedgerMapping } from '@/types'
 
@@ -148,8 +148,10 @@ export default function CompanySettings() {
   const [syncingUnits,   setSyncingUnits]   = useState(false)
   const [syncingGodowns, setSyncingGodowns] = useState(false)
   const [savingMap,      setSavingMap]      = useState(false)
-  const [tallyUrl,    setTallyUrl]    = useState(() => getTallyUrl(companyId, company?.port))
-  const [voucherType, setVoucherType] = useState(() => getTallyVoucherType(companyId))
+  const [tallyUrl,       setTallyUrl]       = useState(() => getTallyUrl(companyId, company?.port))
+  const [voucherType,    setVoucherType]    = useState(() => getTallyVoucherType(companyId))
+  const [voucherTypes,   setVoucherTypes]   = useState<string[]>([])
+  const [fetchingVTypes, setFetchingVTypes] = useState(false)
 
   const storedLedgers     = companyId ? getLedgers(companyId)     : []
   const storedStockItems  = companyId ? getStockItems(companyId)  : []
@@ -180,6 +182,21 @@ export default function CompanySettings() {
   const handleSaveVoucherType = () => {
     localStorage.setItem(`${TALLY_VOUCHER_TYPE_KEY}-${companyId}`, voucherType.trim() || DEFAULT_VOUCHER_TYPE)
     toast.success('Voucher type saved')
+  }
+
+  const handleFetchVoucherTypes = async () => {
+    if (!companyId) return
+    setFetchingVTypes(true)
+    try {
+      const types = await fetchTallyVoucherTypes(getTallyUrl(companyId, company?.port), companyName || undefined)
+      if (types.length === 0) { toast.error('No voucher types found in Tally'); return }
+      setVoucherTypes(types)
+      toast.success(`${types.length} voucher types fetched`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch voucher types')
+    } finally {
+      setFetchingVTypes(false)
+    }
   }
 
   const handleSyncLedgers = async () => {
@@ -312,15 +329,22 @@ export default function CompanySettings() {
                 </label>
                 <div className="flex gap-2">
                   <input
+                    list="voucher-type-list"
                     value={voucherType}
                     onChange={(e) => setVoucherType(e.target.value)}
                     placeholder="GST PURCHASE"
                     className="input-base flex-1"
                   />
+                  <datalist id="voucher-type-list">
+                    {voucherTypes.map((t) => <option key={t} value={t} />)}
+                  </datalist>
+                  <Button variant="outline" size="sm" loading={fetchingVTypes} onClick={handleFetchVoucherTypes}>
+                    Fetch
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleSaveVoucherType}>Save</Button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Must match exactly as it appears in Tally (e.g. <span className="font-mono">GST PURCHASE</span>).
+                  Click <strong>Fetch</strong> to load types from Tally, then pick one. Must match exactly as it appears in Tally.
                 </p>
               </div>
 

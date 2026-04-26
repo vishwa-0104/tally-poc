@@ -80,6 +80,11 @@ export async function fetchTallyGodowns(tallyUrl: string, tallyCompany?: string)
   return result.godowns
 }
 
+export async function fetchTallyVoucherTypes(tallyUrl: string, tallyCompany?: string): Promise<string[]> {
+  const result = await sendToExtension<{ voucherTypes: string[] }>('FETCH_VOUCHER_TYPES', { tallyUrl, tallyCompany })
+  return result.voucherTypes
+}
+
 export async function createTallyStockItem(payload: CreateStockItemPayload, tallyUrl: string): Promise<TallySyncResult> {
   const result = await sendToExtension<TallySyncResult>('CREATE_STOCK_ITEM', { ...payload, tallyUrl })
   console.log('[CreateStockItem] Tally response:', result)

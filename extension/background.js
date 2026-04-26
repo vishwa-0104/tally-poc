@@ -53,6 +53,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ godowns: [], error: err.message }))
       return true
 
+    case 'FETCH_VOUCHER_TYPES':
+      handleFetchVoucherTypes(payload.tallyUrl, payload.tallyCompany)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ voucherTypes: [], error: err.message }))
+      return true
+
     case 'SYNC_TO_TALLY':
       handleSyncToTally(payload.xml, payload.tallyUrl)
         .then(sendResponse)
@@ -376,6 +382,56 @@ function parseGodowns(xml) {
     godowns.push({ name })
   }
   return godowns
+}
+
+// ── Fetch voucher types from Tally ───────────────────────────────────────────
+
+async function handleFetchVoucherTypes(tallyUrl, tallyCompany) {
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSVoucherTypes</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSVoucherTypes" ISMODIFY="No">
+            <TYPE>Voucher Type</TYPE>
+            <NATIVEMETHOD>Name</NATIVEMETHOD>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  const voucherTypes = parseVoucherTypes(responseText)
+  console.log('[Tally voucher types] count:', voucherTypes.length)
+  return { voucherTypes }
+}
+
+function parseVoucherTypes(xml) {
+  const seen = new Set()
+  const types = []
+  const blocks = [...xml.matchAll(/<VOUCHERTYPE\b[^>]*>([\s\S]*?)<\/VOUCHERTYPE>/gi)]
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+
+  for (const match of blocks) {
+    const block = match[0]
+    let name = block.match(/<VOUCHERTYPE\s+NAME="([^"]+)"/i)?.[1]?.trim()
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    types.push(name)
+  }
+  return types
 }
 
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────
