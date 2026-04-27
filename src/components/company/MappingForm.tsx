@@ -67,7 +67,7 @@ function TallyItemCell({ index, register, watch, onCreateClick }: TallyItemCellP
         list="stock-items-list"
         autoComplete="off"
         placeholder="Select stock item…"
-        className="w-36 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+        className="w-52 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
       />
       {isEmpty && (
         <button
@@ -596,16 +596,22 @@ export function MappingForm({
             <table className="w-full border-collapse text-xs" aria-label="Line items">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  {['Description', 'HSN', 'Qty', 'Unit', 'Unit Price', 'Disc%', 'GST%', 'Amount', 'Tally Item'].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">{h}</th>
-                  ))}
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[440px]">Description</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">HSN</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Qty</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit Price</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc%</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">GST%</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[220px]">Tally Item</th>
                 </tr>
               </thead>
               <tbody>
                 {bill.lineItems.map((_item, i) => (
                   <tr key={i} className="border-b border-gray-100 last:border-0">
                     <td className="px-2 py-1.5">
-                      <input {...register(`lineItems.${i}.description`)} className="w-full min-w-[140px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.description`)} className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.hsnCode`)} className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
