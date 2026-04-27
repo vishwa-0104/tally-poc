@@ -532,53 +532,80 @@ function getTodayYYYYMMDD() {
 function buildStockItemXml({ name, group, unit, description, gstApplicable, taxability, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
   const applicable = gstApplicable === 'Yes' ? 'Applicable' : 'Not Applicable'
 
-let gstBlock = ''
-if (gstApplicable === 'Yes') {
-  const isTaxable = taxability === 'Taxable'
-  const date = getTodayYYYYMMDD()
+  let gstBlock = ''
+  if (gstApplicable === 'Yes') {
+    const isTaxable = taxability === 'Taxable'
+    const date = getTodayYYYYMMDD()
 
-  // 1. HSN Block: Handles the Code and Description
-  const hsnPart = `
-            <HSNDETAILS.LIST>
-              <APPLICABLEFROM>${date}</APPLICABLEFROM>
-              <HSNSACTYPE>HSN</HSNSACTYPE>
-              ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : ''}
-              ${description ? `<DESCRIPTION>${description}</DESCRIPTION>` : ''}
-            </HSNDETAILS.LIST>`
+    const hsnPart = `
+              <HSNDETAILS.LIST>
+                <APPLICABLEFROM>${date}</APPLICABLEFROM>
+                <HSNSACTYPE>HSN</HSNSACTYPE>
+                ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : ''}
+                ${description ? `<DESCRIPTION>${description}</DESCRIPTION>` : ''}
+              </HSNDETAILS.LIST>`
 
-  // 2. GST Block: Handles the actual Taxability and Rates
-  let taxPart = ''
-  if (isTaxable && gstRate) {
-    const halfRate = gstRate / 2
-    taxPart = `
-            <GSTDETAILS.LIST>
-              <APPLICABLEFROM>${date}</APPLICABLEFROM>
-              <TAXABILITY>Taxable</TAXABILITY>
-              <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
-              <STATEGSTDETAILS.LIST>
-                <GSTRATETYPE>Central Tax</GSTRATETYPE>
-                <GSTRATE>${halfRate}</GSTRATE>
-              </STATEGSTDETAILS.LIST>
-              <STATEGSTDETAILS.LIST>
-                <GSTRATETYPE>State Tax</GSTRATETYPE>
-                <GSTRATE>${halfRate}</GSTRATE>
-              </STATEGSTDETAILS.LIST>
-              <STATEGSTDETAILS.LIST>
-                <GSTRATETYPE>Integrated Tax</GSTRATETYPE>
-                <GSTRATE>${gstRate}</GSTRATE>
-              </STATEGSTDETAILS.LIST>
-            </GSTDETAILS.LIST>`
-  } else {
-    // Handle Exempt/Nil Rated if necessary
-    taxPart = `
-            <GSTDETAILS.LIST>
-              <APPLICABLEFROM>${date}</APPLICABLEFROM>
-              <TAXABILITY>${taxability}</TAXABILITY>
-            </GSTDETAILS.LIST>`
+    let taxPart = ''
+    if (isTaxable && gstRate) {
+      const halfRate = gstRate / 2
+      taxPart = `
+              <GSTDETAILS.LIST>
+                <APPLICABLEFROM>${date}</APPLICABLEFROM>
+                <TAXABILITY>Taxable</TAXABILITY>
+                <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
+                <STATEGSTDETAILS.LIST>
+                  <GSTRATETYPE>Central Tax</GSTRATETYPE>
+                  <GSTRATE>${halfRate}</GSTRATE>
+                </STATEGSTDETAILS.LIST>
+                <STATEGSTDETAILS.LIST>
+                  <GSTRATETYPE>State Tax</GSTRATETYPE>
+                  <GSTRATE>${halfRate}</GSTRATE>
+                </STATEGSTDETAILS.LIST>
+                <STATEGSTDETAILS.LIST>
+                  <GSTRATETYPE>Integrated Tax</GSTRATETYPE>
+                  <GSTRATE>${gstRate}</GSTRATE>
+                </STATEGSTDETAILS.LIST>
+              </GSTDETAILS.LIST>`
+    } else {
+      taxPart = `
+              <GSTDETAILS.LIST>
+                <APPLICABLEFROM>${date}</APPLICABLEFROM>
+                <TAXABILITY>${taxability}</TAXABILITY>
+              </GSTDETAILS.LIST>`
+    }
+
+    gstBlock = hsnPart + taxPart
   }
 
-  gstBlock = hsnPart + taxPart
-}
+  const companyBlock = tallyCompany
+    ? `\n        <STATICVARIABLES>\n          <SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>\n        </STATICVARIABLES>`
+    : ''
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>All Masters</REPORTNAME>${companyBlock}
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <STOCKITEM NAME="${name}" ACTION="Create">
+            <NAME>${name}</NAME>
+            ${group ? `<PARENT>${group}</PARENT>` : ''}
+            ${unit ? `<BASEUNITS>${unit}</BASEUNITS>` : ''}
+            <GSTAPPLICABLE>${applicable}</GSTAPPLICABLE>
+            ${typeOfSupply ? `<TYPEOFSUPPLY>${typeOfSupply}</TYPEOFSUPPLY>` : ''}
+            ${gstBlock}
+          </STOCKITEM>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`
 }
 
 // ── HTTP helper ──────────────────────────────────────────────────────────────

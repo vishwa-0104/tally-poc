@@ -58,7 +58,7 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
       </span>
 
       {/* Nav items */}
-      <div className="flex-1 space-y-0.5">
+      <div className="flex-1 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const active = location.pathname === item.path || location.pathname.startsWith(item.path + '/')
           return (
@@ -124,12 +124,12 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
   )
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
 
       {/* ── Desktop / Tablet sidebar (hidden on mobile) ── */}
       <nav
         className={cn(
-          'hidden md:flex flex-shrink-0 flex-col py-5 px-3.5',
+          'hidden md:flex flex-shrink-0 flex-col py-5 px-3.5 h-full overflow-hidden',
           'md:w-14 lg:w-60',           // icon-rail on tablet, full on desktop
           sidebarBg,
         )}
