@@ -102,14 +102,15 @@ async function handleFetchLedgers(tallyUrl, tallyCompany) {
         <TDLMESSAGE>
           <COLLECTION NAME="TBSLedgers" ISMODIFY="No">
             <TYPE>Ledger</TYPE>
-            <NATIVEMETHOD>Name</NATIVEMETHOD>
-            <NATIVEMETHOD>Parent</NATIVEMETHOD>
+            
+            <NATIVEMETHOD>Name, Parent, LedgerAddress, StateName, OpeningBalance</NATIVEMETHOD>
+            
             <NATIVEMETHOD>PartyGSTIN</NATIVEMETHOD>
-            <NATIVEMETHOD>LedgerAddress</NATIVEMETHOD>
-            <NATIVEMETHOD>StateName</NATIVEMETHOD>
-            <NATIVEMETHOD>OpeningBalance</NATIVEMETHOD>
             <NATIVEMETHOD>GSTRegistrationType</NATIVEMETHOD>
-            <COMPUTE>FETCHEDGSTIN:$PartyGSTIN</COMPUTE>
+            
+            <NATIVEMETHOD>GstPartyIdentificationNo</NATIVEMETHOD>
+
+            <FETCH>Name, Parent, PartyGSTIN, GstPartyIdentificationNo, GSTRegistrationType, LEDGSTREGDETAILS.*</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
