@@ -17,6 +17,7 @@ function Row({ label, value }: { label: string; value?: string | null }) {
 
 export function SyncedBillView({ bill }: SyncedBillViewProps) {
   const isInterstate = bill.igstAmount > 0
+  const isMisc       = bill.billType === 'misc'
   const mapping      = bill.tallyMapping
 
   return (
@@ -40,7 +41,7 @@ export function SyncedBillView({ bill }: SyncedBillViewProps) {
           <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Ledger Mapping</p>
           <div className="space-y-2">
             <Row label="Vendor Ledger"   value={mapping.vendorLedger} />
-            <Row label="Purchase Ledger" value={mapping.purchaseLedger} />
+            {!isMisc && <Row label="Purchase Ledger" value={mapping.purchaseLedger} />}
             {!isInterstate && <Row label="CGST Ledger" value={mapping.cgstLedger} />}
             {!isInterstate && <Row label="SGST Ledger" value={mapping.sgstLedger} />}
             {isInterstate  && <Row label="IGST Ledger" value={mapping.igstLedger} />}
@@ -48,8 +49,77 @@ export function SyncedBillView({ bill }: SyncedBillViewProps) {
         </div>
       )}
 
-      {/* Line items */}
-      {bill.lineItems.length > 0 && (
+      {/* Misc expense lines */}
+      {isMisc && bill.lineItems.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100">
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Expense Lines</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  {['Description', 'Amount', 'Expense Ledger'].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {bill.lineItems.map((item, i) => (
+                  <tr key={i} className="border-b border-gray-100 last:border-0">
+                    <td className="px-3 py-2 text-gray-800">{item.description}</td>
+                    <td className="px-3 py-2 font-semibold text-gray-800">{formatCurrency(item.amount)}</td>
+                    <td className="px-3 py-2 text-gray-600">{item.tallyLedger ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                <tr>
+                  <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Subtotal</td>
+                  <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
+                  <td />
+                </tr>
+                {!isInterstate && bill.cgstAmount > 0 && (
+                  <tr>
+                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.cgstAmount)}</td>
+                    <td />
+                  </tr>
+                )}
+                {!isInterstate && bill.sgstAmount > 0 && (
+                  <tr>
+                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.sgstAmount)}</td>
+                    <td />
+                  </tr>
+                )}
+                {isInterstate && bill.igstAmount > 0 && (
+                  <tr>
+                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.igstAmount)}</td>
+                    <td />
+                  </tr>
+                )}
+                {bill.roundOffAmount != null && Math.abs(bill.roundOffAmount) >= 0.01 && (
+                  <tr>
+                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.roundOffAmount)}</td>
+                    <td />
+                  </tr>
+                )}
+                <tr className="border-t-2 border-gray-300">
+                  <td className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
+                  <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Purchase line items */}
+      {!isMisc && bill.lineItems.length > 0 && (
         <div className="card overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-100">
             <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Line Items</p>
