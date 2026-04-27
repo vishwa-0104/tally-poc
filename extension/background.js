@@ -105,6 +105,7 @@ async function handleFetchLedgers(tallyUrl, tallyCompany) {
             <NATIVEMETHOD>Name</NATIVEMETHOD>
             <NATIVEMETHOD>Parent</NATIVEMETHOD>
             <NATIVEMETHOD>PartyGSTIN</NATIVEMETHOD>
+            <NATIVEMETHOD>GSTIN</NATIVEMETHOD>
             <NATIVEMETHOD>LedgerAddress</NATIVEMETHOD>
             <NATIVEMETHOD>StateName</NATIVEMETHOD>
             <NATIVEMETHOD>OpeningBalance</NATIVEMETHOD>
@@ -153,7 +154,11 @@ function parseLedgers(xml) {
       ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
       ?? ''
     )
-    const gstin               = decode(block.match(/<PARTYGSTIN[^>]*>([^<]+)<\/PARTYGSTIN>/i)?.[1]) || undefined
+    const gstin               = decode(
+      block.match(/<PARTYGSTIN[^>]*>([^<]+)<\/PARTYGSTIN>/i)?.[1]
+      ?? block.match(/<GSTIN[^>]*>([^<]+)<\/GSTIN>/i)?.[1]
+      ?? ''
+    ) || undefined
     const state               = decode(block.match(/<STATENAME[^>]*>([^<]+)<\/STATENAME>/i)?.[1]) || undefined
     const openingBalance      = decode(block.match(/<OPENINGBALANCE[^>]*>([^<]+)<\/OPENINGBALANCE>/i)?.[1]) || undefined
     const gstRegistrationType = decode(block.match(/<GSTREGISTRATIONTYPE[^>]*>([^<]+)<\/GSTREGISTRATIONTYPE>/i)?.[1]) || undefined
