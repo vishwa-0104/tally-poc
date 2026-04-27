@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, CheckCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { MappingForm } from '@/components/company/MappingForm'
 import { SyncedBillView } from '@/components/company/SyncedBillView'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
@@ -22,9 +23,11 @@ export default function BillMapping() {
   const [saving, setSaving]     = useState(false)
   const [syncing, setSyncing]   = useState(false)
   const [syncDone, setSyncDone] = useState(false)
+  const [duplicateWarning, setDuplicateWarning] = useState<Bill | null>(null)
+  const [pendingSync, setPendingSync]           = useState<MappingInput | null>(null)
 
   const { activeCompanyId, companies: authCompanies } = useAuthStore()
-  const { getBill, updateBillStatus, fetchBills } = useBillStore()
+  const { getBill, getBills, updateBillStatus, fetchBills } = useBillStore()
   const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb, getStockUnits, fetchStockUnitsFromDb } = useCompanyStore()
   const ledgersState          = useCompanyStore((s) => s.ledgers)
   const stockItemsState       = useCompanyStore((s) => s.stockItems)
@@ -208,7 +211,35 @@ export default function BillMapping() {
     setSaving(false)
   }
 
+  const findDuplicate = (data: MappingInput): Bill | null => {
+    const allBills = getBills(companyId)
+    const currentBillNumber = data.billNumber?.trim().toLowerCase()
+    const currentGstin      = bill.vendorGstin?.trim()
+    const currentName       = bill.vendorName?.trim().toLowerCase()
+
+    return allBills.find((b) => {
+      if (b.id === bill.id) return false
+      if (b.billNumber?.trim().toLowerCase() !== currentBillNumber) return false
+
+      const otherGstin = b.vendorGstin?.trim()
+      if (currentGstin && otherGstin) {
+        return currentGstin === otherGstin
+      }
+      return b.vendorName?.trim().toLowerCase() === currentName
+    }) ?? null
+  }
+
   const handleSync = async (data: MappingInput) => {
+    const duplicate = findDuplicate(data)
+    if (duplicate) {
+      setDuplicateWarning(duplicate)
+      setPendingSync(data)
+      return
+    }
+    await performSync(data)
+  }
+
+  const performSync = async (data: MappingInput) => {
     console.log('[handleSync] form data:', JSON.stringify(data, null, 2))
     if (!companyId) return
     setSyncing(true)
@@ -336,6 +367,51 @@ export default function BillMapping() {
         )}
 
       </div>
+
+      {/* Duplicate bill warning */}
+      {duplicateWarning && (
+        <Modal
+          open={!!duplicateWarning}
+          onClose={() => { setDuplicateWarning(null); setPendingSync(null) }}
+          title="Duplicate Bill Detected"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => { setDuplicateWarning(null); setPendingSync(null) }}>
+                Cancel
+              </Button>
+              <Button
+                variant="teal"
+                onClick={async () => {
+                  const data = pendingSync!
+                  setDuplicateWarning(null)
+                  setPendingSync(null)
+                  await performSync(data)
+                }}
+              >
+                Sync Anyway
+              </Button>
+            </>
+          }
+        >
+          <div className="flex gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>
+                A bill with number <span className="font-semibold">{duplicateWarning.billNumber}</span> from{' '}
+                <span className="font-semibold">{duplicateWarning.vendorName}</span> already exists.
+              </p>
+              <p>
+                Status:{' '}
+                {duplicateWarning.status === 'synced' && <span className="font-medium text-emerald-700">Already synced to Tally</span>}
+                {duplicateWarning.status === 'mapped' && <span className="font-medium text-blue-700">Already mapped, not yet synced</span>}
+                {duplicateWarning.status === 'parsed' && <span className="font-medium text-gray-700">Already parsed</span>}
+                {duplicateWarning.status === 'error' && <span className="font-medium text-red-700">Previous sync attempt failed</span>}
+              </p>
+              <p className="text-gray-500">You can still sync this bill if it's intentional.</p>
+            </div>
+          </div>
+        </Modal>
+      )}
     </>
   )
 }
