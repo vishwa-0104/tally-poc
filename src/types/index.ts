@@ -79,6 +79,11 @@ export interface Company {
   mapping: LedgerMapping | null
   features?: CompanyFeature[]
   syncTimestamps?: { ledgers?: string; stockItems?: string; stockGroups?: string; stockUnits?: string; godowns?: string } | null
+  parseBillsLimit: number
+  parseBillsUsed: number
+  parseBlocked: boolean
+  subscriptionExpiresAt: string | null
+  subscriptionRenewedAt: string | null
   createdAt: string
 }
 

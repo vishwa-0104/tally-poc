@@ -1,13 +1,25 @@
 import { useState, useCallback, useRef } from 'react'
 import type { ChangeEvent } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Camera, Upload, CheckCircle, Circle, Loader } from 'lucide-react'
+import { Camera, Upload, CheckCircle, Circle, Loader, AlertTriangle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { parseBillWithAI, parsedDataToBill } from '@/services'
 import { useBillStore, useCompanyStore, useAuthStore } from '@/store'
 import { cn } from '@/lib/utils'
+
+type QuotaErrorType = 'limit' | 'expired' | 'blocked'
+interface QuotaError { type: QuotaErrorType; message: string }
+
+function extractQuotaError(err: unknown): QuotaError | null {
+  const code = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data?.error
+  const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? ''
+  if (code === 'PARSE_LIMIT_EXCEEDED') return { type: 'limit', message }
+  if (code === 'SUBSCRIPTION_EXPIRED')  return { type: 'expired', message }
+  if (code === 'PARSE_BLOCKED')         return { type: 'blocked', message }
+  return null
+}
 
 const STEPS = [
   { label: 'Uploading your bill',       sub: 'Preparing your file…' },
@@ -25,11 +37,12 @@ interface UploadModalProps {
 }
 
 export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType = 'purchase' }: UploadModalProps) {
-  const [file, setFile]           = useState<File | null>(null)
+  const [file, setFile]             = useState<File | null>(null)
   const [multiFiles, setMultiFiles] = useState<File[]>([])
-  const [parsing, setParsing]     = useState(false)
-  const [step, setStep]           = useState(-1)
-  const cameraInputRef            = useRef<HTMLInputElement>(null)
+  const [parsing, setParsing]       = useState(false)
+  const [step, setStep]             = useState(-1)
+  const [quotaError, setQuotaError] = useState<QuotaError | null>(null)
+  const cameraInputRef              = useRef<HTMLInputElement>(null)
 
   const handleCameraCapture = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -79,7 +92,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
     setParsing(true)
     setStep(0)
     try {
-      const parsed = await parseBillWithAI(file, (s) => setStep(s), billType)
+      const parsed = await parseBillWithAI(file, (s) => setStep(s), billType, activeCompanyId)
       const bill   = parsedDataToBill(parsed, activeCompanyId, undefined, billType)
       const saved  = await addBill(bill)
       incrementBillCount(activeCompanyId)
@@ -87,7 +100,12 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
       onParsed(saved.id)
       handleClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Parsing failed')
+      const qe = extractQuotaError(err)
+      if (qe) {
+        setQuotaError(qe)
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Parsing failed')
+      }
     } finally {
       setParsing(false)
       setStep(-1)
@@ -99,8 +117,11 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
     setFile(null)
     setMultiFiles([])
     setStep(-1)
+    setQuotaError(null)
     onClose()
   }
+
+  const quotaFooter = <Button variant="outline" onClick={handleClose}>Close</Button>
 
   return (
     <Modal
@@ -111,6 +132,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
         ? 'Upload expense bills (stationery, repairs, utilities) — items map to expense ledgers'
         : "Upload a photo or PDF of your purchase bill and we'll read it for you"}
       footer={
+        quotaError ? quotaFooter :
         parsing ? undefined : (
           <>
             <Button variant="outline" onClick={handleClose}>Cancel</Button>
@@ -121,7 +143,24 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
         )
       }
     >
-      {!parsing ? (
+      {quotaError ? (
+        <div className="py-6 flex flex-col items-center gap-4 text-center">
+          <div className={cn(
+            'w-14 h-14 rounded-full flex items-center justify-center',
+            quotaError.type === 'blocked' ? 'bg-red-100' : 'bg-amber-100',
+          )}>
+            <AlertTriangle className={cn('w-7 h-7', quotaError.type === 'blocked' ? 'text-red-500' : 'text-amber-500')} />
+          </div>
+          <div>
+            <p className={cn('text-sm font-bold mb-1', quotaError.type === 'blocked' ? 'text-red-700' : 'text-amber-700')}>
+              {quotaError.type === 'blocked'   ? 'Parsing Disabled' :
+               quotaError.type === 'expired'   ? 'Subscription Expired' :
+                                                 'Parse Limit Reached'}
+            </p>
+            <p className="text-xs text-gray-600 leading-relaxed max-w-xs">{quotaError.message}</p>
+          </div>
+        </div>
+      ) : !parsing ? (
         <>
           {/* Dropzone */}
           <div

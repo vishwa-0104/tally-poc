@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { BillsTable, UploadModal } from '@/components/company'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { parseBillWithAI, parsedDataToBill } from '@/services'
+import { cn } from '@/lib/utils'
 
 export default function CompanyBills() {
   const [showUpload, setShowUpload]         = useState(false)
@@ -43,21 +44,27 @@ export default function CompanyBills() {
     let failed = 0
     for (const file of files) {
       try {
-        const parsed = await parseBillWithAI(file, undefined, billType)
+        const parsed = await parseBillWithAI(file, undefined, billType, activeCompanyId)
         const bill   = parsedDataToBill(parsed, activeCompanyId!, undefined, billType)
         addBill(bill)
         incrementBillCount(activeCompanyId!)
         succeeded++
-      } catch {
+      } catch (err) {
+        const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+        if (code === 'PARSE_LIMIT_EXCEEDED' || code === 'SUBSCRIPTION_EXPIRED' || code === 'PARSE_BLOCKED') {
+          toast.error(code === 'PARSE_BLOCKED' ? 'Parsing is disabled for your account' : 'Parse limit reached — stopping upload')
+          setBulkDone((d) => d + (files.length - succeeded - failed))
+          break
+        }
         failed++
       }
       setBulkDone((d) => d + 1)
     }
 
     setBulkParsing(false)
-    if (failed === 0) {
+    if (failed === 0 && succeeded > 0) {
       toast.success(`${succeeded} bill${succeeded !== 1 ? 's' : ''} parsed successfully`)
-    } else {
+    } else if (succeeded > 0) {
       toast.success(`${succeeded} parsed, ${failed} failed`)
     }
   }
@@ -70,6 +77,21 @@ export default function CompanyBills() {
         actions={
           <>
             <ExtensionStatus />
+            {company && (() => {
+              const used    = company.parseBillsUsed
+              const limit   = company.parseBillsLimit
+              const pct     = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+              const expired = company.subscriptionExpiresAt && new Date(company.subscriptionExpiresAt) < new Date()
+              const color   = company.parseBlocked || expired ? 'text-red-600 border-red-200 bg-red-50' :
+                              pct >= 90 ? 'text-red-600 border-red-200 bg-red-50' :
+                              pct >= 70 ? 'text-amber-600 border-amber-200 bg-amber-50' :
+                              'text-teal-700 border-teal-200 bg-teal-50'
+              return (
+                <span className={cn('hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border', color)}>
+                  {used} / {limit} bills parsed
+                </span>
+              )
+            })()}
             {bulkParsing && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-medium rounded-full border border-teal-200">
                 <Loader className="w-3 h-3 animate-spin" />

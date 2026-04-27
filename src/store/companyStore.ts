@@ -16,6 +16,7 @@ interface CompanyStore {
   updateCompany: (companyId: string, data: { name?: string; gstin?: string | null; port?: number }) => Promise<void>
   updateMapping: (companyId: string, mapping: LedgerMapping) => Promise<void>
   updateCompanyFeature: (companyId: string, feature: string, enabled: boolean) => Promise<void>
+  updateQuota: (companyId: string, data: { parseBillsLimit?: number; parseBlocked?: boolean; subscriptionExpiresAt?: string | null; renew?: boolean }) => Promise<void>
   getCompany: (id: string) => Company | undefined
   setLedgers: (companyId: string, ledgers: TallyLedger[]) => void
   getLedgers: (companyId: string) => TallyLedger[]
@@ -200,6 +201,13 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
     }))
   },
 
+  updateQuota: async (companyId, data) => {
+    const { data: updated } = await api.patch(`/companies/${companyId}/quota`, data)
+    set((s) => ({
+      companies: s.companies.map((c) => (c.id === companyId ? { ...c, ...updated } : c)),
+    }))
+  },
+
   getGodowns: (companyId) => get().godowns[companyId] ?? [],
 
   fetchGodownsFromDb: async (companyId) => {
@@ -219,7 +227,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
 
   // Local-only counter helpers (optimistic, synced counts come from fetchCompanies)
   incrementBillCount: (companyId) =>
-    set((s) => ({ companies: s.companies.map((c) => c.id === companyId ? { ...c, totalBills: c.totalBills + 1, pendingBills: c.pendingBills + 1 } : c) })),
+    set((s) => ({ companies: s.companies.map((c) => c.id === companyId ? { ...c, totalBills: c.totalBills + 1, pendingBills: c.pendingBills + 1, parseBillsUsed: c.parseBillsUsed + 1 } : c) })),
 
   incrementPending: (companyId) =>
     set((s) => ({ companies: s.companies.map((c) => c.id === companyId ? { ...c, pendingBills: c.pendingBills + 1 } : c) })),

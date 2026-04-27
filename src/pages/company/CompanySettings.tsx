@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
-import { RefreshCw, CheckCircle } from 'lucide-react'
+import { RefreshCw, CheckCircle, AlertTriangle, CreditCard } from 'lucide-react'
 import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
+import { cn } from '@/lib/utils'
 import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits, fetchTallyVoucherTypes } from '@/services/tallyService'
 import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { LedgerMapping } from '@/types'
@@ -99,7 +100,7 @@ function SyncRow({ label, count, loading, lastSync, onSync }: SyncRowProps) {
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-type Tab = 'connection' | 'ledgers'
+type Tab = 'connection' | 'ledgers' | 'subscription'
 
 interface TabBarProps {
   active: Tab
@@ -108,8 +109,9 @@ interface TabBarProps {
 
 function TabBar({ active, onChange }: TabBarProps) {
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'connection', label: 'Tally Connection' },
-    { id: 'ledgers',    label: 'Default Ledgers' },
+    { id: 'connection',   label: 'Tally Connection' },
+    { id: 'ledgers',      label: 'Default Ledgers' },
+    { id: 'subscription', label: 'Subscription' },
   ]
   return (
     <div className="flex border-b border-gray-200 mb-5">
@@ -417,6 +419,91 @@ export default function CompanySettings() {
               </Button>
             </div>
           )}
+
+          {/* ── Tab: Subscription ── */}
+          {activeTab === 'subscription' && (() => {
+            const used    = company?.parseBillsUsed  ?? 0
+            const limit   = company?.parseBillsLimit ?? 50
+            const pct     = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+            const expiresAt = company?.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt) : null
+            const renewedAt = company?.subscriptionRenewedAt ? new Date(company.subscriptionRenewedAt) : null
+            const isExpired = expiresAt && expiresAt < new Date()
+            const daysLeft  = expiresAt && !isExpired
+              ? Math.ceil((expiresAt.getTime() - Date.now()) / 86400000)
+              : null
+            const blocked   = company?.parseBlocked
+
+            const barColor  = blocked || isExpired ? 'bg-red-500' :
+                              pct >= 90 ? 'bg-red-500' :
+                              pct >= 70 ? 'bg-amber-400' : 'bg-teal-500'
+
+            return (
+              <div className="space-y-5">
+                {/* Status banner */}
+                {(blocked || isExpired) && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-red-50 border border-red-200">
+                    <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700 font-medium">
+                      {blocked ? 'Bill parsing has been disabled for your account.' : 'Your subscription has expired.'}
+                      {' '}Please contact your administrator.
+                    </p>
+                  </div>
+                )}
+                {daysLeft !== null && daysLeft <= 7 && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-700 font-medium">
+                      Your subscription expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}. Contact your administrator to renew.
+                    </p>
+                  </div>
+                )}
+
+                {/* Usage */}
+                <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <CreditCard className="w-3.5 h-3.5 text-teal-600" />
+                    <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Parse Usage This Month</p>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <span className="text-2xl font-bold text-gray-800">{used}</span>
+                    <span className="text-xs text-gray-500 mb-1">of {limit} bills</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${pct}%` }} />
+                  </div>
+                  <p className="text-[11px] text-gray-500">{pct}% used — {Math.max(0, limit - used)} remaining</p>
+                </div>
+
+                {/* Dates */}
+                <div className="space-y-1.5 text-xs text-gray-600">
+                  {renewedAt && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Last renewed</span>
+                      <span className="font-medium">{renewedAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    </div>
+                  )}
+                  {expiresAt && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">{isExpired ? 'Expired on' : 'Expires on'}</span>
+                      <span className={cn('font-medium', isExpired ? 'text-red-600' : daysLeft !== null && daysLeft <= 7 ? 'text-amber-600' : 'text-gray-700')}>
+                        {expiresAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  )}
+                  {!expiresAt && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Subscription</span>
+                      <span className="font-medium text-teal-600">No expiry (free tier)</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-gray-400 pt-1">
+                  To increase your limit or renew your subscription, please contact your administrator.
+                </p>
+              </div>
+            )
+          })()}
         </div>
       </div>
     </>

@@ -102,16 +102,40 @@ billsRouter.delete('/bills/:id', async (req, res) => {
 
 // POST /api/bills/parse — AI parse a bill image/PDF (Anthropic key stays server-side)
 billsRouter.post('/bills/parse', async (req, res) => {
-  const { base64, mediaType, billType } = req.body as { base64: string; mediaType: string; billType?: string }
+  const { base64, mediaType, billType, companyId } = req.body as {
+    base64: string; mediaType: string; billType?: string; companyId?: string
+  }
   const prompt = billType === 'misc' ? MISC_PARSE_PROMPT : PARSE_PROMPT
 
   const apiKey = process.env.ANTHROPIC_API_KEY
 
-  // Return mock data if no API key configured
+  // Return mock data if no API key configured (dev mode — skip quota)
   if (!apiKey) {
     await new Promise((r) => setTimeout(r, 2000))
     res.json(MOCK_PARSED_BILL())
     return
+  }
+
+  // Quota enforcement (real AI mode only)
+  if (companyId) {
+    if (!(await canAccessCompany(req.auth, companyId))) {
+      res.status(403).json({ error: 'Forbidden' }); return
+    }
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { parseBlocked: true, parseBillsLimit: true, parseBillsUsed: true, subscriptionExpiresAt: true },
+    })
+    if (!company) { res.status(404).json({ error: 'Company not found' }); return }
+
+    if (company.parseBlocked) {
+      res.status(403).json({ error: 'PARSE_BLOCKED', message: 'Bill parsing has been disabled for your account. Please contact your administrator.' }); return
+    }
+    if (company.subscriptionExpiresAt && company.subscriptionExpiresAt < new Date()) {
+      res.status(402).json({ error: 'SUBSCRIPTION_EXPIRED', message: 'Your subscription has expired. Please contact your administrator to renew.' }); return
+    }
+    if (company.parseBillsUsed >= company.parseBillsLimit) {
+      res.status(429).json({ error: 'PARSE_LIMIT_EXCEEDED', limit: company.parseBillsLimit, used: company.parseBillsUsed, message: `Your parse limit of ${company.parseBillsLimit} bills has been reached this month. Please contact your administrator to upgrade your plan.` }); return
+    }
   }
 
   const contentBlock = mediaType === 'application/pdf'
@@ -165,6 +189,14 @@ billsRouter.post('/bills/parse', async (req, res) => {
       if (Math.abs(Math.abs(expected) - Math.abs(roundOffAmount)) < 0.05) {
         roundOffAmount = expected
       }
+    }
+
+    // Increment parse counter after successful AI parse
+    if (companyId) {
+      await prisma.company.update({
+        where: { id: companyId },
+        data: { parseBillsUsed: { increment: 1 } },
+      }).catch(() => {})
     }
 
     res.json({

@@ -70,6 +70,31 @@ companiesRouter.post('/companies', requireAdmin, async (req, res) => {
   res.status(201).json(company)
 })
 
+// PATCH /api/companies/:id/quota — update parse quota and subscription (admin only)
+companiesRouter.patch('/companies/:id/quota', requireAdmin, async (req, res) => {
+  const schema = z.object({
+    parseBillsLimit:       z.number().int().min(0).optional(),
+    parseBlocked:          z.boolean().optional(),
+    subscriptionExpiresAt: z.string().datetime().nullable().optional(),
+    renew:                 z.boolean().optional(), // if true: reset parseBillsUsed to 0 + stamp renewedAt
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input', details: result.error.flatten() }); return }
+
+  const { parseBillsLimit, parseBlocked, subscriptionExpiresAt, renew } = result.data
+  const data: Record<string, unknown> = {}
+  if (parseBillsLimit       !== undefined) data.parseBillsLimit = parseBillsLimit
+  if (parseBlocked          !== undefined) data.parseBlocked    = parseBlocked
+  if (subscriptionExpiresAt !== undefined) data.subscriptionExpiresAt = subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null
+  if (renew) {
+    data.parseBillsUsed        = 0
+    data.subscriptionRenewedAt = new Date()
+  }
+
+  const company = await prisma.company.update({ where: { id: req.params.id }, data })
+  res.json(company)
+})
+
 // PATCH /api/companies/:id — update name, gstin, port (admin only)
 companiesRouter.patch('/companies/:id', requireAdmin, async (req, res) => {
   const schema = z.object({

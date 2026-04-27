@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Warehouse, X, ChevronRight, Zap, Pencil } from 'lucide-react'
+import { Plus, Warehouse, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
@@ -9,6 +9,18 @@ import { useCompanyStore } from '@/store'
 import { COMPANY_FEATURES } from '@/types'
 import type { Company, CompanyFeature } from '@/types'
 import { cn } from '@/lib/utils'
+
+const PLANS = [
+  { label: 'Starter', bills: 50 },
+  { label: 'Basic',   bills: 200 },
+  { label: 'Pro',     bills: 500 },
+] as const
+
+function defaultExpiry(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 30)
+  return d.toISOString().split('T')[0]
+}
 
 // ── Feature catalogue — add new entries here as features grow ─────────────────
 
@@ -99,13 +111,20 @@ interface FeaturePanelProps {
 }
 
 function FeaturePanel({ company, onClose }: FeaturePanelProps) {
-  const { updateCompanyFeature, updateCompany } = useCompanyStore()
+  const { updateCompanyFeature, updateCompany, updateQuota } = useCompanyStore()
   const [toggling, setToggling] = useState<string | null>(null)
 
   const [editName,  setEditName]  = useState(company.name)
   const [editGstin, setEditGstin] = useState(company.gstin ?? '')
   const [editPort,  setEditPort]  = useState(String(company.port ?? 9000))
   const [saving,    setSaving]    = useState(false)
+
+  const [planLimit,    setPlanLimit]    = useState(String(company.parseBillsLimit ?? 50))
+  const [expiryDate,   setExpiryDate]   = useState(() =>
+    company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toISOString().split('T')[0] : '',
+  )
+  const [renewing,     setRenewing]     = useState(false)
+  const [togglingBlk,  setTogglingBlk]  = useState(false)
 
   const handleSave = async () => {
     setSaving(true)
@@ -120,6 +139,36 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
       toast.error('Failed to update company')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleRenew = async () => {
+    const limit = parseInt(planLimit, 10)
+    if (!limit || limit < 1) { toast.error('Enter a valid bill limit'); return }
+    setRenewing(true)
+    try {
+      await updateQuota(company.id, {
+        parseBillsLimit:       limit,
+        subscriptionExpiresAt: expiryDate ? new Date(expiryDate).toISOString() : null,
+        renew:                 true,
+      })
+      toast.success('Subscription renewed — counter reset to 0')
+    } catch {
+      toast.error('Failed to renew subscription')
+    } finally {
+      setRenewing(false)
+    }
+  }
+
+  const handleToggleBlock = async () => {
+    setTogglingBlk(true)
+    try {
+      await updateQuota(company.id, { parseBlocked: !company.parseBlocked })
+      toast.success(company.parseBlocked ? 'Parsing unblocked' : 'Parsing blocked')
+    } catch {
+      toast.error('Failed to update block status')
+    } finally {
+      setTogglingBlk(false)
     }
   }
 
@@ -239,6 +288,105 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
             More features can be added to the catalogue as needed.
           </p>
         </div>
+
+        {/* Subscription & Quota */}
+        <div className="px-5 py-5 border-t border-gray-700/50">
+          <div className="flex items-center gap-2 mb-4">
+            <CreditCard size={14} className="text-teal-400" />
+            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Subscription & Quota</p>
+          </div>
+
+          {/* Usage bar */}
+          {(() => {
+            const used  = company.parseBillsUsed  ?? 0
+            const limit = company.parseBillsLimit ?? 50
+            const pct   = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+            const expiresAt = company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt) : null
+            const renewedAt = company.subscriptionRenewedAt ? new Date(company.subscriptionRenewedAt) : null
+            const isExpired = expiresAt && expiresAt < new Date()
+            const barColor  = company.parseBlocked || isExpired ? 'bg-red-500' : pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-400' : 'bg-teal-500'
+            return (
+              <div className="mb-4 space-y-1.5">
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-gray-400">Bills parsed this period</span>
+                  <span className={cn('font-semibold', company.parseBlocked || isExpired ? 'text-red-400' : 'text-gray-200')}>{used} / {limit}</span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div className={cn('h-full rounded-full', barColor)} style={{ width: `${pct}%` }} />
+                </div>
+                {renewedAt && <p className="text-[10px] text-gray-500">Last renewed: {renewedAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>}
+                {expiresAt && (
+                  <p className={cn('text-[10px]', isExpired ? 'text-red-400' : 'text-gray-500')}>
+                    {isExpired ? 'Expired: ' : 'Expires: '}
+                    {expiresAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Plan quick-select */}
+          <p className="text-[10px] text-gray-400 mb-1.5">Select plan</p>
+          <div className="flex gap-1.5 mb-3">
+            {PLANS.map((p) => (
+              <button
+                key={p.bills}
+                onClick={() => { setPlanLimit(String(p.bills)); setExpiryDate(defaultExpiry()) }}
+                className={cn(
+                  'flex-1 py-1 rounded-lg text-[11px] font-semibold border transition-colors',
+                  planLimit === String(p.bills)
+                    ? 'bg-teal-500 border-teal-400 text-white'
+                    : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-teal-500',
+                )}
+              >
+                {p.label}<br /><span className="text-[10px] font-normal opacity-75">{p.bills} bills</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Custom limit + expiry */}
+          <div className="space-y-2 mb-3">
+            <div>
+              <label className="block text-[10px] text-gray-400 mb-1">Custom limit</label>
+              <input
+                type="number"
+                min={1}
+                value={planLimit}
+                onChange={(e) => setPlanLimit(e.target.value)}
+                className="w-full text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-400 mb-1">Subscription expiry</label>
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="w-full text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+          </div>
+
+          <Button variant="primary" size="sm" loading={renewing} onClick={handleRenew} className="w-full mb-3">
+            Renew Subscription
+          </Button>
+
+          {/* Block toggle */}
+          <button
+            onClick={handleToggleBlock}
+            disabled={togglingBlk}
+            className={cn(
+              'w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+              company.parseBlocked
+                ? 'bg-gray-700 border-gray-600 text-gray-300 hover:border-teal-500'
+                : 'bg-red-900/30 border-red-700/50 text-red-400 hover:bg-red-900/50',
+              togglingBlk && 'opacity-50 cursor-not-allowed',
+            )}
+          >
+            <Ban size={12} />
+            {company.parseBlocked ? 'Unblock Parsing' : 'Block Parsing'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -273,7 +421,7 @@ export default function AdminCompanies() {
           <table className="w-full border-collapse" aria-label="Companies">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                {['Company', 'GSTIN', 'Bills', 'Port', 'Tally Mapping', 'Features', ''].map((h) => (
+                {['Company', 'GSTIN', 'Bills', 'Quota', 'Port', 'Tally Mapping', 'Features', ''].map((h) => (
                   <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                     {h}
                   </th>
@@ -288,6 +436,23 @@ export default function AdminCompanies() {
                     <td className="px-4 py-3 text-sm font-semibold text-gray-800">{c.name}</td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-500">{c.gstin || '—'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{c.totalBills}</td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const used  = c.parseBillsUsed  ?? 0
+                        const limit = c.parseBillsLimit ?? 50
+                        const expiresAt = c.subscriptionExpiresAt ? new Date(c.subscriptionExpiresAt) : null
+                        const isExpired = expiresAt && expiresAt < new Date()
+                        const color = c.parseBlocked || isExpired
+                          ? 'text-red-600' : used >= limit ? 'text-amber-600' : 'text-gray-700'
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <span className={cn('text-xs font-semibold', color)}>{used} / {limit}</span>
+                            {c.parseBlocked && <span className="text-[10px] font-medium text-red-500">Blocked</span>}
+                            {!c.parseBlocked && isExpired && <span className="text-[10px] font-medium text-red-500">Expired</span>}
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-500">:{c.port}</td>
                     <td className="px-4 py-3">
                       {c.mapping ? <StatusBadge status="synced" /> : <StatusBadge status="pending" />}

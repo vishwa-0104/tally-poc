@@ -8,6 +8,7 @@ export async function parseBillWithAI(
   file: File,
   onProgress?: (step: number) => void,
   billType: 'purchase' | 'misc' = 'purchase',
+  companyId?: string,
 ): Promise<ParsedBillData> {
   onProgress?.(0)
   const base64 = await fileToBase64(file)
@@ -17,6 +18,7 @@ export async function parseBillWithAI(
     base64,
     mediaType: file.type,
     billType,
+    companyId,
   })
 
   onProgress?.(2)

@@ -17,6 +17,8 @@ export const MOCK_COMPANIES: Company[] = [
       input_cgst_2_5:  'Input CGST @2.5%',
       input_sgst_2_5:  'Input SGST @2.5%',
     },
+    parseBillsLimit: 50, parseBillsUsed: 28, parseBlocked: false,
+    subscriptionExpiresAt: null, subscriptionRenewedAt: null,
     createdAt: '2025-01-10T00:00:00Z',
   },
   {
@@ -36,6 +38,8 @@ export const MOCK_COMPANIES: Company[] = [
       input_sgst_9:    'Input SGST @9%',
       igst_18:         'Input IGST @18%',
     },
+    parseBillsLimit: 50, parseBillsUsed: 15, parseBlocked: false,
+    subscriptionExpiresAt: null, subscriptionRenewedAt: null,
     createdAt: '2025-01-15T00:00:00Z',
   },
   {
@@ -50,6 +54,8 @@ export const MOCK_COMPANIES: Company[] = [
     errorBills: 0,
     voucherCounter: 0,
     mapping: null,
+    parseBillsLimit: 50, parseBillsUsed: 9, parseBlocked: false,
+    subscriptionExpiresAt: null, subscriptionRenewedAt: null,
     createdAt: '2025-02-01T00:00:00Z',
   },
 ]

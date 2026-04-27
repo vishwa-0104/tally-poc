@@ -51,7 +51,12 @@ model Company {
   email          String?
   port           Int            @default(9000)
   mapping        Json?
-  voucherCounter Int            @default(0)
+  voucherCounter         Int       @default(0)
+  parseBillsLimit        Int       @default(50)
+  parseBillsUsed         Int       @default(0)
+  parseBlocked           Boolean   @default(false)
+  subscriptionExpiresAt  DateTime?
+  subscriptionRenewedAt  DateTime?
   bills            Bill[]
   linkedUsers      UserCompany[]
   ledgerCache      LedgerCache[]
