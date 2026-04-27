@@ -393,7 +393,7 @@ export function MappingForm({
               <>
                 <LedgerInput
                   id="cgst-5"
-                  label="CGST (5%)"
+                  label="CGST (2.5%)"
                   required
                   ledgers={ledgers}
                   pinnedNames={prefillCgst5 ? [prefillCgst5] : []}
@@ -401,7 +401,7 @@ export function MappingForm({
                 />
                 <LedgerInput
                   id="sgst-5"
-                  label="SGST (5%)"
+                  label="SGST (2.5%)"
                   required
                   ledgers={ledgers}
                   pinnedNames={prefillSgst5 ? [prefillSgst5] : []}
@@ -413,7 +413,7 @@ export function MappingForm({
               <>
                 <LedgerInput
                   id="cgst-18"
-                  label="CGST (18%)"
+                  label="CGST (9%)"
                   required
                   ledgers={ledgers}
                   pinnedNames={prefillCgst18 ? [prefillCgst18] : []}
@@ -421,7 +421,7 @@ export function MappingForm({
                 />
                 <LedgerInput
                   id="sgst-18"
-                  label="SGST (18%)"
+                  label="SGST (9%)"
                   required
                   ledgers={ledgers}
                   pinnedNames={prefillSgst18 ? [prefillSgst18] : []}
