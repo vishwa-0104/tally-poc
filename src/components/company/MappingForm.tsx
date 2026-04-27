@@ -596,7 +596,7 @@ export function MappingForm({
             <table className="w-full border-collapse text-xs" aria-label="Line items">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[440px]">Description</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[380px]">Description</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">HSN</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Qty</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit</th>
