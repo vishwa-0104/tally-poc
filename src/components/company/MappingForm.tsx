@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { CreateStockItemModal } from '@/components/company/CreateStockItemModal'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
 import type { Bill, TallyGodown, TallyLedger, TallyStockUnit, LedgerMapping, StockItemAlias } from '@/types'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, decodeHtmlEntities } from '@/lib/utils'
 
 
 interface LedgerInputProps {
@@ -106,7 +106,7 @@ interface MappingFormProps {
 
 export function MappingForm({
   bill,
-  ledgers,
+  ledgers: rawLedgers,
   ledgersLoading,
   stockItems,
   saving,
@@ -125,6 +125,13 @@ export function MappingForm({
   onSyncToTally,
 }: MappingFormProps) {
   const [createItemRowIndex, setCreateItemRowIndex] = useState<number | null>(null)
+
+  // Decode HTML entities in ledger names from existing DB data (&amp; → &, etc.)
+  const ledgers = rawLedgers.map((l) => ({
+    ...l,
+    name:  decodeHtmlEntities(l.name),
+    gstin: l.gstin ? decodeHtmlEntities(l.gstin) : l.gstin,
+  }))
 
   // ── Determine tax type ──────────────────────────────────────────────────────
   const isInterstate = bill.igstAmount > 0
