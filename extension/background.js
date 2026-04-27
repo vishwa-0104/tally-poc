@@ -105,11 +105,11 @@ async function handleFetchLedgers(tallyUrl, tallyCompany) {
             <NATIVEMETHOD>Name</NATIVEMETHOD>
             <NATIVEMETHOD>Parent</NATIVEMETHOD>
             <NATIVEMETHOD>PartyGSTIN</NATIVEMETHOD>
-            <NATIVEMETHOD>GSTIN</NATIVEMETHOD>
             <NATIVEMETHOD>LedgerAddress</NATIVEMETHOD>
             <NATIVEMETHOD>StateName</NATIVEMETHOD>
             <NATIVEMETHOD>OpeningBalance</NATIVEMETHOD>
             <NATIVEMETHOD>GSTRegistrationType</NATIVEMETHOD>
+            <COMPUTE>FETCHEDGSTIN:$PartyGSTIN</COMPUTE>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -118,7 +118,16 @@ async function handleFetchLedgers(tallyUrl, tallyCompany) {
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[Tally ledgers raw]', responseText.slice(0, 5000))
+
+  // Find and log the first ledger block that contains any GSTIN-like string
+  // so we can see the exact tag name Tally is using
+  const gstinPatternInXml = responseText.match(/<LEDGER\b[^>]*>[\s\S]{0,2000}?[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z][\s\S]{0,200}?<\/LEDGER>/i)
+  if (gstinPatternInXml) {
+    console.log('[Tally ledgers GSTIN block sample]', gstinPatternInXml[0])
+  } else {
+    console.log('[Tally ledgers raw - first 8000]', responseText.slice(0, 8000))
+  }
+
   const ledgers = parseLedgers(responseText)
   return { ledgers }
 }
@@ -154,11 +163,19 @@ function parseLedgers(xml) {
       ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
       ?? ''
     )
-    const gstin               = decode(
+    // GSTIN appears under different tag names depending on Tally version:
+    // TallyPrime: <PARTYGSTIN> | Tally ERP 9: <INCOMETAXNUMBER> (used for GSTIN)
+    // TallyPrime nested: <GSTREGISTRATIONDETAILS.LIST><GSTIN>...</GSTIN>
+    const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/
+    const candidateGstin = decode(
       block.match(/<PARTYGSTIN[^>]*>([^<]+)<\/PARTYGSTIN>/i)?.[1]
+      ?? block.match(/<FETCHEDGSTIN[^>]*>([^<]+)<\/FETCHEDGSTIN>/i)?.[1]
+      ?? block.match(/<GSTREGISTRATIONDETAILS\.LIST[^>]*>[\s\S]*?<GSTIN[^>]*>([^<\s]+)<\/GSTIN>/i)?.[1]
       ?? block.match(/<GSTIN[^>]*>([^<]+)<\/GSTIN>/i)?.[1]
+      ?? block.match(/<INCOMETAXNUMBER[^>]*>([^<]+)<\/INCOMETAXNUMBER>/i)?.[1]
       ?? ''
-    ) || undefined
+    )
+    const gstin = GSTIN_RE.test(candidateGstin) ? candidateGstin : undefined
     const state               = decode(block.match(/<STATENAME[^>]*>([^<]+)<\/STATENAME>/i)?.[1]) || undefined
     const openingBalance      = decode(block.match(/<OPENINGBALANCE[^>]*>([^<]+)<\/OPENINGBALANCE>/i)?.[1]) || undefined
     const gstRegistrationType = decode(block.match(/<GSTREGISTRATIONTYPE[^>]*>([^<]+)<\/GSTREGISTRATIONTYPE>/i)?.[1]) || undefined
