@@ -275,13 +275,14 @@ export function MappingForm({
   const watchedLineItems = watch('lineItems')
   const watchedRoundOff  = watch('roundOffAmount')
 
-  // Round off mismatch check — only when bill has a round off value
+  // Round off mismatch check — expected = totalAmount − (subtotal + taxes)
+  // Same formula used server-side when correcting the AI-parsed sign.
   let roundOffSuggestion: number | null = null
   if (hasRoundOff) {
     const recomputedSubtotal = (watchedLineItems ?? bill.lineItems)
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
     const net      = recomputedSubtotal + bill.cgstAmount + bill.sgstAmount + bill.igstAmount
-    const expected = parseFloat((Math.round(net) - net).toFixed(2))
+    const expected = parseFloat((bill.totalAmount + (bill.invoiceDiscountAmount ?? 0) - net).toFixed(2))
     if (Math.abs(expected - Number(watchedRoundOff)) >= 0.01) {
       roundOffSuggestion = expected
     }

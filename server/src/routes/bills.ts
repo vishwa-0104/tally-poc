@@ -152,9 +152,24 @@ billsRouter.post('/bills/parse', async (req, res) => {
     const fenced = text.match(/```json\s*([\s\S]*?)```/)
     const jsonStr = fenced ? fenced[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
     const parsed = JSON.parse(jsonStr)
+
+    // Correct sign of roundOffAmount:
+    //   expected = totalAmount + invoiceDiscount − (subtotal + taxes)
+    // Discount is on the credit side (like party), so it must be added back.
+    // Bills print round-off as absolute; the AI may return +0.50 when direction is negative.
+    let roundOffAmount: number | null = parsed.roundOffAmount ?? null
+    if (roundOffAmount != null && roundOffAmount !== 0) {
+      const base     = (parsed.subtotal ?? 0) + (parsed.cgstAmount ?? 0) + (parsed.sgstAmount ?? 0) + (parsed.igstAmount ?? 0)
+      const expected = parseFloat(((parsed.totalAmount ?? 0) + (parsed.invoiceDiscountAmount ?? 0) - base).toFixed(2))
+      // Use computed value only when it matches the AI magnitude (within ±0.05)
+      if (Math.abs(Math.abs(expected) - Math.abs(roundOffAmount)) < 0.05) {
+        roundOffAmount = expected
+      }
+    }
+
     res.json({
       ...parsed,
-      roundOffAmount: parsed.roundOffAmount ?? null,
+      roundOffAmount,
       invoiceDiscountAmount: parsed.invoiceDiscountAmount ?? null,
       lineItems: (parsed.lineItems ?? []).map((item: Record<string, unknown>) => ({
         ...item,
