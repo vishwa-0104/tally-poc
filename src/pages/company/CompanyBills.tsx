@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/Button'
 import { BillsTable, UploadModal } from '@/components/company'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { parseBillWithAI, parsedDataToBill } from '@/services'
-import { cn } from '@/lib/utils'
 
 export default function CompanyBills() {
   const [showUpload, setShowUpload]         = useState(false)
@@ -77,7 +76,7 @@ export default function CompanyBills() {
         actions={
           <>
             <ExtensionStatus />
-            {company && (() => {
+            {/* {company && (() => {
               const used    = company.parseBillsUsed
               const limit   = company.parseBillsLimit
               const pct     = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
@@ -91,7 +90,7 @@ export default function CompanyBills() {
                   {used} / {limit} bills parsed
                 </span>
               )
-            })()}
+            })()} */}
             {bulkParsing && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-medium rounded-full border border-teal-200">
                 <Loader className="w-3 h-3 animate-spin" />
