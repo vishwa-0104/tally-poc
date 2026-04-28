@@ -593,14 +593,45 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
       </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <STOCKITEM NAME="${name}" ACTION="Create">
-            <NAME>${name}</NAME>
-            ${group ? `<PARENT>${group}</PARENT>` : ''}
-            ${unit ? `<BASEUNITS>${unit}</BASEUNITS>` : ''}
-            <GSTAPPLICABLE>${applicable}</GSTAPPLICABLE>
-            ${typeOfSupply ? `<TYPEOFSUPPLY>${typeOfSupply}</TYPEOFSUPPLY>` : ''}
-            ${gstBlock}
-          </STOCKITEM>
+          <STOCKITEM NAME="HSD Bar (TMT) (8MM-550) - Test" ACTION="Create">
+            <NAME>HSD Bar (TMT) (8MM-550) - Test1</NAME>
+            <PARENT>Sariya</PARENT>
+            <BASEUNITS>KG</BASEUNITS>
+            <GSTAPPLICABLE>Applicable</GSTAPPLICABLE>
+            <GSTTYPEOFSUPPLY>Goods</GSTTYPEOFSUPPLY>
+
+            <HSNDETAILS.LIST>
+                <APPLICABLEFROM>20260428</APPLICABLEFROM>
+                <HSNCODE>72142090</HSNCODE>
+                <HSN>HSD BAR</HSN>
+                <SRCOFHSNDETAILS>Specify Details Here</SRCOFHSNDETAILS>
+            </HSNDETAILS.LIST>
+
+            <GSTDETAILS.LIST>
+                <APPLICABLEFROM>20260428</APPLICABLEFROM>
+                <TAXABILITY>Taxable</TAXABILITY>
+                <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
+                <SRCOFGSTDETAILS>Specify Details Here</SRCOFGSTDETAILS>
+                <STATEWISEDETAILS.LIST>
+                    <STATENAME>Any</STATENAME>
+                    <RATEDETAILS.LIST>
+                        <GSTRATEDUTYHEAD>CGST</GSTRATEDUTYHEAD>
+                        <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
+                        <GSTRATE>9</GSTRATE>
+                    </RATEDETAILS.LIST>
+                    <RATEDETAILS.LIST>
+                        <GSTRATEDUTYHEAD>SGST/UTGST</GSTRATEDUTYHEAD>
+                        <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
+                        <GSTRATE>9</GSTRATE>
+                    </RATEDETAILS.LIST>
+                    <RATEDETAILS.LIST>
+                        <GSTRATEDUTYHEAD>IGST</GSTRATEDUTYHEAD>
+                        <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
+                        <GSTRATE>18</GSTRATE>
+                    </RATEDETAILS.LIST>
+                </STATEWISEDETAILS.LIST>
+            </GSTDETAILS.LIST>
+        </STOCKITEM>
         </TALLYMESSAGE>
       </REQUESTDATA>
     </IMPORTDATA>
