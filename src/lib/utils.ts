@@ -253,21 +253,18 @@ export function buildTallyXml(params: {
     : ''
 
   // Round-off — ROUNDTYPE and ROUNDLIMIT match real Tally export.
-  // ISDEEMEDPOSITIVE controls ledger posting direction (Yes=debit, No=credit).
-  // AMOUNT is always negative — consistent with all other non-party entries.
-  // Tally uses the sign of AMOUNT (negative = deduction, positive = addition) for
-  // round-off direction; ISDEEMEDPOSITIVE determines which side of the ledger it posts to.
+  // ISDEEMEDPOSITIVE=Yes means debit (positive roundoff reduces vendor payable).
   const roundOffEntry = params.roundOffAmount && params.roundOffAmount !== 0
     ? `
             <LEDGERENTRIES.LIST>
-              <ROUNDTYPE>Normal Rounding</ROUNDTYPE>
-              <LEDGERNAME>${esc(params.roundOffLedger || 'Round Off')}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>${params.roundOffAmount > 0 ? 'Yes' : 'No'}</ISDEEMEDPOSITIVE>
-              <LEDGERFROMITEM>No</LEDGERFROMITEM>
-              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
-              <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>-${amt(Math.abs(params.roundOffAmount))}</AMOUNT>
-              <ROUNDLIMIT> 1</ROUNDLIMIT>
+             <ROUNDTYPE>Normal Rounding</ROUNDTYPE>
+                <LEDGERNAME>ROUNDED OFF</LEDGERNAME>
+                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                <LEDGERFROMITEM>No</LEDGERFROMITEM>
+                <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+                <ISPARTYLEDGER>No</ISPARTYLEDGER>
+                <AMOUNT>${amt(params.roundOffAmount * -1)}</AMOUNT>
+                <ROUNDLIMIT>1</ROUNDLIMIT>
             </LEDGERENTRIES.LIST>`
     : ''
 
