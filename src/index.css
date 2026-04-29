@@ -94,6 +94,32 @@
   .badge-blue   { @apply bg-brand-50 text-brand-700; }
   .badge-teal   { @apply bg-teal-50 text-teal-700; }
   .badge-gray   { @apply bg-gray-100 text-gray-600; }
+
+  /* Privacy Policy prose */
+  .prose-custom h2 {
+    @apply text-base font-bold text-white mt-8 mb-3;
+  }
+  .prose-custom h3 {
+    @apply text-sm font-semibold text-gray-200 mt-5 mb-2;
+  }
+  .prose-custom ul {
+    @apply list-disc list-outside pl-5 space-y-1.5 mt-2;
+  }
+  .prose-custom ol {
+    @apply list-decimal list-outside pl-5 space-y-1.5 mt-2;
+  }
+  .prose-custom table {
+    @apply w-full text-xs border-collapse;
+  }
+  .prose-custom th {
+    @apply text-left px-3 py-2 bg-gray-800 text-gray-300 font-semibold border border-gray-700;
+  }
+  .prose-custom td {
+    @apply px-3 py-2 border border-gray-700 text-gray-400;
+  }
+  .prose-custom section {
+    @apply border-b border-white/5 pb-8;
+  }
 }
 
 /* Animations */
