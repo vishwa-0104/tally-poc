@@ -165,9 +165,13 @@ companiesRouter.put('/companies/:id/ledgers', async (req, res) => {
           "gstRegistrationType" = EXCLUDED."gstRegistrationType"
       `
     }
-    await tx.ledgerCache.deleteMany({
-      where: { companyId, name: { notIn: incoming.map((l) => l.name) } },
-    })
+    await tx.$executeRaw`
+      DELETE FROM "LedgerCache"
+      WHERE "companyId" = ${companyId}
+      AND name NOT IN (
+        SELECT name FROM json_to_recordset(${JSON.stringify(incoming.map((l) => ({ name: l.name })))}::json) AS s(name text)
+      )
+    `
   }, { timeout: 60000 })
 
   console.log(`[Ledgers] Upserted ${incoming.length} ledgers for company ${companyId}`)
@@ -226,9 +230,13 @@ companiesRouter.put('/companies/:id/stock-items', async (req, res) => {
           unit    = EXCLUDED.unit
       `
     }
-    await tx.stockItemCache.deleteMany({
-      where: { companyId, name: { notIn: incoming.map((i) => i.name) } },
-    })
+    await tx.$executeRaw`
+      DELETE FROM "StockItemCache"
+      WHERE "companyId" = ${companyId}
+      AND name NOT IN (
+        SELECT name FROM json_to_recordset(${JSON.stringify(incoming.map((i) => ({ name: i.name })))}::json) AS s(name text)
+      )
+    `
   }, { timeout: 60000 })
 
   console.log(`[StockItems] Upserted ${incoming.length} items for company ${companyId}`)
@@ -271,17 +279,12 @@ companiesRouter.put('/companies/:id/stock-groups', async (req, res) => {
   const incoming  = result.data
 
   await prisma.$transaction(async (tx) => {
-    for (const g of incoming) {
-      await tx.stockGroupCache.upsert({
-        where:  { companyId_name: { companyId, name: g.name } },
-        update: { parent: g.parent },
-        create: { companyId, name: g.name, parent: g.parent },
-      })
-    }
-    await tx.stockGroupCache.deleteMany({
-      where: { companyId, name: { notIn: incoming.map((g) => g.name) } },
+    await tx.stockGroupCache.deleteMany({ where: { companyId } })
+    await tx.stockGroupCache.createMany({
+      data: incoming.map((g) => ({ companyId, name: g.name, parent: g.parent })),
+      skipDuplicates: true,
     })
-  })
+  }, { timeout: 30000 })
 
   const now = new Date().toISOString()
   await prisma.$executeRaw`
@@ -336,9 +339,13 @@ companiesRouter.put('/companies/:id/stock-units', async (req, res) => {
           symbol = EXCLUDED.symbol
       `
     }
-    await tx.stockUnitCache.deleteMany({
-      where: { companyId, name: { notIn: incoming.map((u) => u.name) } },
-    })
+    await tx.$executeRaw`
+      DELETE FROM "StockUnitCache"
+      WHERE "companyId" = ${companyId}
+      AND name NOT IN (
+        SELECT name FROM json_to_recordset(${JSON.stringify(incoming.map((u) => ({ name: u.name })))}::json) AS s(name text)
+      )
+    `
   }, { timeout: 60000 })
 
   console.log(`[StockUnits] Upserted ${incoming.length} units for company ${companyId}`)
