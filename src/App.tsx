@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import LandingPage    from '@/pages/LandingPage'
 import LoginPage      from '@/pages/LoginPage'
 import PrivacyPolicy  from '@/pages/PrivacyPolicy'
+import TermsAndCondtions from '@/pages/TermsAndConditions'
 
 // Admin layout + pages
 import AdminLayout    from '@/pages/admin/AdminLayout'
@@ -28,6 +29,7 @@ export default function App() {
       <Route path="/login"           element={<LoginPage />} />
       <Route path="/login/:role"     element={<LoginPage />} />
       <Route path="/privacy-policy"  element={<PrivacyPolicy />} />
+      <Route path="/privacy-policy"  element={<TermsAndCondtions />} />
 
       {/* ── Admin portal ── */}
       <Route path="/admin" element={<AdminLayout />}>

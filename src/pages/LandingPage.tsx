@@ -173,6 +173,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <span>© 2026 Invoice Sync. All rights reserved.</span>
           </div>
+          <Link to="/terms_condition" className="text-teal-400 hover:text-teal-300 underline underline-offset-2 transition-colors">Terms & Conditions</Link>
           <Link to="/privacy-policy" className="text-teal-400 hover:text-teal-300 underline underline-offset-2 transition-colors">Privacy Policy</Link>
         </div>
       </footer>
