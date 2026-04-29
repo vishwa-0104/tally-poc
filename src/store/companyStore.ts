@@ -16,7 +16,7 @@ interface CompanyStore {
   updateCompany: (companyId: string, data: { name?: string; gstin?: string | null; port?: number }) => Promise<void>
   updateMapping: (companyId: string, mapping: LedgerMapping) => Promise<void>
   updateCompanyFeature: (companyId: string, feature: string, enabled: boolean) => Promise<void>
-  updateQuota: (companyId: string, data: { parseBillsLimit?: number; parseBlocked?: boolean; subscriptionExpiresAt?: string | null; renew?: boolean }) => Promise<void>
+  updateQuota: (companyId: string, data: { parseBillsLimit?: number; parseBlocked?: boolean; parseModel?: string; subscriptionExpiresAt?: string | null; renew?: boolean }) => Promise<void>
   getCompany: (id: string) => Company | undefined
   setLedgers: (companyId: string, ledgers: TallyLedger[]) => void
   getLedgers: (companyId: string) => TallyLedger[]

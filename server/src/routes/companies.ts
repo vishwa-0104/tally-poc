@@ -72,19 +72,22 @@ companiesRouter.post('/companies', requireAdmin, async (req, res) => {
 
 // PATCH /api/companies/:id/quota — update parse quota and subscription (admin only)
 companiesRouter.patch('/companies/:id/quota', requireAdmin, async (req, res) => {
+  const ALLOWED_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7']
   const schema = z.object({
     parseBillsLimit:       z.number().int().min(0).optional(),
     parseBlocked:          z.boolean().optional(),
+    parseModel:            z.string().refine((m) => ALLOWED_MODELS.includes(m)).optional(),
     subscriptionExpiresAt: z.string().datetime().nullable().optional(),
     renew:                 z.boolean().optional(), // if true: reset parseBillsUsed to 0 + stamp renewedAt
   })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input', details: result.error.flatten() }); return }
 
-  const { parseBillsLimit, parseBlocked, subscriptionExpiresAt, renew } = result.data
+  const { parseBillsLimit, parseBlocked, parseModel, subscriptionExpiresAt, renew } = result.data
   const data: Record<string, unknown> = {}
   if (parseBillsLimit       !== undefined) data.parseBillsLimit = parseBillsLimit
   if (parseBlocked          !== undefined) data.parseBlocked    = parseBlocked
+  if (parseModel            !== undefined) data.parseModel      = parseModel
   if (subscriptionExpiresAt !== undefined) data.subscriptionExpiresAt = subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null
   if (renew) {
     data.parseBillsUsed        = 0
@@ -93,6 +96,60 @@ companiesRouter.patch('/companies/:id/quota', requireAdmin, async (req, res) => 
 
   const company = await prisma.company.update({ where: { id: req.params.id }, data })
   res.json(company)
+})
+
+// GET /api/companies/:id/parse-usage — per-company token & request stats (admin only)
+companiesRouter.get('/companies/:id/parse-usage', requireAdmin, async (req, res) => {
+  const companyId = req.params.id
+
+  const [totals, byModel, daily] = await Promise.all([
+    prisma.parseUsageLog.aggregate({
+      where: { companyId },
+      _count: { id: true },
+      _sum:   { inputTokens: true, outputTokens: true, cacheRead: true, cacheWrite: true },
+    }),
+    prisma.parseUsageLog.groupBy({
+      by: ['model', 'success'],
+      where: { companyId },
+      _count: { id: true },
+      _sum:   { inputTokens: true, outputTokens: true },
+    }),
+    prisma.$queryRaw<{ date: string; requests: bigint; input: bigint; output: bigint }[]>`
+      SELECT
+        TO_CHAR("createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
+        COUNT(*)::bigint                                        AS requests,
+        COALESCE(SUM("inputTokens"), 0)::bigint                AS input,
+        COALESCE(SUM("outputTokens"), 0)::bigint               AS output
+      FROM "ParseUsageLog"
+      WHERE "companyId" = ${companyId}
+        AND "createdAt" >= NOW() - INTERVAL '30 days'
+      GROUP BY 1
+      ORDER BY 1
+    `,
+  ])
+
+  res.json({
+    total: {
+      requests:     totals._count.id,
+      inputTokens:  totals._sum.inputTokens  ?? 0,
+      outputTokens: totals._sum.outputTokens ?? 0,
+      cacheRead:    totals._sum.cacheRead    ?? 0,
+      cacheWrite:   totals._sum.cacheWrite   ?? 0,
+    },
+    byModel: byModel.map((r: typeof byModel[number]) => ({
+      model:        r.model,
+      success:      r.success,
+      requests:     r._count.id,
+      inputTokens:  r._sum.inputTokens  ?? 0,
+      outputTokens: r._sum.outputTokens ?? 0,
+    })),
+    daily: daily.map((r: { date: string; requests: bigint; input: bigint; output: bigint }) => ({
+      date:     r.date,
+      requests: Number(r.requests),
+      input:    Number(r.input),
+      output:   Number(r.output),
+    })),
+  })
 })
 
 // PATCH /api/companies/:id — update name, gstin, port (admin only)

@@ -55,10 +55,12 @@ model Company {
   parseBillsLimit        Int       @default(50)
   parseBillsUsed         Int       @default(0)
   parseBlocked           Boolean   @default(false)
+  parseModel             String    @default("claude-haiku-4-5-20251001")
   subscriptionExpiresAt  DateTime?
   subscriptionRenewedAt  DateTime?
   bills            Bill[]
   linkedUsers      UserCompany[]
+  parseUsageLogs   ParseUsageLog[]
   ledgerCache      LedgerCache[]
   stockItemCache   StockItemCache[]
   stockGroupCache  StockGroupCache[]
@@ -68,6 +70,21 @@ model Company {
   features         CompanyFeature[]
   syncTimestamps   Json?
   createdAt        DateTime       @default(now())
+}
+
+model ParseUsageLog {
+  id           String   @id @default(cuid())
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId    String
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  cacheRead    Int      @default(0)
+  cacheWrite   Int      @default(0)
+  success      Boolean
+  createdAt    DateTime @default(now())
+
+  @@index([companyId, createdAt])
 }
 
 model CompanyFeature {

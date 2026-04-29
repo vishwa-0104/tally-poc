@@ -116,6 +116,9 @@ billsRouter.post('/bills/parse', async (req, res) => {
     return
   }
 
+  const ALLOWED_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7']
+  let model = 'claude-haiku-4-5-20251001'
+
   // Quota enforcement (real AI mode only)
   if (companyId) {
     if (!(await canAccessCompany(req.auth, companyId))) {
@@ -123,7 +126,7 @@ billsRouter.post('/bills/parse', async (req, res) => {
     }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { parseBlocked: true, parseBillsLimit: true, parseBillsUsed: true, subscriptionExpiresAt: true },
+      select: { parseBlocked: true, parseBillsLimit: true, parseBillsUsed: true, subscriptionExpiresAt: true, parseModel: true },
     })
     if (!company) { res.status(404).json({ error: 'Company not found' }); return }
 
@@ -135,6 +138,9 @@ billsRouter.post('/bills/parse', async (req, res) => {
     }
     if (company.parseBillsUsed >= company.parseBillsLimit) {
       res.status(429).json({ error: 'PARSE_LIMIT_EXCEEDED', limit: company.parseBillsLimit, used: company.parseBillsUsed, message: `Your parse limit of ${company.parseBillsLimit} bills has been reached this month. Please contact your administrator to upgrade your plan.` }); return
+    }
+    if (company.parseModel && ALLOWED_MODELS.includes(company.parseModel)) {
+      model = company.parseModel
     }
   }
 
@@ -150,11 +156,15 @@ billsRouter.post('/bills/parse', async (req, res) => {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model,
         max_tokens: 2000,
-        messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: prompt }] }],
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: prompt, cache_control: { type: 'ephemeral' } },
+          contentBlock,
+        ]}],
       }),
     })
   } catch (err) {
@@ -165,12 +175,21 @@ billsRouter.post('/bills/parse', async (req, res) => {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
+    if (companyId) {
+      prisma.parseUsageLog.create({
+        data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
+      }).catch(() => {})
+    }
     res.status(response.status).json({ error: 'AI API error', details: err })
     return
   }
 
-  const data = await response.json() as { content: Array<{ type: string; text: string }> }
+  const data = await response.json() as {
+    content: Array<{ type: string; text: string }>
+    usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+  }
   const text = data.content.find((b) => b.type === 'text')?.text ?? ''
+  const usage = data.usage ?? {}
 
   try {
     const fenced = text.match(/```json\s*([\s\S]*?)```/)
@@ -191,11 +210,22 @@ billsRouter.post('/bills/parse', async (req, res) => {
       }
     }
 
-    // Increment parse counter after successful AI parse
+    // Increment parse counter and log usage after successful AI parse
     if (companyId) {
       await prisma.company.update({
         where: { id: companyId },
         data: { parseBillsUsed: { increment: 1 } },
+      }).catch(() => {})
+      prisma.parseUsageLog.create({
+        data: {
+          companyId,
+          model,
+          inputTokens:  usage.input_tokens ?? 0,
+          outputTokens: usage.output_tokens ?? 0,
+          cacheRead:    usage.cache_read_input_tokens ?? 0,
+          cacheWrite:   usage.cache_creation_input_tokens ?? 0,
+          success: true,
+        },
       }).catch(() => {})
     }
 

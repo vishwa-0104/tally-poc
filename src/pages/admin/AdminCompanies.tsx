@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Warehouse, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
@@ -9,6 +9,30 @@ import { useCompanyStore } from '@/store'
 import { COMPANY_FEATURES } from '@/types'
 import type { Company, CompanyFeature } from '@/types'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
+
+interface ParseUsageStats {
+  total: { requests: number; inputTokens: number; outputTokens: number; cacheRead: number; cacheWrite: number }
+  byModel: { model: string; success: boolean; requests: number; inputTokens: number; outputTokens: number }[]
+  daily:   { date: string; requests: number; input: number; output: number }[]
+}
+
+const MODEL_LABELS: Record<string, string> = {
+  'claude-haiku-4-5-20251001': 'Haiku',
+  'claude-sonnet-4-6':         'Sonnet',
+  'claude-opus-4-7':           'Opus',
+}
+
+function estimateCostInr(inputTokens: number, outputTokens: number, model: string): number {
+  const rates: Record<string, [number, number]> = {
+    'claude-haiku-4-5-20251001': [0.80,  4.00],
+    'claude-sonnet-4-6':         [3.00, 15.00],
+    'claude-opus-4-7':           [15.00, 75.00],
+  }
+  const [inRate, outRate] = rates[model] ?? [3.00, 15.00]
+  const usd = (inputTokens * inRate + outputTokens * outRate) / 1_000_000
+  return parseFloat((usd * 84).toFixed(2))
+}
 
 const PLANS = [
   { label: 'Starter', bills: 50 },
@@ -123,8 +147,17 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
   const [expiryDate,   setExpiryDate]   = useState(() =>
     company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toISOString().split('T')[0] : '',
   )
+  const [parseModel,   setParseModel]   = useState(company.parseModel ?? 'claude-haiku-4-5-20251001')
+  const [savingModel,  setSavingModel]  = useState(false)
   const [renewing,     setRenewing]     = useState(false)
   const [togglingBlk,  setTogglingBlk]  = useState(false)
+  const [usage,        setUsage]        = useState<ParseUsageStats | null>(null)
+
+  useEffect(() => {
+    api.get(`/companies/${company.id}/parse-usage`)
+      .then((r: { data: ParseUsageStats }) => setUsage(r.data))
+      .catch(() => {})
+  }, [company.id])
 
   const handleSave = async () => {
     setSaving(true)
@@ -169,6 +202,18 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
       toast.error('Failed to update block status')
     } finally {
       setTogglingBlk(false)
+    }
+  }
+
+  const handleSaveModel = async () => {
+    setSavingModel(true)
+    try {
+      await updateQuota(company.id, { parseModel })
+      toast.success('Parse model updated')
+    } catch {
+      toast.error('Failed to update model')
+    } finally {
+      setSavingModel(false)
     }
   }
 
@@ -370,6 +415,99 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
           <Button variant="primary" size="sm" loading={renewing} onClick={handleRenew} className="w-full mb-3">
             Renew Subscription
           </Button>
+
+          {/* Parse model */}
+          <div className="mb-3">
+            <label className="block text-[10px] text-gray-400 mb-1">AI Parse Model</label>
+            <div className="flex gap-2">
+              <select
+                value={parseModel}
+                onChange={(e) => setParseModel(e.target.value)}
+                className="flex-1 text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500"
+              >
+                <option value="claude-haiku-4-5-20251001">Haiku — fast &amp; cheap (~₹0.40/bill)</option>
+                <option value="claude-sonnet-4-6">Sonnet — high accuracy (~₹1.50/bill)</option>
+                <option value="claude-opus-4-7">Opus — best accuracy (~₹6/bill)</option>
+              </select>
+              <Button variant="primary" size="sm" loading={savingModel} onClick={handleSaveModel}>
+                Save
+              </Button>
+            </div>
+          </div>
+
+          {/* Parse usage stats */}
+          {usage && (
+            <div className="mt-4 pt-4 border-t border-gray-700/50">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Parse Usage (All Time)</p>
+
+              {/* Totals row */}
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {[
+                  { label: 'Requests', value: usage.total.requests.toLocaleString() },
+                  { label: 'Input Tokens', value: (usage.total.inputTokens + usage.total.cacheRead).toLocaleString() },
+                  { label: 'Output Tokens', value: usage.total.outputTokens.toLocaleString() },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-gray-800 rounded-lg px-2.5 py-2 text-center">
+                    <p className="text-[10px] text-gray-400">{label}</p>
+                    <p className="text-sm font-bold text-white">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* By model breakdown */}
+              {usage.byModel.length > 0 && (
+                <div className="space-y-1.5 mb-3">
+                  {Object.entries(
+                    usage.byModel.reduce<Record<string, { requests: number; inputTokens: number; outputTokens: number; failed: number }>>((acc, r) => {
+                      if (!acc[r.model]) acc[r.model] = { requests: 0, inputTokens: 0, outputTokens: 0, failed: 0 }
+                      acc[r.model].requests    += r.requests
+                      acc[r.model].inputTokens += r.inputTokens
+                      acc[r.model].outputTokens += r.outputTokens
+                      if (!r.success) acc[r.model].failed += r.requests
+                      return acc
+                    }, {})
+                  ).map(([model, stats]) => (
+                    <div key={model} className="flex items-center justify-between bg-gray-800/60 rounded-lg px-2.5 py-1.5">
+                      <div>
+                        <span className="text-xs font-medium text-gray-200">{MODEL_LABELS[model] ?? model}</span>
+                        {stats.failed > 0 && <span className="ml-1.5 text-[10px] text-red-400">{stats.failed} failed</span>}
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-300">{stats.requests} reqs</p>
+                        <p className="text-[10px] text-teal-400 font-medium">
+                          ₹{estimateCostInr(stats.inputTokens, stats.outputTokens, model)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Last 7 days */}
+              {usage.daily.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-gray-500 mb-1.5">Last 30 days activity</p>
+                  <div className="flex items-end gap-0.5 h-10">
+                    {usage.daily.slice(-30).map((d) => {
+                      const max = Math.max(...usage.daily.map((x) => x.requests), 1)
+                      const pct = Math.max((d.requests / max) * 100, 8)
+                      return (
+                        <div key={d.date} className="flex-1 relative group">
+                          <div
+                            className="bg-teal-500/70 hover:bg-teal-400 rounded-sm transition-colors"
+                            style={{ height: `${pct}%` }}
+                          />
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-gray-700 text-[10px] text-white px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                            {d.date}: {d.requests} req
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Block toggle */}
           <button
