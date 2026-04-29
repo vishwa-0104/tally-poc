@@ -161,10 +161,8 @@ billsRouter.post('/bills/parse', async (req, res) => {
       body: JSON.stringify({
         model,
         max_tokens: 2000,
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: prompt, cache_control: { type: 'ephemeral' } },
-          contentBlock,
-        ]}],
+        system: [{ type: 'text', text: prompt, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: [contentBlock] }],
       }),
     })
   } catch (err) {
