@@ -72,10 +72,15 @@ companiesRouter.post('/companies', requireAdmin, async (req, res) => {
 
 // PATCH /api/companies/:id/quota — update parse quota and subscription (admin only)
 companiesRouter.patch('/companies/:id/quota', requireAdmin, async (req, res) => {
-  const ALLOWED_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7']
+  const ALLOWED_SERVICES = ['gemini', 'anthropic']
+  const ALLOWED_MODELS   = [
+    'gemini-flash-latest', 'gemini-3.1-flash', 'gemini-2.0-flash',
+    'claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7',
+  ]
   const schema = z.object({
     parseBillsLimit:       z.number().int().min(0).optional(),
     parseBlocked:          z.boolean().optional(),
+    parseService:          z.string().refine((s) => ALLOWED_SERVICES.includes(s)).optional(),
     parseModel:            z.string().refine((m) => ALLOWED_MODELS.includes(m)).optional(),
     subscriptionExpiresAt: z.string().datetime().nullable().optional(),
     renew:                 z.boolean().optional(), // if true: reset parseBillsUsed to 0 + stamp renewedAt
@@ -83,10 +88,11 @@ companiesRouter.patch('/companies/:id/quota', requireAdmin, async (req, res) => 
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input', details: result.error.flatten() }); return }
 
-  const { parseBillsLimit, parseBlocked, parseModel, subscriptionExpiresAt, renew } = result.data
+  const { parseBillsLimit, parseBlocked, parseService, parseModel, subscriptionExpiresAt, renew } = result.data
   const data: Record<string, unknown> = {}
   if (parseBillsLimit       !== undefined) data.parseBillsLimit = parseBillsLimit
   if (parseBlocked          !== undefined) data.parseBlocked    = parseBlocked
+  if (parseService          !== undefined) data.parseService    = parseService
   if (parseModel            !== undefined) data.parseModel      = parseModel
   if (subscriptionExpiresAt !== undefined) data.subscriptionExpiresAt = subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null
   if (renew) {

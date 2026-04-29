@@ -55,7 +55,8 @@ model Company {
   parseBillsLimit        Int       @default(50)
   parseBillsUsed         Int       @default(0)
   parseBlocked           Boolean   @default(false)
-  parseModel             String    @default("claude-haiku-4-5-20251001")
+  parseService           String    @default("gemini")
+  parseModel             String    @default("gemini-flash-latest")
   subscriptionExpiresAt  DateTime?
   subscriptionRenewedAt  DateTime?
   bills            Bill[]

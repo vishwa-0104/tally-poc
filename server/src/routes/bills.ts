@@ -100,33 +100,25 @@ billsRouter.delete('/bills/:id', async (req, res) => {
   res.status(204).send()
 })
 
-// POST /api/bills/parse — AI parse a bill image/PDF (Anthropic key stays server-side)
+const GEMINI_MODELS    = ['gemini-flash-latest', 'gemini-3.1-flash', 'gemini-2.0-flash']
+const ANTHROPIC_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7']
+
+// POST /api/bills/parse — AI parse a bill image/PDF
 billsRouter.post('/bills/parse', async (req, res) => {
   const { base64, mediaType, billType, companyId } = req.body as {
     base64: string; mediaType: string; billType?: string; companyId?: string
   }
-  const prompt = billType === 'misc' ? MISC_PARSE_PROMPT : PARSE_PROMPT
+  let parseService = 'gemini'
+  let model        = 'gemini-flash-latest'
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-
-  // Return mock data if no API key configured (dev mode — skip quota)
-  if (!apiKey) {
-    await new Promise((r) => setTimeout(r, 2000))
-    res.json(MOCK_PARSED_BILL())
-    return
-  }
-
-  const ALLOWED_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7']
-  let model = 'claude-haiku-4-5-20251001'
-
-  // Quota enforcement (real AI mode only)
+  // Quota enforcement
   if (companyId) {
     if (!(await canAccessCompany(req.auth, companyId))) {
       res.status(403).json({ error: 'Forbidden' }); return
     }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { parseBlocked: true, parseBillsLimit: true, parseBillsUsed: true, subscriptionExpiresAt: true, parseModel: true },
+      select: { parseBlocked: true, parseBillsLimit: true, parseBillsUsed: true, subscriptionExpiresAt: true, parseService: true, parseModel: true },
     })
     if (!company) { res.status(404).json({ error: 'Company not found' }); return }
 
@@ -139,60 +131,142 @@ billsRouter.post('/bills/parse', async (req, res) => {
     if (company.parseBillsUsed >= company.parseBillsLimit) {
       res.status(429).json({ error: 'PARSE_LIMIT_EXCEEDED', limit: company.parseBillsLimit, used: company.parseBillsUsed, message: `Your parse limit of ${company.parseBillsLimit} bills has been reached this month. Please contact your administrator to upgrade your plan.` }); return
     }
-    if (company.parseModel && ALLOWED_MODELS.includes(company.parseModel)) {
-      model = company.parseModel
-    }
+
+    parseService = company.parseService ?? 'gemini'
+    const dbModel = company.parseModel ?? ''
+    // Use DB model only when it matches the configured service
+    if (parseService === 'gemini' && GEMINI_MODELS.includes(dbModel))            model = dbModel
+    else if (parseService === 'anthropic' && ANTHROPIC_MODELS.includes(dbModel)) model = dbModel
+    else model = parseService === 'anthropic' ? 'claude-haiku-4-5-20251001' : 'gemini-flash-latest'
   }
 
-  const contentBlock = mediaType === 'application/pdf'
-    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
-    : { type: 'image',    source: { type: 'base64', media_type: mediaType,          data: base64 } }
+  const isMiscBill = billType === 'misc'
+  const prompt = parseService === 'gemini'
+    ? (isMiscBill ? GEMINI_MISC_PARSE_PROMPT : GEMINI_PARSE_PROMPT)
+    : (isMiscBill ? MISC_PARSE_PROMPT        : PARSE_PROMPT)
 
-  let response: Response
-  try {
-    response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'prompt-caching-2024-07-31',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2000,
-        system: [{ type: 'text', text: prompt, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: [contentBlock] }],
-      }),
-    })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Network error'
-    res.status(503).json({ error: 'Could not reach Anthropic API. Check internet connectivity.', details: msg })
+  const apiKey = parseService === 'anthropic'
+    ? process.env.ANTHROPIC_API_KEY
+    : process.env.GEMINI_API_KEY
+
+  // Return mock data if no API key configured (dev mode — skip quota)
+  if (!apiKey) {
+    await new Promise((r) => setTimeout(r, 2000))
+    res.json(MOCK_PARSED_BILL())
     return
   }
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}))
-    if (companyId) {
-      prisma.parseUsageLog.create({
-        data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
-      }).catch(() => {})
-    }
-    res.status(response.status).json({ error: 'AI API error', details: err })
-    return
+  interface ParsedUsage {
+    input_tokens: number
+    output_tokens: number
+    cache_read_input_tokens?: number
+    cache_creation_input_tokens?: number
   }
 
-  const data = await response.json() as {
-    content: Array<{ type: string; text: string }>
-    usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+  let text: string
+  let usage: ParsedUsage
+
+  if (parseService === 'gemini') {
+    let geminiRes: Response
+    try {
+      geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: prompt }] },
+            contents: [{ role: 'user', parts: [{ inline_data: { mime_type: mediaType, data: base64 } }] }],
+            generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json' },
+          }),
+        }
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Network error'
+      res.status(503).json({ error: 'Could not reach Gemini API. Check internet connectivity.', details: msg })
+      return
+    }
+
+    if (!geminiRes.ok) {
+      const err = await geminiRes.json().catch(() => ({}))
+      if (companyId) {
+        prisma.parseUsageLog.create({
+          data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
+        }).catch(() => {})
+      }
+      res.status(geminiRes.status).json({ error: 'Gemini API error', details: err })
+      return
+    }
+
+    const geminiData = await geminiRes.json() as {
+      candidates: Array<{ content: { parts: Array<{ text: string }> } }>
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number }
+    }
+    text  = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    usage = {
+      input_tokens:  geminiData.usageMetadata?.promptTokenCount    ?? 0,
+      output_tokens: geminiData.usageMetadata?.candidatesTokenCount ?? 0,
+    }
+  } else {
+    // Anthropic
+    const contentBlock = mediaType === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+      : { type: 'image',    source: { type: 'base64', media_type: mediaType,          data: base64 } }
+
+    let anthropicRes: Response
+    try {
+      anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 2000,
+          system: [{ type: 'text', text: prompt, cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content: [contentBlock] }],
+        }),
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Network error'
+      res.status(503).json({ error: 'Could not reach Anthropic API. Check internet connectivity.', details: msg })
+      return
+    }
+
+    if (!anthropicRes.ok) {
+      const err = await anthropicRes.json().catch(() => ({}))
+      if (companyId) {
+        prisma.parseUsageLog.create({
+          data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
+        }).catch(() => {})
+      }
+      res.status(anthropicRes.status).json({ error: 'AI API error', details: err })
+      return
+    }
+
+    const anthropicData = await anthropicRes.json() as {
+      content: Array<{ type: string; text: string }>
+      usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+    }
+    text  = anthropicData.content.find((b) => b.type === 'text')?.text ?? ''
+    usage = anthropicData.usage ?? {}
   }
-  const text = data.content.find((b) => b.type === 'text')?.text ?? ''
-  const usage = data.usage ?? {}
 
   try {
-    const fenced = text.match(/```json\s*([\s\S]*?)```/)
-    const jsonStr = fenced ? fenced[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
-    const parsed = JSON.parse(jsonStr)
+    // Gemini with responseMimeType returns raw JSON; Claude wraps in ```json``` fences.
+    // Try direct parse first, fall back to fence extraction.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let parsed: any
+    try {
+      parsed = JSON.parse(text.trim())
+    } catch {
+      const fenced = text.match(/```json\s*([\s\S]*?)```/)
+      const jsonStr = fenced ? fenced[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
+      parsed = JSON.parse(jsonStr)
+    }
 
     // Correct sign of roundOffAmount:
     //   expected = totalAmount + invoiceDiscount − (subtotal + taxes)
@@ -247,6 +321,71 @@ billsRouter.post('/bills/parse', async (req, res) => {
 function normalizeBill(bill: Record<string, unknown> & { status: string; lineItems?: unknown[] }) {
   return { ...bill, status: bill.status.toLowerCase() }
 }
+
+const GEMINI_PARSE_PROMPT = `Extract structured data from an Indian GST purchase bill (printed or handwritten) and return ONLY a raw JSON object — no markdown, no code fences, no explanation.
+
+PARTIES
+- vendorName/vendorGstin: the business that ISSUED the bill (top of bill, "From"/"Supplier"/"Sold by"). GSTIN is 15 chars near their name.
+- buyerGstin: GSTIN in the "Bill to"/"Consignee" section. If ambiguous, assign to vendorGstin.
+
+DISCOUNT PATTERN & MULTI-COLUMN LOGIC
+- Pattern A (per-line): each line has Discount%. amount = Qty × unitPrice × (1 − disc%/100).
+- Pattern B (invoice-level): lines show gross amounts, one discount deducted at bottom. amount = Qty × unitPrice × (subtotal / grossTotal).
+- MULTI-COLUMN RULE: If an invoice has multiple discount columns (e.g., 'Payment Discount', 'Special Discount', 'Cash Disc'), lineItem.discountAmount MUST be the SUM of all these values for that specific line.
+
+FIELD RULES
+- lineItem.amount: This is the "Value Before Tax" or "Taxable Value" printed on the bill. NEVER include GST.
+- lineItem.unitPrice: The original/gross rate per unit before any deductions.
+- lineItem.discountAmount: The total ₹ value deducted from the line item. If multiple discount columns exist, sum them.
+- lineItem.gstRate: The COMBINED GST percentage (CGST% + SGST% or IGST%).
+- Verify: (qty × unitPrice) - lineItem.discountAmount ≈ lineItem.amount.
+- lineItem.unit: read from bill (Ltr/Kg/Pc/Pkt/Strip/Ctn/Nos). Default: "blank".
+
+VERIFICATION & HIERARCHY
+- The "Value Before Tax" printed on the invoice is the absolute truth for lineItem.amount.
+- subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount.
+
+NUMERIC RULES: dot = decimal (1.50 not 150), comma = thousands separator (1,450.50 → 1450.50). Copy numbers exactly. Missing optional fields → null.
+
+Return this exact JSON structure:
+{
+  "vendorName": string,
+  "vendorGstin": string | null,
+  "buyerGstin": string | null,
+  "billNumber": string,
+  "billDate": "YYYY-MM-DD",
+  "lineItems": [{ "description": string, "hsnCode": string | null, "quantity": number, "unit": string, "unitPrice": number, "discountPercent": number | null, "discountAmount": number | null, "gstRate": number, "amount": number }],
+  "subtotal": number,
+  "cgstAmount": number,
+  "sgstAmount": number,
+  "igstAmount": number,
+  "totalAmount": number,
+  "roundOffAmount": number | null,
+  "invoiceDiscountAmount": number | null
+}`
+
+const GEMINI_MISC_PARSE_PROMPT = `Extract structured data from an Indian GST expense/misc bill (stationery, repairs, services, office supplies) and return ONLY a raw JSON object — no markdown, no code fences, no explanation.
+
+- vendorName/vendorGstin: supplier name and 15-char GSTIN (or null).
+- buyerGstin: buyer GSTIN from "Bill to" section or null.
+- billNumber, billDate ("YYYY-MM-DD").
+- lineItems: one per expense line. description = item name. amount = pre-tax amount (distribute proportionally if only bill-level tax shown). quantity=1, unit="Nos", unitPrice=amount, hsnCode="", gstRate=0, discountPercent=null.
+- subtotal: sum of all lineItem amounts (pre-tax).
+- cgstAmount/sgstAmount/igstAmount: from bill labels, 0 if absent.
+- totalAmount: final grand total.
+- roundOffAmount: null if absent.
+- invoiceDiscountAmount: null.
+
+VERIFY: subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount
+
+Return this exact JSON structure:
+{
+  "vendorName": string, "vendorGstin": string | null, "buyerGstin": string | null,
+  "billNumber": string, "billDate": "YYYY-MM-DD",
+  "lineItems": [{ "description": string, "amount": number, "quantity": 1, "unit": "Nos", "unitPrice": number, "hsnCode": "", "gstRate": 0, "discountPercent": null }],
+  "subtotal": number, "cgstAmount": number, "sgstAmount": number, "igstAmount": number,
+  "totalAmount": number, "roundOffAmount": number | null, "invoiceDiscountAmount": null
+}`
 
 const PARSE_PROMPT = `Extract structured data from an Indian GST purchase bill (printed or handwritten) and return a single JSON object wrapped in \`\`\`json ... \`\`\`.
 

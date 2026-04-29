@@ -82,6 +82,7 @@ export interface Company {
   parseBillsLimit: number
   parseBillsUsed: number
   parseBlocked: boolean
+  parseService: string
   parseModel: string
   subscriptionExpiresAt: string | null
   subscriptionRenewedAt: string | null

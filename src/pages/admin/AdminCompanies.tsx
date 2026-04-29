@@ -18,13 +18,37 @@ interface ParseUsageStats {
 }
 
 const MODEL_LABELS: Record<string, string> = {
-  'claude-haiku-4-5-20251001': 'Haiku',
-  'claude-sonnet-4-6':         'Sonnet',
-  'claude-opus-4-7':           'Opus',
+  'gemini-flash-latest':       'Gemini Flash Latest',
+  'gemini-3.1-flash':          'Gemini Flash 3.1',
+  'gemini-2.0-flash':          'Gemini Flash 2.0',
+  'claude-haiku-4-5-20251001': 'Claude Haiku',
+  'claude-sonnet-4-6':         'Claude Sonnet',
+  'claude-opus-4-7':           'Claude Opus',
+}
+
+const SERVICE_MODELS: Record<string, { value: string; label: string }[]> = {
+  gemini: [
+    { value: 'gemini-flash-latest', label: 'Flash Latest — always up-to-date (~₹0.01/bill)' },
+    { value: 'gemini-3.1-flash',    label: 'Flash 3.1 (~₹0.01/bill)' },
+    { value: 'gemini-2.0-flash',    label: 'Flash 2.0 (~₹0.01/bill)' },
+  ],
+  anthropic: [
+    { value: 'claude-haiku-4-5-20251001', label: 'Haiku — fast & cheap (~₹0.40/bill)' },
+    { value: 'claude-sonnet-4-6',         label: 'Sonnet — high accuracy (~₹1.50/bill)' },
+    { value: 'claude-opus-4-7',           label: 'Opus — best accuracy (~₹6/bill)' },
+  ],
+}
+
+const SERVICE_DEFAULT_MODEL: Record<string, string> = {
+  gemini:    'gemini-flash-latest',
+  anthropic: 'claude-haiku-4-5-20251001',
 }
 
 function estimateCostInr(inputTokens: number, outputTokens: number, model: string): number {
   const rates: Record<string, [number, number]> = {
+    'gemini-flash-latest': [0.075, 0.30],
+    'gemini-3.1-flash':    [0.075, 0.30],
+    'gemini-2.0-flash':    [0.075, 0.30],
     'claude-haiku-4-5-20251001': [0.80,  4.00],
     'claude-sonnet-4-6':         [3.00, 15.00],
     'claude-opus-4-7':           [15.00, 75.00],
@@ -147,7 +171,8 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
   const [expiryDate,   setExpiryDate]   = useState(() =>
     company.subscriptionExpiresAt ? new Date(company.subscriptionExpiresAt).toISOString().split('T')[0] : '',
   )
-  const [parseModel,   setParseModel]   = useState(company.parseModel ?? 'claude-haiku-4-5-20251001')
+  const [parseService, setParseService] = useState(company.parseService ?? 'gemini')
+  const [parseModel,   setParseModel]   = useState(company.parseModel ?? 'gemini-2.0-flash-latest')
   const [savingModel,  setSavingModel]  = useState(false)
   const [renewing,     setRenewing]     = useState(false)
   const [togglingBlk,  setTogglingBlk]  = useState(false)
@@ -205,13 +230,18 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
     }
   }
 
+  const handleServiceChange = (svc: string) => {
+    setParseService(svc)
+    setParseModel(SERVICE_DEFAULT_MODEL[svc] ?? '')
+  }
+
   const handleSaveModel = async () => {
     setSavingModel(true)
     try {
-      await updateQuota(company.id, { parseModel })
-      toast.success('Parse model updated')
+      await updateQuota(company.id, { parseService, parseModel })
+      toast.success('AI service updated')
     } catch {
-      toast.error('Failed to update model')
+      toast.error('Failed to update AI service')
     } finally {
       setSavingModel(false)
     }
@@ -416,18 +446,27 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
             Renew Subscription
           </Button>
 
-          {/* Parse model */}
+          {/* AI service + model */}
           <div className="mb-3">
-            <label className="block text-[10px] text-gray-400 mb-1">AI Parse Model</label>
+            <label className="block text-[10px] text-gray-400 mb-1">AI Service</label>
+            <select
+              value={parseService}
+              onChange={(e) => handleServiceChange(e.target.value)}
+              className="w-full text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500 mb-2"
+            >
+              <option value="gemini">Google Gemini</option>
+              <option value="anthropic">Anthropic Claude</option>
+            </select>
+            <label className="block text-[10px] text-gray-400 mb-1">AI Model</label>
             <div className="flex gap-2">
               <select
                 value={parseModel}
                 onChange={(e) => setParseModel(e.target.value)}
                 className="flex-1 text-xs bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-teal-500"
               >
-                <option value="claude-haiku-4-5-20251001">Haiku — fast &amp; cheap (~₹0.40/bill)</option>
-                <option value="claude-sonnet-4-6">Sonnet — high accuracy (~₹1.50/bill)</option>
-                <option value="claude-opus-4-7">Opus — best accuracy (~₹6/bill)</option>
+                {(SERVICE_MODELS[parseService] ?? []).map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
               </select>
               <Button variant="primary" size="sm" loading={savingModel} onClick={handleSaveModel}>
                 Save
