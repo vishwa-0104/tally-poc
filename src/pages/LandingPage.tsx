@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Upload, Brain, RefreshCw, Building2, Shield, Clock, CheckCircle } from 'lucide-react'
+import { Upload, Brain, RefreshCw, Building2, Clock } from 'lucide-react'
 import { useAuthStore } from '@/store'
 import { LeadFormModal } from '@/components/LeadFormModal'
 import invoiceSyncSvg from '../assets/invoice-sync-logo-blue.svg'
@@ -170,6 +170,9 @@ export default function LandingPage() {
       {/* ── Footer ── */}
       <footer className="py-8 px-6 bg-gray-950 border-t border-white/5">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-400">
+          <div className="flex items-center gap-2">
+            <span>© 2026 Invoice Sync. All rights reserved.</span>
+          </div>
           <Link to="/privacy-policy" className="text-teal-400 hover:text-teal-300 underline underline-offset-2 transition-colors">Privacy Policy</Link>
         </div>
       </footer>
