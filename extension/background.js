@@ -529,52 +529,66 @@ function getTodayYYYYMMDD() {
   return `${d.getFullYear()}${m}${day}`
 }
 
-function buildStockItemXml({ name, group, unit, description, gstApplicable, taxability, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
+function buildStockItemXml({ name, group, unit, gstApplicable, taxability, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
   const applicable = gstApplicable === 'Yes' ? 'Applicable' : 'Not Applicable'
+  const date = getTodayYYYYMMDD()
 
   let gstBlock = ''
   if (gstApplicable === 'Yes') {
     const isTaxable = taxability === 'Taxable'
-    const date = getTodayYYYYMMDD()
 
-    const hsnPart = `
-              <HSNDETAILS.LIST>
-                <APPLICABLEFROM>${date}</APPLICABLEFROM>
-                <HSNSACTYPE>HSN</HSNSACTYPE>
-                ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : ''}
-                ${description ? `<DESCRIPTION>${description}</DESCRIPTION>` : ''}
-              </HSNDETAILS.LIST>`
-
-    let taxPart = ''
     if (isTaxable && gstRate) {
       const halfRate = gstRate / 2
-      taxPart = `
-              <GSTDETAILS.LIST>
-                <APPLICABLEFROM>${date}</APPLICABLEFROM>
-                <TAXABILITY>Taxable</TAXABILITY>
-                <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
-                <STATEGSTDETAILS.LIST>
-                  <GSTRATETYPE>Central Tax</GSTRATETYPE>
+      gstBlock = `
+            <GSTDETAILS.LIST>
+              <APPLICABLEFROM>${date}</APPLICABLEFROM>
+              <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
+              ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : '<HSNCODE/>'}
+              <TAXABILITY>Taxable</TAXABILITY>
+              <SRCOFGSTDETAILS>Specify Details Here</SRCOFGSTDETAILS>
+              <STATEWISEDETAILS.LIST>
+                <STATENAME>&#4; Any</STATENAME>
+                <RATEDETAILS.LIST>
+                  <GSTRATEDUTYHEAD>CGST</GSTRATEDUTYHEAD>
+                  <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
                   <GSTRATE>${halfRate}</GSTRATE>
-                </STATEGSTDETAILS.LIST>
-                <STATEGSTDETAILS.LIST>
-                  <GSTRATETYPE>State Tax</GSTRATETYPE>
+                  <GSTRATEPERUNIT>0</GSTRATEPERUNIT>
+                </RATEDETAILS.LIST>
+                <RATEDETAILS.LIST>
+                  <GSTRATEDUTYHEAD>SGST/UTGST</GSTRATEDUTYHEAD>
+                  <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
                   <GSTRATE>${halfRate}</GSTRATE>
-                </STATEGSTDETAILS.LIST>
-                <STATEGSTDETAILS.LIST>
-                  <GSTRATETYPE>Integrated Tax</GSTRATETYPE>
+                  <GSTRATEPERUNIT>0</GSTRATEPERUNIT>
+                </RATEDETAILS.LIST>
+                <RATEDETAILS.LIST>
+                  <GSTRATEDUTYHEAD>IGST</GSTRATEDUTYHEAD>
+                  <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
                   <GSTRATE>${gstRate}</GSTRATE>
-                </STATEGSTDETAILS.LIST>
-              </GSTDETAILS.LIST>`
+                  <GSTRATEPERUNIT>0</GSTRATEPERUNIT>
+                </RATEDETAILS.LIST>
+                <RATEDETAILS.LIST>
+                  <GSTRATEDUTYHEAD>Cess</GSTRATEDUTYHEAD>
+                  <GSTRATEVALUATIONTYPE>&#4; Not Applicable</GSTRATEVALUATIONTYPE>
+                  <GSTRATE>0</GSTRATE>
+                  <GSTRATEPERUNIT>0</GSTRATEPERUNIT>
+                </RATEDETAILS.LIST>
+                <RATEDETAILS.LIST>
+                  <GSTRATEDUTYHEAD>State Cess</GSTRATEDUTYHEAD>
+                  <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
+                  <GSTRATE>0</GSTRATE>
+                  <GSTRATEPERUNIT>0</GSTRATEPERUNIT>
+                </RATEDETAILS.LIST>
+              </STATEWISEDETAILS.LIST>
+            </GSTDETAILS.LIST>`
     } else {
-      taxPart = `
-              <GSTDETAILS.LIST>
-                <APPLICABLEFROM>${date}</APPLICABLEFROM>
-                <TAXABILITY>${taxability}</TAXABILITY>
-              </GSTDETAILS.LIST>`
+      gstBlock = `
+            <GSTDETAILS.LIST>
+              <APPLICABLEFROM>${date}</APPLICABLEFROM>
+              ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : '<HSNCODE/>'}
+              <TAXABILITY>${taxability || 'Exempt'}</TAXABILITY>
+              <SRCOFGSTDETAILS>Specify Details Here</SRCOFGSTDETAILS>
+            </GSTDETAILS.LIST>`
     }
-
-    gstBlock = hsnPart + taxPart
   }
 
   const companyBlock = tallyCompany
@@ -593,45 +607,13 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
       </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <STOCKITEM NAME="HSD Bar (TMT) (8MM-550) - Test" ACTION="Create">
-            <NAME>HSD Bar (TMT) (8MM-550) - Test1</NAME>
-            <PARENT>Sariya</PARENT>
-            <BASEUNITS>KG</BASEUNITS>
-            <GSTAPPLICABLE>Applicable</GSTAPPLICABLE>
-            <GSTTYPEOFSUPPLY>Goods</GSTTYPEOFSUPPLY>
-
-            <HSNDETAILS.LIST>
-                <APPLICABLEFROM>20260428</APPLICABLEFROM>
-                <HSNCODE>72142090</HSNCODE>
-                <HSN>HSD BAR</HSN>
-                <SRCOFHSNDETAILS>Specify Details Here</SRCOFHSNDETAILS>
-            </HSNDETAILS.LIST>
-
-            <GSTDETAILS.LIST>
-                <APPLICABLEFROM>20260428</APPLICABLEFROM>
-                <TAXABILITY>Taxable</TAXABILITY>
-                <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
-                <SRCOFGSTDETAILS>Specify Details Here</SRCOFGSTDETAILS>
-                <STATEWISEDETAILS.LIST>
-                    <STATENAME>Any</STATENAME>
-                    <RATEDETAILS.LIST>
-                        <GSTRATEDUTYHEAD>CGST</GSTRATEDUTYHEAD>
-                        <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
-                        <GSTRATE>9</GSTRATE>
-                    </RATEDETAILS.LIST>
-                    <RATEDETAILS.LIST>
-                        <GSTRATEDUTYHEAD>SGST/UTGST</GSTRATEDUTYHEAD>
-                        <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
-                        <GSTRATE>9</GSTRATE>
-                    </RATEDETAILS.LIST>
-                    <RATEDETAILS.LIST>
-                        <GSTRATEDUTYHEAD>IGST</GSTRATEDUTYHEAD>
-                        <GSTRATEVALUATIONTYPE>Based on Value</GSTRATEVALUATIONTYPE>
-                        <GSTRATE>18</GSTRATE>
-                    </RATEDETAILS.LIST>
-                </STATEWISEDETAILS.LIST>
-            </GSTDETAILS.LIST>
-        </STOCKITEM>
+          <STOCKITEM NAME="${name}" ACTION="Create">
+            <NAME>${name}</NAME>
+            ${group ? `<PARENT>${group}</PARENT>` : ''}
+            ${unit ? `<BASEUNITS>${unit}</BASEUNITS>` : ''}
+            <GSTAPPLICABLE>${applicable}</GSTAPPLICABLE>
+            ${typeOfSupply ? `<GSTTYPEOFSUPPLY>${typeOfSupply}</GSTTYPEOFSUPPLY>` : ''}${gstBlock}
+          </STOCKITEM>
         </TALLYMESSAGE>
       </REQUESTDATA>
     </IMPORTDATA>
