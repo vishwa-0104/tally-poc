@@ -28,9 +28,9 @@ const MODEL_LABELS: Record<string, string> = {
 
 const SERVICE_MODELS: Record<string, { value: string; label: string }[]> = {
   gemini: [
-    { value: 'gemini-flash-latest', label: 'Flash Latest — always up-to-date (~₹0.01/bill)' },
-    { value: 'gemini-3.1-flash',    label: 'Flash 3.1 (~₹0.01/bill)' },
-    { value: 'gemini-2.0-flash',    label: 'Flash 2.0 (~₹0.01/bill)' },
+    { value: 'gemini-flash-latest', label: 'Flash Latest — always up-to-date (~₹0.05/bill)' },
+    { value: 'gemini-3.1-flash',    label: 'Flash 3.1 (~₹0.05/bill)' },
+    { value: 'gemini-2.0-flash',    label: 'Flash 2.0 (~₹0.05/bill)' },
   ],
   anthropic: [
     { value: 'claude-haiku-4-5-20251001', label: 'Haiku — fast & cheap (~₹0.40/bill)' },
