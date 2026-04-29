@@ -199,6 +199,10 @@ export function MappingForm({
   // ── Invoice-level discount ───────────────────────────────────────────────────
   const hasInvoiceDiscount = bill.invoiceDiscountAmount != null && bill.invoiceDiscountAmount > 0
 
+  // ── Discount column visibility ───────────────────────────────────────────────
+  const hasFlatDiscount = bill.lineItems.some((i) => i.discountAmount != null && i.discountAmount !== 0)
+  const hasPctDiscount  = !hasFlatDiscount && bill.lineItems.some((i) => i.discountPercent != null && i.discountPercent !== 0)
+
   // ── Form ────────────────────────────────────────────────────────────────────
   const { register, handleSubmit, setValue, watch } = useForm<MappingInput>({
     resolver: zodResolver(mappingSchema),
@@ -601,7 +605,8 @@ export function MappingForm({
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Qty</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit Price</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc%</th>
+                  {hasPctDiscount  && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc%</th>}
+                  {hasFlatDiscount && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc ₹</th>}
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">GST%</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[220px]">Tally Item</th>
@@ -635,9 +640,16 @@ export function MappingForm({
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-1.5">
-                      <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
-                    </td>
+                    {hasPctDiscount && (
+                      <td className="px-2 py-1.5">
+                        <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      </td>
+                    )}
+                    {hasFlatDiscount && (
+                      <td className="px-2 py-1.5">
+                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      </td>
+                    )}
                     <td className="px-2 py-1.5">
                       <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
@@ -663,7 +675,7 @@ export function MappingForm({
               </datalist>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                 <tr className="border-t border-gray-100">
-                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
+                  <td colSpan={6 + (hasPctDiscount || hasFlatDiscount ? 1 : 0)} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
                   <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
                 </tr>
                 {!isInterstate && (

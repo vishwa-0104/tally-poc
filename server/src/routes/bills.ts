@@ -235,6 +235,7 @@ billsRouter.post('/bills/parse', async (req, res) => {
         ...item,
         hsnCode: item.hsnCode ?? '',
         discountPercent: item.discountPercent ?? null,
+        discountAmount: item.discountAmount ?? null,
       })),
     })
   } catch {
@@ -247,186 +248,74 @@ function normalizeBill(bill: Record<string, unknown> & { status: string; lineIte
   return { ...bill, status: bill.status.toLowerCase() }
 }
 
-const PARSE_PROMPT = `You are extracting structured data from an Indian GST purchase bill (may be handwritten or printed).
+const PARSE_PROMPT = `Extract structured data from an Indian GST purchase bill (printed or handwritten) and return a single JSON object wrapped in \`\`\`json ... \`\`\`.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 1 — Identify the parties
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- VENDOR / SELLER: the business that ISSUED the bill (name/logo at the top, labels like "From", "Supplier", "Sold by").
-- BUYER: the business that RECEIVED the bill (labels like "Bill to", "Sold to", "Consignee").
+PARTIES
+- vendorName/vendorGstin: the business that ISSUED the bill (top of bill, "From"/"Supplier"/"Sold by"). GSTIN is 15 chars near their name.
+- buyerGstin: GSTIN in the "Bill to"/"Consignee" section. If ambiguous, assign to vendorGstin.
 
-GSTIN rules:
-- vendorGstin: GSTIN of the VENDOR near their name/address, or under "GSTIN", "GST No", "Supplier GSTIN", "Our GSTIN".
-- buyerGstin: GSTIN of the BUYER in the "Bill to" section, or under "Buyer GSTIN", "Your GSTIN", "Recipient GSTIN".
-- Ambiguous GSTIN → assign to vendorGstin.
-- Valid Indian GSTIN: 15 chars — 2-digit state code + 10-char PAN + entity type + Z + check digit.
+DISCOUNT PATTERN & MULTI-COLUMN LOGIC
+- Pattern A (per-line): each line has Discount%. amount = Qty × unitPrice × (1 − disc%/100).
+- Pattern B (invoice-level): lines show gross amounts, one discount deducted at bottom. amount = Qty × unitPrice × (subtotal / grossTotal).
+- MULTI-COLUMN RULE: If an invoice has multiple discount columns (e.g., 'Payment Discount', 'Special Discount', 'Cash Disc'), lineItem.discountAmount MUST be the SUM of all these values for that specific line. 
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 2 — Identify the bill's calculation pattern
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Indian GST bills use one of two patterns:
+FIELD RULES
+- lineItem.amount: This is the "Value Before Tax" or "Taxable Value" printed on the bill.  NEVER include GST.
+- lineItem.unitPrice: The original/gross rate per unit before any deductions. 
+- lineItem.discountAmount: The total ₹ value deducted from the line item. If multiple discount columns exist, sum them. 
+- lineItem.gstRate: The COMBINED GST percentage (CGST% + SGST% or IGST%). 
+- Verify: (qty × unitPrice) - lineItem.discountAmount ≈ lineItem.amount. 
+- lineItem.unit: read from bill (Ltr/Kg/Pc/Pkt/Strip/Ctn/Nos).  Default: "blank".
 
-PATTERN A — Per-line discount + GST:
-  Each line item has its own Qty, Unit Price, Discount %, Line Amount, GST %.
-  Taxable amount per line = Qty × UnitPrice × (1 − Discount%/100)
-  Subtotal (taxable value) = sum of all per-line taxable amounts.
-  GST is applied per line or on the subtotal total.
+VERIFICATION & HIERARCHY
+- The "Value Before Tax" printed on the invoice is the absolute truth for lineItem.amount. 
+- subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount. 
 
-PATTERN B — Invoice-level discount + GST:
-  Lines show Qty, Unit Price, Gross Amount (= Qty × UnitPrice) with no per-line discount.
-  A single discount is deducted from the gross total at the bottom of the bill.
-  Subtotal (taxable value) = Gross Total − Invoice Discount.
-  GST (CGST+SGST or IGST) is applied on the subtotal.
-  Round-off (if any) is applied after tax to reach the final payable amount.
+NUMERIC RULES: dot = decimal (1.50 not 150), comma = thousands separator (1,450.50 → 1450.50). Copy numbers exactly. Missing optional fields → null.
 
-PATTERN C — Mixed (per-line + invoice-level discount):
-  Some lines have individual discounts AND there is also an invoice-level discount at the bottom.
-  Treat as Pattern B for invoiceDiscountAmount — extract the invoice-level discount amount.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 3 — Extract values
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-▸ lineItem.amount — ALWAYS the tax-exclusive (pre-GST) amount for that line:
-  • Pattern A: amount = Qty × unitPrice × (1 − discountPercent/100)
-  • Pattern B (no per-line discount): amount = Qty × unitPrice × (subtotal / grossTotal)
-    where grossTotal = sum of all (Qty × unitPrice) across lines
-    and subtotal is the taxable value read from the bill.
-    If there is no discount at all: amount = Qty × unitPrice.
-  ⚠ NEVER include GST in lineItem.amount. The amount must be tax-exclusive.
-
-▸ lineItem.unit — determine using this exact priority order:
-  1. Dedicated column: a separate column in the line-items table for the unit of measure — may have any header ("Unit", "UOM", "U/M", "Pack", "Packing", etc.) or no header. Use the cell value for that row.
-  2. Alongside quantity: a unit written directly next to the quantity value in the qty cell (e.g. "33 pc", "216 PCS", "10 Kg", "5 Bags").
-  3. Inside description/name: if and only if no value was found in steps 1–2, look inside the item description or product name for a unit abbreviation (e.g. "Sugar 5 Kg Bag" → "Kg", "Ariel 1 Ltr" → "Ltr", "Pipe 200mm pkt" → "Pkt"). Extract only the unit word, not the quantity or rest of the name.
-  4. Smart inference: if no unit is found anywhere on the bill for this line, infer the most appropriate standard unit from the product type or name:
-     - Liquids / oils / beverages → "Ltr" or "Ml"
-     - Grains / flour / sugar / powder by weight → "Kg"
-     - Tablets / capsules / medicines → "Strip" or "Box"
-     - Pipes / rods / bars / tubes → "Pc"
-     - Packets / pouches / sachets → "Pkt"
-     - Cartons / cases / bundles → "Ctn"
-     - General items with no clear type → "blank"
-
-▸ lineItem.discountPercent — per-line discount % only. Use null for Pattern B (discount is invoice-level).
-
-▸ subtotal — read the "Taxable Value", "Net Amount before Tax", or "Taxable Amount" printed on the bill.
-  This is the total of all tax-exclusive line amounts after any discount.
-  VERIFY: sum of all lineItem.amount values should equal subtotal (within ±1 due to rounding).
-
-▸ cgstAmount — read from labels "CGST", "C.GST", "Central GST", "Central Tax". Use 0 if not present.
-▸ sgstAmount — read from labels "SGST", "S.GST", "State GST", "State Tax", "UTGST". Use 0 if not present.
-▸ igstAmount — read from label "IGST". Use 0 if not present.
-▸ roundOffAmount — read from "Round Off", "Rounding", "Rounded". Use null if not present.
-▸ totalAmount — the final grand total payable (bottom-line number on the bill).
-▸ invoiceDiscountAmount — the invoice-level (overall) discount deducted from the gross total:
-  • Pattern A only (all discounts are per-line): set to null.
-  • Pattern B or C (discount on overall/total amount exists): read the discount amount from the bill footer (labels like "Discount", "Trade Discount", "Special Discount", "Less Discount"). Use the rupee amount, not the percentage.
-  • If no invoice-level discount is present: null.
-
-VERIFY before outputting:
-  subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount
-  Note: invoiceDiscountAmount is NOT added back here. subtotal is already the post-discount
-  taxable value (for Pattern B/C: subtotal = grossTotal − invoiceDiscountAmount). The discount
-  is embedded in subtotal, not a separate addend. If the equation does not balance, re-check
-  that subtotal is the net-of-discount figure, not the gross total.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 4 — Output ONLY a valid JSON object
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Schema:
+OUTPUT schema:
+\`\`\`json
 {
   "vendorName": string,
   "vendorGstin": string | null,
   "buyerGstin": string | null,
   "billNumber": string,
   "billDate": "YYYY-MM-DD",
-  "lineItems": [
-    {
-      "description": string,
-      "hsnCode": string | null,
-      "quantity": number,
-      "unit": string,           ← see unit rules below
-      "unitPrice": number,
-      "discountPercent": number | null,
-      "gstRate": number,
-      "amount": number          ← tax-exclusive, after any discount
-    }
-  ],
-  "subtotal": number,           ← total taxable value (sum of line amounts, before GST)
-  "cgstAmount": number,
-  "sgstAmount": number,
-  "igstAmount": number,
-  "totalAmount": number,        ← final grand total including all taxes and round-off
-  "roundOffAmount": number | null,
-  "invoiceDiscountAmount": number | null  ← invoice-level discount amount; null if only per-line discounts or no discount
-}
-
-CRITICAL numeric rules:
-- A dot (.) between digits is ALWAYS a decimal point — never drop it (e.g. "1.50" → 1.50, NOT 150).
-- Commas are thousand separators (e.g. "1,450.50" → 1450.50).
-- Do not round or truncate any value; copy numbers exactly as printed.
-- If a field is not present on the bill, use null (not 0 for optional fields).
-
-End your response with the JSON object wrapped in \`\`\`json ... \`\`\`.`
-
-
-const MISC_PARSE_PROMPT = `You are extracting structured data from an Indian GST expense/misc bill (purchases not directly related to primary business inventory — e.g. stationery, printer, repairs, office supplies).
-
-Extract the following fields and return ONLY a valid JSON object wrapped in \`\`\`json ... \`\`\`.
-
-Rules:
-- vendorName: name of the supplier
-- vendorGstin: supplier GSTIN (15 chars) or null
-- buyerGstin: buyer GSTIN or null
-- billNumber: invoice/bill number
-- billDate: "YYYY-MM-DD"
-- lineItems: one entry per expense line on the bill. Each entry has:
-  - description: expense item name (e.g. "Printer Paper A4", "HP Toner Cartridge")
-  - amount: the pre-tax amount for this line (number). If tax is only at bill level, distribute proportionally.
-  - quantity: 1 (default — not important for expense bills)
-  - unit: "Nos" (default)
-  - unitPrice: same as amount
-  - hsnCode: "" (empty string)
-  - gstRate: 0 (default — tax is captured at bill level)
-  - discountPercent: null
-- subtotal: total pre-tax amount (sum of all lineItem amounts)
-- cgstAmount: CGST total (number, 0 if not present)
-- sgstAmount: SGST total (number, 0 if not present)
-- igstAmount: IGST total (number, 0 if not present)
-- totalAmount: final grand total payable
-- roundOffAmount: round off amount or null
-- invoiceDiscountAmount: null
-
-CRITICAL: subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount
-
-Schema:
-{
-  "vendorName": string,
-  "vendorGstin": string | null,
-  "buyerGstin": string | null,
-  "billNumber": string,
-  "billDate": "YYYY-MM-DD",
-  "lineItems": [
-    {
-      "description": string,
-      "amount": number,
-      "quantity": 1,
-      "unit": "Nos",
-      "unitPrice": number,
-      "hsnCode": "",
-      "gstRate": 0,
-      "discountPercent": null
-    }
-  ],
+  "lineItems": [{ "description": string, "hsnCode": string | null, "quantity": number, "unit": string, "unitPrice": number, "discountPercent": number | null, "discountAmount": number | null, "gstRate": number, "amount": number }],
   "subtotal": number,
   "cgstAmount": number,
   "sgstAmount": number,
   "igstAmount": number,
   "totalAmount": number,
   "roundOffAmount": number | null,
-  "invoiceDiscountAmount": null
-}`
+  "invoiceDiscountAmount": number | null
+}
+\`\`\``;
+
+
+const MISC_PARSE_PROMPT = `Extract structured data from an Indian GST expense/misc bill (stationery, repairs, services, office supplies) and return a single JSON object wrapped in \`\`\`json ... \`\`\`.
+
+- vendorName/vendorGstin: supplier name and 15-char GSTIN (or null).
+- buyerGstin: buyer GSTIN from "Bill to" section or null.
+- billNumber, billDate ("YYYY-MM-DD").
+- lineItems: one per expense line. description = item name. amount = pre-tax amount (distribute proportionally if only bill-level tax shown). quantity=1, unit="Nos", unitPrice=amount, hsnCode="", gstRate=0, discountPercent=null.
+- subtotal: sum of all lineItem amounts (pre-tax).
+- cgstAmount/sgstAmount/igstAmount: from bill labels, 0 if absent.
+- totalAmount: final grand total.
+- roundOffAmount: null if absent.
+- invoiceDiscountAmount: null.
+
+VERIFY: subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount
+
+\`\`\`json
+{
+  "vendorName": string, "vendorGstin": string | null, "buyerGstin": string | null,
+  "billNumber": string, "billDate": "YYYY-MM-DD",
+  "lineItems": [{ "description": string, "amount": number, "quantity": 1, "unit": "Nos", "unitPrice": number, "hsnCode": "", "gstRate": 0, "discountPercent": null }],
+  "subtotal": number, "cgstAmount": number, "sgstAmount": number, "igstAmount": number,
+  "totalAmount": number, "roundOffAmount": number | null, "invoiceDiscountAmount": null
+}
+\`\`\``
 
 function MOCK_PARSED_BILL() {
   return {

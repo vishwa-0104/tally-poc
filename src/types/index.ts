@@ -116,7 +116,8 @@ export interface LineItem {
   quantity: number
   unit: string
   unitPrice: number
-  discountPercent?: number
+  discountPercent?: number | null
+  discountAmount?: number | null
   gstRate: number
   amount: number
   tallyLedger?: string

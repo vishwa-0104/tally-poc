@@ -40,7 +40,8 @@ interface LineItemParam {
   quantity: number
   unit: string
   unitPrice: number
-  discountPercent?: number
+  discountPercent?: number | null
+  discountAmount?: number | null
   gstRate: number
   amount: number
   tallyStockItem?: string | null
@@ -128,8 +129,19 @@ export function buildTallyXml(params: {
         const itemAmt     = amt(item.amount)
         const purchLedger = params.purchaseLedger ? esc(params.purchaseLedger) : ''
 
-        const discPct = item.discountPercent != null && item.discountPercent !== 0
-          ? `\n              <DISCOUNTINPERCENT>${item.discountPercent}</DISCOUNTINPERCENT>` : ''
+        const discPct = (() => {
+          if (item.discountPercent != null && item.discountPercent !== 0) {
+            return `\n              <DISCOUNTINPERCENT>${item.discountPercent}</DISCOUNTINPERCENT>`
+          }
+          if (item.discountAmount != null && item.discountAmount !== 0) {
+            const grossAmt = item.quantity * item.unitPrice
+            if (grossAmt > 0) {
+              const equiv = parseFloat(((item.discountAmount / grossAmt) * 100).toFixed(4))
+              return `\n              <DISCOUNTINPERCENT>${equiv}</DISCOUNTINPERCENT>`
+            }
+          }
+          return ''
+        })()
 
         return `
             <ALLINVENTORYENTRIES.LIST>

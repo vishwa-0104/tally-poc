@@ -203,6 +203,7 @@ model LineItem {
   unit            String
   unitPrice       Float
   discountPercent Float?
+  discountAmount  Float?
   gstRate         Float
   amount          Float
   tallyLedger     String?
