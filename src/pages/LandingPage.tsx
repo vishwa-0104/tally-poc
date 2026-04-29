@@ -1,11 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Upload, Brain, RefreshCw, Building2, Shield, Clock, CheckCircle, Zap, FileText } from 'lucide-react'
 import { useAuthStore } from '@/store'
+import { LeadFormModal } from '@/components/LeadFormModal'
 
 export default function LandingPage() {
   const { isAuthenticated, user } = useAuthStore()
   const navigate = useNavigate()
+  const [showLeadModal, setShowLeadModal] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -14,6 +16,7 @@ export default function LandingPage() {
   }, [isAuthenticated, user, navigate])
 
   return (
+    <>
     <div className="min-h-screen bg-gray-950 text-white">
 
       {/* ── Sticky header ── */}
@@ -57,12 +60,12 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link
-              to="/login"
+            <button
+              onClick={() => setShowLeadModal(true)}
               className="w-full sm:w-auto px-7 py-3 bg-teal-500 hover:bg-teal-400 text-white font-bold rounded-xl transition-colors text-sm shadow-lg shadow-teal-500/25"
             >
               Get Started — It's Free
-            </Link>
+            </button>
             <a
               href="#how-it-works"
               className="w-full sm:w-auto px-7 py-3 border border-white/20 hover:bg-white/5 text-gray-300 font-semibold rounded-xl transition-colors text-sm"
@@ -266,5 +269,8 @@ export default function LandingPage() {
         </div>
       </footer>
     </div>
+
+    <LeadFormModal open={showLeadModal} onClose={() => setShowLeadModal(false)} />
+    </>
   )
 }

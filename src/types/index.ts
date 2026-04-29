@@ -161,6 +161,20 @@ export interface StockItemAlias {
   tallyStockItemName: string // Tally stock item name
 }
 
+// ── Leads ─────────────────────────────────────────────────
+export type LeadStatus = 'new_lead' | 'onboarded' | 'not_onboarded' | 'rejected'
+
+export interface Lead {
+  id: string
+  companyName: string
+  phone: string
+  email: string
+  description?: string
+  status: LeadStatus
+  remarks?: string
+  createdAt: string
+}
+
 // ── Tally ─────────────────────────────────────────────────
 export interface TallyGodown {
   name: string

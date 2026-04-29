@@ -10,6 +10,7 @@ import AdminDashboard from '@/pages/admin/AdminDashboard'
 import AdminCompanies from '@/pages/admin/AdminCompanies'
 import AdminUsers     from '@/pages/admin/AdminUsers'
 import AdminAnalytics from '@/pages/admin/AdminAnalytics'
+import AdminLeads     from '@/pages/admin/AdminLeads'
 
 // Company layout + pages
 import CompanyLayout   from '@/pages/company/CompanyLayout'
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="companies"       element={<AdminCompanies />} />
         <Route path="users"           element={<AdminUsers />} />
         <Route path="analytics"       element={<AdminAnalytics />} />
+        <Route path="leads"           element={<AdminLeads />} />
       </Route>
 
       {/* ── Company portal ── */}

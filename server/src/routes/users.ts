@@ -6,10 +6,8 @@ import { requireAuth, requireAdmin } from '../middleware/auth'
 
 export const usersRouter = Router()
 
-usersRouter.use(requireAuth)
-
 // GET /api/users — list all company-role users (admin only)
-usersRouter.get('/users', requireAdmin, async (_req, res) => {
+usersRouter.get('/users', requireAuth, requireAdmin, async (_req, res) => {
   const users = await prisma.user.findMany({
     where: { role: 'COMPANY' },
     include: {
@@ -32,7 +30,7 @@ usersRouter.get('/users', requireAdmin, async (_req, res) => {
 })
 
 // POST /api/users — create enterprise user (admin only)
-usersRouter.post('/users', requireAdmin, async (req, res) => {
+usersRouter.post('/users', requireAuth, requireAdmin, async (req, res) => {
   const schema = z.object({
     name: z.string().min(2),
     email: z.string().email(),
@@ -61,13 +59,13 @@ usersRouter.post('/users', requireAdmin, async (req, res) => {
 })
 
 // DELETE /api/users/:userId — delete user + cascade (admin only)
-usersRouter.delete('/users/:userId', requireAdmin, async (req, res) => {
+usersRouter.delete('/users/:userId', requireAuth, requireAdmin, async (req, res) => {
   await prisma.user.delete({ where: { id: req.params.userId } }).catch(() => {})
   res.json({ ok: true })
 })
 
 // PATCH /api/users/default-company — set active company as default for authenticated user
-usersRouter.patch('/users/default-company', async (req, res) => {
+usersRouter.patch('/users/default-company', requireAuth, async (req, res) => {
   const schema = z.object({ companyId: z.string().min(1) })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
@@ -75,7 +73,6 @@ usersRouter.patch('/users/default-company', async (req, res) => {
   const { companyId } = result.data
   const userId = req.auth.userId
 
-  // Verify user has access to this company
   const link = await prisma.userCompany.findUnique({
     where: { userId_companyId: { userId, companyId } },
   })
@@ -83,7 +80,6 @@ usersRouter.patch('/users/default-company', async (req, res) => {
     res.status(403).json({ error: 'Forbidden' }); return
   }
 
-  // Clear existing default, set new one
   await prisma.$transaction([
     prisma.userCompany.updateMany({ where: { userId }, data: { isDefault: false } }),
     prisma.userCompany.update({ where: { userId_companyId: { userId, companyId } }, data: { isDefault: true } }),
@@ -93,7 +89,7 @@ usersRouter.patch('/users/default-company', async (req, res) => {
 })
 
 // GET /api/users/:userId/companies — list companies linked to a user (admin only)
-usersRouter.get('/users/:userId/companies', requireAdmin, async (req, res) => {
+usersRouter.get('/users/:userId/companies', requireAuth, requireAdmin, async (req, res) => {
   const links = await prisma.userCompany.findMany({
     where: { userId: req.params.userId },
     include: { company: { select: { id: true, name: true, gstin: true, port: true } } },
@@ -103,7 +99,7 @@ usersRouter.get('/users/:userId/companies', requireAdmin, async (req, res) => {
 })
 
 // POST /api/users/:userId/link-company — link a company to a user (admin only)
-usersRouter.post('/users/:userId/link-company', requireAdmin, async (req, res) => {
+usersRouter.post('/users/:userId/link-company', requireAuth, requireAdmin, async (req, res) => {
   const schema = z.object({ companyId: z.string().min(1) })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
@@ -114,7 +110,6 @@ usersRouter.post('/users/:userId/link-company', requireAdmin, async (req, res) =
   const company = await prisma.company.findUnique({ where: { id: companyId } })
   if (!company) { res.status(404).json({ error: 'Company not found' }); return }
 
-  // Check if this is the user's first company (auto-set as default)
   const existingCount = await prisma.userCompany.count({ where: { userId } })
 
   try {
@@ -128,7 +123,7 @@ usersRouter.post('/users/:userId/link-company', requireAdmin, async (req, res) =
 })
 
 // PATCH /api/users/:userId/default-company — admin sets default company for a specific user
-usersRouter.patch('/users/:userId/default-company', requireAdmin, async (req, res) => {
+usersRouter.patch('/users/:userId/default-company', requireAuth, requireAdmin, async (req, res) => {
   const schema = z.object({ companyId: z.string().min(1) })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
@@ -150,7 +145,7 @@ usersRouter.patch('/users/:userId/default-company', requireAdmin, async (req, re
 })
 
 // PATCH /api/users/:userId/reset-password — admin resets a user's password (admin only)
-usersRouter.patch('/users/:userId/reset-password', requireAdmin, async (req, res) => {
+usersRouter.patch('/users/:userId/reset-password', requireAuth, requireAdmin, async (req, res) => {
   const schema = z.object({ password: z.string().min(8) })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Password must be at least 8 characters' }); return }
@@ -164,12 +159,11 @@ usersRouter.patch('/users/:userId/reset-password', requireAdmin, async (req, res
 })
 
 // DELETE /api/users/:userId/link-company/:companyId — unlink company from user (admin only)
-usersRouter.delete('/users/:userId/link-company/:companyId', requireAdmin, async (req, res) => {
+usersRouter.delete('/users/:userId/link-company/:companyId', requireAuth, requireAdmin, async (req, res) => {
   const { userId, companyId } = req.params
 
   await prisma.userCompany.deleteMany({ where: { userId, companyId } })
 
-  // If deleted row was the default, promote next linked company as default
   const remaining = await prisma.userCompany.findMany({
     where: { userId },
     orderBy: { createdAt: 'asc' },
