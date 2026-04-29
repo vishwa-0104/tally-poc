@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { loginSchema, type LoginInput } from '@/lib/validators'
 import { useAuthStore } from '@/store'
+import invoiceSyncSvg from '../assets/invoice-sync-logo-blue.svg'
 
 export default function LoginPage() {
   const { role } = useParams<{ role?: string }>()
@@ -73,17 +74,19 @@ export default function LoginPage() {
           )}
 
           {/* Logo */}
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${isAdmin ? 'bg-brand-500' : 'bg-teal-500'}`}>
-              <svg className="w-5 h-5 stroke-white fill-none stroke-2" viewBox="0 0 24 24">
+          <div className="flex items-center gap-2.5 mb-8">
+            <div className={`w-32 h-9 rounded-lg flex items-center justify-center ${isAdmin ? 'bg-brand-500' : ''}`}>
+              <img className='w-2xl h-4.5 stroke-white fill-none stroke-2' src={invoiceSyncSvg} alt="InvoiceSync" />
+              {/* <svg className="w-5 h-5 stroke-white fill-none stroke-2" viewBox="0 0 24 24">
                 <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+              </svg> */}
             </div>
-            <span className="text-lg font-bold text-gray-900">Tally Bill Sync</span>
+            {/* <span className="text-lg font-bold text-gray-900">InvoiceSync</span> */}
+             <h1 className="text-2xl font-bold text-gray-700 mb-2">Welcome back</h1>
           </div>
 
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
-          <p className="text-sm text-gray-500 mb-7">
+         
+          <p className="text-xl text-gray-700 mb-7">
             {isAdmin ? 'Sign in to your admin account' : 'Sign in to your company account'}
           </p>
 
@@ -107,7 +110,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              variant={isAdmin ? 'primary' : 'teal'}
+              variant={isAdmin ? 'primary' : 'primary'}
               size="lg"
               loading={isSubmitting}
               className="mt-1"
