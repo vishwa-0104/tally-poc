@@ -529,9 +529,17 @@ function getTodayYYYYMMDD() {
   return `${d.getFullYear()}${m}${day}`
 }
 
-function buildStockItemXml({ name, group, unit, gstApplicable, taxability, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
+function buildStockItemXml({ name, group, unit, description, gstApplicable, taxability, hsnCode, gstRate, typeOfSupply, tallyCompany }) {
   const applicable = gstApplicable === 'Yes' ? 'Applicable' : 'Not Applicable'
   const date = getTodayYYYYMMDD()
+
+  const hsnBlock = hsnCode ? `
+            <HSNDETAILS.LIST>
+              <APPLICABLEFROM>${date}</APPLICABLEFROM>
+              <HSNCODE>${hsnCode}</HSNCODE>
+              ${description ? `<HSN>${description}</HSN>` : ''}
+              <SRCOFHSNDETAILS>Specify Details Here</SRCOFHSNDETAILS>
+            </HSNDETAILS.LIST>` : ''
 
   let gstBlock = ''
   if (gstApplicable === 'Yes') {
@@ -543,7 +551,6 @@ function buildStockItemXml({ name, group, unit, gstApplicable, taxability, hsnCo
             <GSTDETAILS.LIST>
               <APPLICABLEFROM>${date}</APPLICABLEFROM>
               <CALCULATIONTYPE>On Value</CALCULATIONTYPE>
-              ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : '<HSNCODE/>'}
               <TAXABILITY>Taxable</TAXABILITY>
               <SRCOFGSTDETAILS>Specify Details Here</SRCOFGSTDETAILS>
               <STATEWISEDETAILS.LIST>
@@ -584,7 +591,6 @@ function buildStockItemXml({ name, group, unit, gstApplicable, taxability, hsnCo
       gstBlock = `
             <GSTDETAILS.LIST>
               <APPLICABLEFROM>${date}</APPLICABLEFROM>
-              ${hsnCode ? `<HSNCODE>${hsnCode}</HSNCODE>` : '<HSNCODE/>'}
               <TAXABILITY>${taxability || 'Exempt'}</TAXABILITY>
               <SRCOFGSTDETAILS>Specify Details Here</SRCOFGSTDETAILS>
             </GSTDETAILS.LIST>`
@@ -612,7 +618,7 @@ function buildStockItemXml({ name, group, unit, gstApplicable, taxability, hsnCo
             ${group ? `<PARENT>${group}</PARENT>` : ''}
             ${unit ? `<BASEUNITS>${unit}</BASEUNITS>` : ''}
             <GSTAPPLICABLE>${applicable}</GSTAPPLICABLE>
-            ${typeOfSupply ? `<GSTTYPEOFSUPPLY>${typeOfSupply}</GSTTYPEOFSUPPLY>` : ''}${gstBlock}
+            ${typeOfSupply ? `<GSTTYPEOFSUPPLY>${typeOfSupply}</GSTTYPEOFSUPPLY>` : ''}${hsnBlock}${gstBlock}
           </STOCKITEM>
         </TALLYMESSAGE>
       </REQUESTDATA>
