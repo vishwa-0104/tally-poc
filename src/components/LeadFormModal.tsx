@@ -76,7 +76,7 @@ export function LeadFormModal({ open, onClose }: Props) {
             <label className="block text-sm font-medium text-gray-700 mb-1">Company Name <span className="text-red-500">*</span></label>
             <input
               {...register('companyName')}
-              placeholder="Sharma Enterprises Pvt Ltd"
+              placeholder="Your company name"
               className="input-base w-full"
             />
             {errors.companyName && <p className="input-error">{errors.companyName.message}</p>}

@@ -11,7 +11,7 @@ export function ExtensionStatus() {
       aria-live="polite"
     >
       <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-      {connected ? 'Connected to Tally' : 'Extension not detected'}
+      {connected ? 'Connected' : 'Connection Required'}
     </div>
   )
 }

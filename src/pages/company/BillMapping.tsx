@@ -333,7 +333,7 @@ export default function BillMapping() {
               <div>
                 <p className="text-sm font-bold text-emerald-800">Successfully synced to Tally!</p>
                 <p className="text-xs text-emerald-700 mt-0.5">
-                  Voucher created in Tally ERP. This bill is now marked as synced.
+                  Voucher created in ERP. This bill is now marked as synced.
                 </p>
               </div>
             </div>

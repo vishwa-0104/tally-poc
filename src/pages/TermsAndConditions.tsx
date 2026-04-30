@@ -1,11 +1,9 @@
-import React from 'react';
 
-const TermsOfUse: React.FC = () => {
+
+export default function TermsAndConditions() {
   const effectiveDate = "April 29, 2026";
 
-  const handlePrint = () => {
-    window.print();
-  };
+
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -18,12 +16,6 @@ const TermsOfUse: React.FC = () => {
             <h1 className="text-3xl font-bold">Terms of Use</h1>
             <p className="mt-2 text-slate-300">Effective Date: {effectiveDate}</p>
           </div>
-          <button 
-            onClick={handlePrint}
-            className="hidden md:block bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm transition-colors print:hidden"
-          >
-            Print Version
-          </button>
         </div>
 
         {/* Content Section */}
@@ -127,11 +119,11 @@ const TermsOfUse: React.FC = () => {
             </p>
           </section>
 
-          <section className="mb-8 text-center bg-slate-50 p-6 rounded-lg border border-slate-200">
+          <section className="mb-8 bg-slate-50 p-6 rounded-lg border border-slate-200">
             <h2 className="text-xl font-semibold text-slate-900 mb-2">11. Governing Law</h2>
             <p>
               Disputes shall be subject to the exclusive jurisdiction of the 
-              competent courts in <strong>Ahmedabad, Gujarat</strong>.
+              competent courts in Ahmedabad, Gujarat.
             </p>
           </section>
 
@@ -158,11 +150,10 @@ const TermsOfUse: React.FC = () => {
           onClick={() => window.history.back()}
           className="text-slate-500 hover:text-slate-800 font-medium transition-colors"
         >
-          &larr; Back to Dashboard
+          &larr; Back to home
         </button>
       </div>
     </div>
   );
 };
 
-export default TermsOfUse;

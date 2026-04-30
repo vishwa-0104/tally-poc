@@ -535,7 +535,7 @@ export function MappingForm({
       <div className="mt-2 flex gap-6 flex-wrap">
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-            Tally Voucher Number
+            Voucher Number
           </label>
           <div className="input-base w-48 bg-gray-50 text-gray-500 cursor-not-allowed select-none">
             {nextVoucherNumber ?? `${bill.billNumber}_1`}
@@ -544,7 +544,7 @@ export function MappingForm({
         </div>
         <div>
           <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-            Tally Voucher Date
+            Voucher Date
           </label>
           <input
             {...register('voucherDate')}
@@ -609,7 +609,7 @@ export function MappingForm({
                   {hasFlatDiscount && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc ₹</th>}
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">GST%</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[220px]">Tally Item</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[220px]">Item as defined in ERP</th>
                 </tr>
               </thead>
               <tbody>
@@ -831,7 +831,7 @@ export function MappingForm({
             className="whitespace-nowrap px-6 py-2.5"
             onClick={handleSubmit(onSyncToTally, (errors) => console.error('[MappingForm] Sync validation failed:', errors))}
           >
-            {syncing ? 'Pushing to Tally…' : 'Push to Tally'}
+            {syncing ? 'Pushing' : 'Push'}
           </Button>
         </div>
       </div>

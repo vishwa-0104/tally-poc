@@ -266,11 +266,13 @@ export function buildTallyXml(params: {
 
   // Round-off — ROUNDTYPE and ROUNDLIMIT match real Tally export.
   // ISDEEMEDPOSITIVE=Yes means debit (positive roundoff reduces vendor payable).
+  const roundOffLedger = esc(params.roundOffLedger?.trim() || 'Round Off')
+
   const roundOffEntry = params.roundOffAmount && params.roundOffAmount !== 0
     ? `
             <LEDGERENTRIES.LIST>
              <ROUNDTYPE>Normal Rounding</ROUNDTYPE>
-                <LEDGERNAME>ROUNDED OFF</LEDGERNAME>
+                <LEDGERNAME>${roundOffLedger}</LEDGERNAME>
                 <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
                 <LEDGERFROMITEM>No</LEDGERFROMITEM>
                 <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>

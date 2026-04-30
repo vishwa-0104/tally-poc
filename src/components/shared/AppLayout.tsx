@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { LogOut, Menu, X, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store'
+import invoiceSyncSvg from '../../assets/invoice-sync-logo-white.svg'
 
 export interface NavItem {
   label: string
@@ -34,8 +35,8 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
   const handleNavClick = () => setDrawerOpen(false)
 
   const sidebarBg   = isAdmin ? 'bg-gray-900' : 'bg-[#021A12]'
-  const iconBg      = isAdmin ? 'bg-brand-500' : 'bg-teal-500'
-  const pillBg      = isAdmin ? 'bg-blue-900/50 text-blue-300' : 'bg-teal-900/40 text-teal-300'
+  // const iconBg      = isAdmin ? 'bg-brand-500' : 'bg-teal-500'
+  // const pillBg      = isAdmin ? 'bg-blue-900/50 text-blue-300' : 'bg-teal-900/40 text-teal-300'
   const activeClass = isAdmin ? 'bg-brand-500 text-white' : 'bg-teal-600 text-white'
   const avatarBg    = isAdmin ? 'bg-brand-500' : 'bg-teal-600'
 
@@ -43,18 +44,19 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
     <>
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-2 mb-2">
-        <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', iconBg)}>
-          <svg className="w-4 h-4 stroke-white fill-none stroke-2" viewBox="0 0 24 24">
+        <div className={cn('w-32 h-8 rounded-lg flex items-center justify-center flex-shrink-0')}>
+           <img className='w-2xl h-4.5 stroke-white fill-none stroke-2' src={invoiceSyncSvg} alt="InvoiceSync" />
+          {/* <svg className="w-4 h-4 stroke-white fill-none stroke-2" viewBox="0 0 24 24">
             <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
+          </svg> */}
         </div>
         {/* Label — hidden on tablet icon-rail, shown otherwise */}
-        <span className="text-sm font-bold text-white md:hidden lg:block">Tally Sync</span>
+        {/* <span className="text-sm font-bold text-white md:hidden lg:block">Tally Sync</span> */}
       </div>
 
       {/* Role pill */}
-      <span className={cn('mx-2 mb-5 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase w-fit md:hidden lg:block', pillBg)}>
-        {isAdmin ? 'Admin' : 'Company'}
+      <span className={cn('mx-2 mb-5 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase w-fit md:hidden lg:block')}>
+        {isAdmin ? 'Admin' : ''}
       </span>
 
       {/* Nav items */}
@@ -117,7 +119,7 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
           className="flex items-center gap-2.5 px-2.5 py-2 mt-1 w-full rounded-lg text-xs font-medium text-gray-500 hover:text-white hover:bg-white/8 transition-all md:justify-center md:px-2 lg:justify-start lg:px-2.5"
         >
           <LogOut className="w-4 h-4" />
-          <span className="md:hidden lg:block">Sign out</span>
+          <span className="md:hidden lg:block text-teal-400">Sign out</span>
         </button>
       </div>
     </>
@@ -178,7 +180,7 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-sm font-bold text-white">Tally Sync</span>
+          <span className="text-sm font-bold text-white">InvoiceSync</span>
         </div>
         {children}
       </main>

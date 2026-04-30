@@ -112,7 +112,7 @@ export default function CompanyBills() {
         {/* Stats */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
           <StatCard label="Total Bills" value={bills.length} sub="All time"                accent="blue"  />
-          <StatCard label="Synced"      value={synced}       sub="In Tally"                accent="green" />
+          <StatCard label="Synced"      value={synced}       sub="In ERP"                accent="green" />
           <StatCard label="Pending"     value={pending}      sub="Needs mapping or sync"   accent="amber" />
           <StatCard label="Errors"      value={errors}       sub="Need attention"          accent="red"   />
         </div>

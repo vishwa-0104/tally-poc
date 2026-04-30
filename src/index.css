@@ -41,7 +41,7 @@
   }
 
   .input-error {
-    @apply border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-500/10;
+    @apply border-red-500 text-red-800 focus:border-red-500 focus:ring-red-500/10 text-sm;
   }
 
   /* Buttons */
@@ -52,8 +52,8 @@
   }
 
   .btn-primary {
-    @apply btn-base bg-brand-500 text-white hover:bg-brand-700
-           hover:shadow-lg hover:shadow-brand-500/25 active:translate-y-px;
+    @apply btn-base bg-blue-500 text-white hover:bg-blue-600
+           hover:shadow-lg hover:shadow-blue-500/25 active:translate-y-px;
   }
 
   .btn-teal {
@@ -97,10 +97,10 @@
 
   /* Privacy Policy prose */
   .prose-custom h2 {
-    @apply text-base font-bold text-white mt-8 mb-3;
+    @apply text-base font-bold text-gray-700 mt-8 mb-3;
   }
   .prose-custom h3 {
-    @apply text-sm font-semibold text-gray-200 mt-5 mb-2;
+    @apply text-sm font-semibold text-gray-600 mt-5 mb-2;
   }
   .prose-custom ul {
     @apply list-disc list-outside pl-5 space-y-1.5 mt-2;
@@ -146,3 +146,5 @@
 .xml-val   { color: #7EE787; }
 .xml-attr  { color: #FFA657; }
 .xml-comment { color: #6E7681; }
+
+

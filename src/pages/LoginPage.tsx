@@ -82,7 +82,7 @@ export default function LoginPage() {
               </svg> */}
             </div>
             {/* <span className="text-lg font-bold text-gray-900">InvoiceSync</span> */}
-             <h1 className="text-2xl font-bold text-gray-700 mb-2">Welcome back</h1>
+             {/* <h1 className="text-2xl font-bold text-gray-700 mb-2">Welcome back</h1> */}
           </div>
 
          
