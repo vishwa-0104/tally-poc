@@ -103,10 +103,10 @@ export default function BillMapping() {
     const trim = (v?: string) => (v && v.trim() ? v.trim() : undefined)
 
     // Derive single-value ledgers for XML (temporary until XML supports multi-ledger entries)
-    const purchaseLedger = trim(data.purchaseLedger_18) ?? trim(data.purchaseLedger_5) ?? trim(data.purchaseLedger_exempt)
-    const cgstLedger     = trim(data.cgstLedger_18)     ?? trim(data.cgstLedger_5)
-    const sgstLedger     = trim(data.sgstLedger_18)     ?? trim(data.sgstLedger_5)
-    const igstLedger     = trim(data.igstLedger_18)     ?? trim(data.igstLedger_5)
+    const purchaseLedger = trim(data.purchaseLedger_40) ?? trim(data.purchaseLedger_18) ?? trim(data.purchaseLedger_5) ?? trim(data.purchaseLedger_exempt)
+    const cgstLedger     = trim(data.cgstLedger_40)     ?? trim(data.cgstLedger_18)     ?? trim(data.cgstLedger_5)
+    const sgstLedger     = trim(data.sgstLedger_40)     ?? trim(data.sgstLedger_18)     ?? trim(data.sgstLedger_5)
+    const igstLedger     = trim(data.igstLedger_40)     ?? trim(data.igstLedger_18)     ?? trim(data.igstLedger_5)
 
     const godown = godownEnabled ? trim(data.godownName) : undefined
 

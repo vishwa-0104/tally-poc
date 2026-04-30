@@ -56,14 +56,18 @@ export const mappingSchema = z.object({
   purchaseLedger_exempt: z.string().optional(),
   purchaseLedger_5:      z.string().optional(),
   purchaseLedger_18:     z.string().optional(),
+  purchaseLedger_40:     z.string().optional(),
   // CGST / SGST — intra-state bills only
   cgstLedger_5:          z.string().optional(),
   sgstLedger_5:          z.string().optional(),
   cgstLedger_18:         z.string().optional(),
   sgstLedger_18:         z.string().optional(),
+  cgstLedger_40:         z.string().optional(),
+  sgstLedger_40:         z.string().optional(),
   // IGST — interstate bills only
   igstLedger_5:          z.string().optional(),
   igstLedger_18:         z.string().optional(),
+  igstLedger_40:         z.string().optional(),
   // Bill meta
   billDate:       z.string().min(1, 'Date is required'),
   voucherDate:    z.string().optional(),

@@ -23,17 +23,22 @@ export interface LedgerMapping {
   // Purchase ledgers (1:1 static keys)
   purchase_interstate_18?: string
   purchase_interstate_5?:  string
+  purchase_interstate_40?: string
   purchase_up_18?:         string
   purchase_up_5?:          string
+  purchase_up_40?:         string
   purchase_exempt?:        string
   // CGST / SGST input pairs
   input_cgst_9?:   string
   input_sgst_9?:   string
   input_cgst_2_5?: string
   input_sgst_2_5?: string
+  input_cgst_20?:  string
+  input_sgst_20?:  string
   // IGST
   igst_5?:  string
   igst_18?: string
+  igst_40?: string
   // Round off
   roundoff_ledger?: string
 }

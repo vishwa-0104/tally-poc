@@ -143,41 +143,50 @@ export function MappingForm({
   let show18: boolean
   let showExempt: boolean
 
+  let show40: boolean
+
   if (billType === 'misc') {
     const totalTax      = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
     const effectiveRate = bill.subtotal > 0 ? Math.round(totalTax / bill.subtotal * 100) : 0
     show5      = totalTax > 0 && effectiveRate <= 7
-    show18     = totalTax > 0 && effectiveRate > 7
+    show40     = totalTax > 0 && effectiveRate > 35
+    show18     = totalTax > 0 && effectiveRate > 7 && !show40
     showExempt = totalTax === 0
   } else {
     const ratesPresent = new Set(bill.lineItems.map((i) => i.gstRate))
     show5      = ratesPresent.has(5)
     show18     = ratesPresent.has(18)
+    show40     = ratesPresent.has(40)
     showExempt = ratesPresent.has(0)
 
     // Fallback: when line items carry no recognised rate, infer from bill totals
-    if (!show5 && !show18 && !showExempt) {
+    if (!show5 && !show18 && !show40 && !showExempt) {
       const totalTax      = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
       const effectiveRate = bill.subtotal > 0 ? Math.round(totalTax / bill.subtotal * 100) : 0
-      if (totalTax === 0)          showExempt = true
-      else if (effectiveRate <= 7) show5      = true
-      else                         show18     = true
+      if (totalTax === 0)           showExempt = true
+      else if (effectiveRate <= 7)  show5      = true
+      else if (effectiveRate > 35)  show40     = true
+      else                          show18     = true
     }
 
     // Safety: always show at least one field
-    if (!show5 && !show18 && !showExempt) showExempt = true
+    if (!show5 && !show18 && !show40 && !showExempt) showExempt = true
   }
 
   // ── Pre-fill values from company mapping ────────────────────────────────────
   const prefillPurchase5      = isInterstate ? savedLedgerSets?.purchase_interstate_5  : savedLedgerSets?.purchase_up_5
   const prefillPurchase18     = isInterstate ? savedLedgerSets?.purchase_interstate_18 : savedLedgerSets?.purchase_up_18
+  const prefillPurchase40     = isInterstate ? savedLedgerSets?.purchase_interstate_40 : savedLedgerSets?.purchase_up_40
   const prefillPurchaseExempt = savedLedgerSets?.purchase_exempt
   const prefillCgst5          = savedLedgerSets?.input_cgst_2_5
   const prefillSgst5          = savedLedgerSets?.input_sgst_2_5
   const prefillCgst18         = savedLedgerSets?.input_cgst_9
   const prefillSgst18         = savedLedgerSets?.input_sgst_9
+  const prefillCgst40         = savedLedgerSets?.input_cgst_20
+  const prefillSgst40         = savedLedgerSets?.input_sgst_20
   const prefillIgst5          = savedLedgerSets?.igst_5
   const prefillIgst18         = savedLedgerSets?.igst_18
+  const prefillIgst40         = savedLedgerSets?.igst_40
 
   // ── Vendor matching ─────────────────────────────────────────────────────────
   const gstinMatch = bill.vendorGstin
@@ -210,13 +219,17 @@ export function MappingForm({
       vendorLedger:          resolvedVendor || undefined,
       purchaseLedger_5:      show5      ? prefillPurchase5      || undefined : undefined,
       purchaseLedger_18:     show18     ? prefillPurchase18     || undefined : undefined,
+      purchaseLedger_40:     show40     ? prefillPurchase40     || undefined : undefined,
       purchaseLedger_exempt: showExempt ? prefillPurchaseExempt || undefined : undefined,
       cgstLedger_5:  !isInterstate && show5  ? prefillCgst5  || undefined : undefined,
       sgstLedger_5:  !isInterstate && show5  ? prefillSgst5  || undefined : undefined,
       cgstLedger_18: !isInterstate && show18 ? prefillCgst18 || undefined : undefined,
       sgstLedger_18: !isInterstate && show18 ? prefillSgst18 || undefined : undefined,
+      cgstLedger_40: !isInterstate && show40 ? prefillCgst40 || undefined : undefined,
+      sgstLedger_40: !isInterstate && show40 ? prefillSgst40 || undefined : undefined,
       igstLedger_5:  isInterstate  && show5  ? prefillIgst5  || undefined : undefined,
       igstLedger_18: isInterstate  && show18 ? prefillIgst18 || undefined : undefined,
+      igstLedger_40: isInterstate  && show40 ? prefillIgst40 || undefined : undefined,
       billDate:       bill.billDate,
       voucherDate:    new Date().toISOString().split('T')[0],
       billNumber:     bill.billNumber,
@@ -232,6 +245,7 @@ export function MappingForm({
 
     if (show5      && prefillPurchase5)      setValue('purchaseLedger_5',      prefillPurchase5)
     if (show18     && prefillPurchase18)     setValue('purchaseLedger_18',     prefillPurchase18)
+    if (show40     && prefillPurchase40)     setValue('purchaseLedger_40',     prefillPurchase40)
     if (showExempt && prefillPurchaseExempt) setValue('purchaseLedger_exempt', prefillPurchaseExempt)
 
     if (!isInterstate) {
@@ -239,9 +253,12 @@ export function MappingForm({
       if (show5  && prefillSgst5)  setValue('sgstLedger_5',  prefillSgst5)
       if (show18 && prefillCgst18) setValue('cgstLedger_18', prefillCgst18)
       if (show18 && prefillSgst18) setValue('sgstLedger_18', prefillSgst18)
+      if (show40 && prefillCgst40) setValue('cgstLedger_40', prefillCgst40)
+      if (show40 && prefillSgst40) setValue('sgstLedger_40', prefillSgst40)
     } else {
       if (show5  && prefillIgst5)  setValue('igstLedger_5',  prefillIgst5)
       if (show18 && prefillIgst18) setValue('igstLedger_18', prefillIgst18)
+      if (show40 && prefillIgst40) setValue('igstLedger_40', prefillIgst40)
     }
   }, [resolvedVendor, savedLedgerSets]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -271,10 +288,12 @@ export function MappingForm({
   // ── Can-sync guard ──────────────────────────────────────────────────────────
   const wP5  = watch('purchaseLedger_5')
   const wP18 = watch('purchaseLedger_18')
+  const wP40 = watch('purchaseLedger_40')
   const wPEx = watch('purchaseLedger_exempt')
   const wC5  = watch('cgstLedger_5');  const wS5  = watch('sgstLedger_5')
   const wC18 = watch('cgstLedger_18'); const wS18 = watch('sgstLedger_18')
-  const wI5  = watch('igstLedger_5');  const wI18 = watch('igstLedger_18')
+  const wC40 = watch('cgstLedger_40'); const wS40 = watch('sgstLedger_40')
+  const wI5  = watch('igstLedger_5');  const wI18 = watch('igstLedger_18'); const wI40 = watch('igstLedger_40')
 
   const watchedLineItems = watch('lineItems')
   const watchedRoundOff  = watch('roundOffAmount')
@@ -294,10 +313,10 @@ export function MappingForm({
 
   const purchaseOk = billType === 'misc'
     ? true
-    : (!show5 || !!wP5?.trim()) && (!show18 || !!wP18?.trim()) && (!showExempt || !!wPEx?.trim())
+    : (!show5 || !!wP5?.trim()) && (!show18 || !!wP18?.trim()) && (!show40 || !!wP40?.trim()) && (!showExempt || !!wPEx?.trim())
   const taxOk = isInterstate
-    ? (!show5 || !!wI5?.trim()) && (!show18 || !!wI18?.trim())
-    : (!show5 || (!!wC5?.trim() && !!wS5?.trim())) && (!show18 || (!!wC18?.trim() && !!wS18?.trim()))
+    ? (!show5 || !!wI5?.trim()) && (!show18 || !!wI18?.trim()) && (!show40 || !!wI40?.trim())
+    : (!show5 || (!!wC5?.trim() && !!wS5?.trim())) && (!show18 || (!!wC18?.trim() && !!wS18?.trim())) && (!show40 || (!!wC40?.trim() && !!wS40?.trim()))
   const miscExpenseLedgersOk = billType !== 'misc'
     || (watchedLineItems ?? bill.lineItems).every((item) => item.tallyLedger?.trim())
   const canSync = purchaseOk && ((!show5 && !show18) || taxOk) && miscExpenseLedgersOk
@@ -375,6 +394,16 @@ export function MappingForm({
                 registration={register('purchaseLedger_18')}
               />
             )}
+            {show40 && (
+              <LedgerInput
+                id="purchase-40"
+                label="Purchase Ledger (40%)"
+                required
+                ledgers={ledgers}
+                pinnedNames={prefillPurchase40 ? [prefillPurchase40] : []}
+                registration={register('purchaseLedger_40')}
+              />
+            )}
             {showExempt && (
               <LedgerInput
                 id="purchase-exempt"
@@ -433,6 +462,26 @@ export function MappingForm({
                 />
               </>
             )}
+            {show40 && (
+              <>
+                <LedgerInput
+                  id="cgst-40"
+                  label="CGST (20%)"
+                  required
+                  ledgers={ledgers}
+                  pinnedNames={prefillCgst40 ? [prefillCgst40] : []}
+                  registration={register('cgstLedger_40')}
+                />
+                <LedgerInput
+                  id="sgst-40"
+                  label="SGST (20%)"
+                  required
+                  ledgers={ledgers}
+                  pinnedNames={prefillSgst40 ? [prefillSgst40] : []}
+                  registration={register('sgstLedger_40')}
+                />
+              </>
+            )}
           </div>
         </div>
       )}
@@ -460,6 +509,16 @@ export function MappingForm({
                 ledgers={ledgers}
                 pinnedNames={prefillIgst18 ? [prefillIgst18] : []}
                 registration={register('igstLedger_18')}
+              />
+            )}
+            {show40 && (
+              <LedgerInput
+                id="igst-40"
+                label="IGST (40%)"
+                required
+                ledgers={ledgers}
+                pinnedNames={prefillIgst40 ? [prefillIgst40] : []}
+                registration={register('igstLedger_40')}
               />
             )}
           </div>

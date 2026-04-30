@@ -383,19 +383,23 @@ export default function CompanySettings() {
               <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
                 <LedgerSelect label="Interstate 18%"       value={mapping.purchase_interstate_18} ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_18')} />
-                <LedgerSelect label="Interstate 5%"        value={mapping.purchase_interstate_5}  ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_5')} />
                 <LedgerSelect label="Intra-state 18%"      value={mapping.purchase_up_18}         ledgerOptions={ledgerOptions} onChange={set('purchase_up_18')} />
+                <LedgerSelect label="Interstate 5%"        value={mapping.purchase_interstate_5}  ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_5')} />
                 <LedgerSelect label="Intra-state 5%"       value={mapping.purchase_up_5}          ledgerOptions={ledgerOptions} onChange={set('purchase_up_5')} />
+                <LedgerSelect label="Inter-state 40%"      value={mapping.purchase_interstate_40} ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_40')} />
+                <LedgerSelect label="Intra-state 40%"      value={mapping.purchase_up_40}         ledgerOptions={ledgerOptions} onChange={set('purchase_up_40')} />
                 <LedgerSelect label="Exempt"               value={mapping.purchase_exempt}        ledgerOptions={ledgerOptions} onChange={set('purchase_exempt')} />
               </div>
 
               {/* CGST / SGST */}
               <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">CGST / SGST</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
-                <LedgerSelect label="CGST 9% (18% GST)"   value={mapping.input_cgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_cgst_9')} />
-                <LedgerSelect label="SGST 9% (18% GST)"   value={mapping.input_sgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_sgst_9')} />
-                <LedgerSelect label="CGST 2.5% (5% GST)"  value={mapping.input_cgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_cgst_2_5')} />
-                <LedgerSelect label="SGST 2.5% (5% GST)"  value={mapping.input_sgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_sgst_2_5')} />
+                <LedgerSelect label="CGST 9% (18% GST)"    value={mapping.input_cgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_cgst_9')} />
+                <LedgerSelect label="SGST 9% (18% GST)"    value={mapping.input_sgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_sgst_9')} />
+                <LedgerSelect label="CGST 2.5% (5% GST)"   value={mapping.input_cgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_cgst_2_5')} />
+                <LedgerSelect label="SGST 2.5% (5% GST)"   value={mapping.input_sgst_2_5} ledgerOptions={ledgerOptions} onChange={set('input_sgst_2_5')} />
+                <LedgerSelect label="CGST 20% (40% GST)"   value={mapping.input_cgst_20}  ledgerOptions={ledgerOptions} onChange={set('input_cgst_20')} />
+                <LedgerSelect label="SGST 20% (40% GST)"   value={mapping.input_sgst_20}  ledgerOptions={ledgerOptions} onChange={set('input_sgst_20')} />
               </div>
 
               {/* IGST */}
@@ -403,6 +407,7 @@ export default function CompanySettings() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
                 <LedgerSelect label="IGST 5%"  value={mapping.igst_5}  ledgerOptions={ledgerOptions} onChange={set('igst_5')} />
                 <LedgerSelect label="IGST 18%" value={mapping.igst_18} ledgerOptions={ledgerOptions} onChange={set('igst_18')} />
+                <LedgerSelect label="IGST 40%" value={mapping.igst_40} ledgerOptions={ledgerOptions} onChange={set('igst_40')} />
               </div>
 
               {/* Round Off */}
