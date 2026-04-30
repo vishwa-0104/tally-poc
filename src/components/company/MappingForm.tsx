@@ -169,6 +169,17 @@ export function MappingForm({
       else                          show18     = true
     }
 
+    // Secondary override: line items have gstRate=0 (AI couldn't find rate on row)
+    // but the bill clearly has tax — infer the real rate from bill-level totals.
+    const billTax = bill.cgstAmount + bill.sgstAmount + bill.igstAmount
+    if (billTax > 0 && !show5 && !show18 && !show40) {
+      showExempt = false
+      const effectiveRate = bill.subtotal > 0 ? Math.round(billTax / bill.subtotal * 100) : 0
+      if (effectiveRate <= 7)       show5  = true
+      else if (effectiveRate > 35)  show40 = true
+      else                          show18 = true
+    }
+
     // Safety: always show at least one field
     if (!show5 && !show18 && !show40 && !showExempt) showExempt = true
   }
@@ -418,7 +429,7 @@ export function MappingForm({
       )}
 
       {/* ── CGST / SGST (intra-state) ── */}
-      {!isInterstate && (show5 || show18) && (
+      {!isInterstate && (show5 || show18 || show40) && (
         <div className="mt-2">
           <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">CGST / SGST</p>
           <div className="grid grid-cols-2 gap-x-4">
@@ -487,7 +498,7 @@ export function MappingForm({
       )}
 
       {/* ── IGST (interstate) ── */}
-      {isInterstate && (show5 || show18) && (
+      {isInterstate && (show5 || show18 || show40) && (
         <div className="mt-2">
           <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">IGST</p>
           <div className="grid grid-cols-2 gap-x-4">
