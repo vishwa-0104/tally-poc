@@ -38,7 +38,7 @@ export function CreateStockItemModal({
   const [unit, setUnit]                       = useState('')
   const [gstApplicable, setGstApplicable]     = useState<'Yes' | 'No'>('Yes')
   const [taxability, setTaxability]           = useState('Taxable')
-  const [gstRate, setGstRate]                 = useState<'5' | '18'>('18')
+  const [gstRate, setGstRate]                 = useState<'5' | '18' | '40'>('18')
   const [typeOfSupply, setTypeOfSupply]       = useState('Goods')
 
   useEffect(() => {
@@ -199,11 +199,12 @@ export function CreateStockItemModal({
                   <label className="block text-xs font-semibold text-gray-700 mb-1.5">GST Rate %</label>
                   <select
                     value={gstRate}
-                    onChange={(e) => setGstRate(e.target.value as '5' | '18')}
+                    onChange={(e) => setGstRate(e.target.value as '5' | '18' | '40')}
                     className="input-base w-full"
                   >
                     <option value="5">5%</option>
                     <option value="18">18%</option>
+                    <option value="18">40%</option>
                   </select>
                 </div>
               )}
