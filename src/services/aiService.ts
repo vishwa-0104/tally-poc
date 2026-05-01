@@ -49,6 +49,8 @@ export function parsedDataToBill(
     igstAmount: data.igstAmount,
     totalAmount: data.totalAmount,
     roundOffAmount: data.roundOffAmount ?? undefined,
+    invoiceDiscountAmount: data.invoiceDiscountAmount ?? undefined,
+    extraCharges: data.extraCharges?.length ? data.extraCharges : undefined,
     status: 'parsed',
     imageUrl,
     lineItems,

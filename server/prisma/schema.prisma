@@ -143,7 +143,9 @@ model Bill {
   rawAiJson    Json?
   tallyXml       String?
   tallyMapping   Json?
-  roundOffAmount Float?
+  roundOffAmount         Float?
+  invoiceDiscountAmount  Float?
+  extraCharges           Json?
   syncedAt       DateTime?
   syncError    String?
   lineItems    LineItem[]

@@ -59,7 +59,7 @@ billsRouter.put('/bills/:id', async (req, res) => {
     'billNumber', 'vendorName', 'vendorGstin', 'buyerGstin', 'billDate',
     'subtotal', 'cgstAmount', 'sgstAmount', 'igstAmount', 'totalAmount',
     'imageUrl', 'originalData', 'isEdited', 'rawAiJson',
-    'tallyXml', 'tallyMapping', 'roundOffAmount', 'syncError', 'billType',
+    'tallyXml', 'tallyMapping', 'roundOffAmount', 'invoiceDiscountAmount', 'syncError', 'billType', 'extraCharges',
   ] as const
   const safeData: Record<string, unknown> = {}
   for (const key of updatable) {
@@ -305,6 +305,10 @@ billsRouter.post('/bills/parse', async (req, res) => {
       ...parsed,
       roundOffAmount,
       invoiceDiscountAmount: parsed.invoiceDiscountAmount ?? null,
+      extraCharges: (parsed.extraCharges ?? []).map((ec: Record<string, unknown>) => ({
+        description: ec.description ?? '',
+        amount: Number(ec.amount ?? 0),
+      })),
       lineItems: (parsed.lineItems ?? []).map((item: Record<string, unknown>) => ({
         ...item,
         hsnCode: item.hsnCode ?? '',
@@ -341,9 +345,17 @@ FIELD RULES
 - Verify: (qty × unitPrice) - lineItem.discountAmount ≈ lineItem.amount.
 - lineItem.unit: read from bill (Ltr/Kg/Pc/Pkt/Strip/Ctn/Nos). Default: "blank".
 
+EXTRA CHARGES
+- Some bills include additional charges outside the main item table (freight, insurance, loading, unloading, rakhsawa, auto charges, handling, cartage, octroi, etc.).
+- These typically appear after the line items and before the GST row.
+- Extract each such charge into extraCharges with its description and amount (pre-tax value).
+- Do NOT include GST rows (CGST/SGST/IGST) or round-off in extraCharges.
+- If no extra charges exist, return [].
+- subtotal = sum of lineItem amounts ONLY (do not include extra charges in subtotal).
+
 VERIFICATION & HIERARCHY
 - The "Value Before Tax" printed on the invoice is the absolute truth for lineItem.amount.
-- subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount.
+- subtotal + sum(extraCharges.amount) + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount.
 
 NUMERIC RULES: dot = decimal (1.50 not 150), comma = thousands separator (1,450.50 → 1450.50). Copy numbers exactly. Missing optional fields → null.
 
@@ -355,6 +367,7 @@ Return this exact JSON structure:
   "billNumber": string,
   "billDate": "YYYY-MM-DD",
   "lineItems": [{ "description": string, "hsnCode": string | null, "quantity": number, "unit": string, "unitPrice": number, "discountPercent": number | null, "discountAmount": number | null, "gstRate": number, "amount": number }],
+  "extraCharges": [{ "description": string, "amount": number }],
   "subtotal": number,
   "cgstAmount": number,
   "sgstAmount": number,
@@ -406,9 +419,17 @@ FIELD RULES
 - Verify: (qty × unitPrice) - lineItem.discountAmount ≈ lineItem.amount. 
 - lineItem.unit: read from bill (Ltr/Kg/Pc/Pkt/Strip/Ctn/Nos).  Default: "blank".
 
+EXTRA CHARGES
+- Some bills include additional charges outside the main item table (freight, insurance, loading, unloading, rakhsawa, auto charges, handling, cartage, octroi, etc.).
+- These typically appear after the line items and before the GST row.
+- Extract each such charge into extraCharges with its description and amount (pre-tax value).
+- Do NOT include GST rows (CGST/SGST/IGST) or round-off in extraCharges.
+- If no extra charges exist, return [].
+- subtotal = sum of lineItem amounts ONLY (do not include extra charges in subtotal).
+
 VERIFICATION & HIERARCHY
-- The "Value Before Tax" printed on the invoice is the absolute truth for lineItem.amount. 
-- subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount. 
+- The "Value Before Tax" printed on the invoice is the absolute truth for lineItem.amount.
+- subtotal + sum(extraCharges.amount) + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) ≈ totalAmount.
 
 NUMERIC RULES: dot = decimal (1.50 not 150), comma = thousands separator (1,450.50 → 1450.50). Copy numbers exactly. Missing optional fields → null.
 
@@ -421,6 +442,7 @@ OUTPUT schema:
   "billNumber": string,
   "billDate": "YYYY-MM-DD",
   "lineItems": [{ "description": string, "hsnCode": string | null, "quantity": number, "unit": string, "unitPrice": number, "discountPercent": number | null, "discountAmount": number | null, "gstRate": number, "amount": number }],
+  "extraCharges": [{ "description": string, "amount": number }],
   "subtotal": number,
   "cgstAmount": number,
   "sgstAmount": number,

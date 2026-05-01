@@ -119,6 +119,10 @@ export default function BillMapping() {
         }))
       : undefined
 
+    const extraChargesForXml = (data.extraCharges ?? [])
+      .filter((ec) => ec.ledger?.trim() && ec.amount)
+      .map((ec) => ({ description: ec.description, amount: Number(ec.amount), ledger: ec.ledger!.trim() }))
+
     const tallyMapping = {
       vendorLedger: trim(data.vendorLedger),
       purchaseLedger,
@@ -126,6 +130,7 @@ export default function BillMapping() {
       sgstLedger,
       igstLedger,
       godown,
+      extraCharges: extraChargesForXml,
     }
 
     // Use the form's round-off value (user-editable, pre-filled from AI parse or computed).
@@ -173,6 +178,7 @@ export default function BillMapping() {
       voucherType:   voucherType,
       lineItems:     bill.billType === 'misc' ? undefined : resolvedLineItems,
       miscLedgerItems,
+      extraCharges:  extraChargesForXml.length > 0 ? extraChargesForXml : undefined,
       narration:     data.narration?.trim() || undefined,
     })
 

@@ -228,6 +228,7 @@ export function MappingForm({
     resolver: zodResolver(mappingSchema),
     defaultValues: {
       vendorLedger:          resolvedVendor || undefined,
+      extraCharges:          (bill.extraCharges ?? []).map((ec) => ({ ...ec, ledger: '' })),
       purchaseLedger_5:      show5      ? prefillPurchase5      || undefined : undefined,
       purchaseLedger_18:     show18     ? prefillPurchase18     || undefined : undefined,
       purchaseLedger_40:     show40     ? prefillPurchase40     || undefined : undefined,
@@ -306,8 +307,9 @@ export function MappingForm({
   const wC40 = watch('cgstLedger_40'); const wS40 = watch('sgstLedger_40')
   const wI5  = watch('igstLedger_5');  const wI18 = watch('igstLedger_18'); const wI40 = watch('igstLedger_40')
 
-  const watchedLineItems = watch('lineItems')
-  const watchedRoundOff  = watch('roundOffAmount')
+  const watchedLineItems    = watch('lineItems')
+  const watchedRoundOff     = watch('roundOffAmount')
+  const watchedExtraCharges = watch('extraCharges')
 
   // Round off mismatch check — expected = totalAmount − (subtotal + taxes)
   // Same formula used server-side when correcting the AI-parsed sign.
@@ -330,7 +332,9 @@ export function MappingForm({
     : (!show5 || (!!wC5?.trim() && !!wS5?.trim())) && (!show18 || (!!wC18?.trim() && !!wS18?.trim())) && (!show40 || (!!wC40?.trim() && !!wS40?.trim()))
   const miscExpenseLedgersOk = billType !== 'misc'
     || (watchedLineItems ?? bill.lineItems).every((item) => item.tallyLedger?.trim())
-  const canSync = purchaseOk && ((!show5 && !show18) || taxOk) && miscExpenseLedgersOk
+  const extraChargesOk = !(bill.extraCharges?.length)
+    || (watchedExtraCharges ?? []).every((ec) => ec.ledger?.trim())
+  const canSync = purchaseOk && ((!show5 && !show18 && !show40) || taxOk) && miscExpenseLedgersOk && extraChargesOk
 
   // All ledger options for datalist
   const allLedgerNames = ledgers.map((l) => l.name)
@@ -427,6 +431,48 @@ export function MappingForm({
           </div>
         </div>
       )}
+
+
+      {/* ── Extra Charges ── */}
+      {/* {bill.extraCharges && bill.extraCharges.length > 0 && (
+        <div className="mt-2">
+          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Extra Charges</p>
+          <div className="overflow-x-auto rounded-xl border border-gray-200">
+            <table className="w-full border-collapse text-xs" aria-label="Extra charges">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Description</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Ledger *</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bill.extraCharges.map((charge, i) => (
+                  <tr key={i} className="border-b border-gray-100 last:border-0">
+                    <td className="px-3 py-2 text-sm text-gray-700">{charge.description}</td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        {...register(`extraCharges.${i}.ledger`)}
+                        list="extra-charges-ledger-list"
+                        autoComplete="off"
+                        placeholder="Select ledger…"
+                        className="w-56 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-sm font-semibold text-gray-800">{formatCurrency(charge.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <datalist id="extra-charges-ledger-list">
+            {allLedgerNames.map((name) => <option key={name} value={name} />)}
+          </datalist>
+          {!extraChargesOk && (
+            <p className="text-xs text-amber-600 mt-2">Select a ledger for every extra charge to enable sync.</p>
+          )}
+        </div>
+      )} */}
 
       {/* ── CGST / SGST (intra-state) ── */}
       {!isInterstate && (show5 || show18 || show40) && (
@@ -559,7 +605,7 @@ export function MappingForm({
         </div>
       )}
 
-      {!canSync && !ledgersLoading && (
+      {!canSync && !ledgersLoading && extraChargesOk && (
         <p className="text-xs text-amber-600 mt-1">
           {billType === 'misc' && !miscExpenseLedgersOk
             ? 'Select an expense ledger for each row to enable sync.'
@@ -744,40 +790,76 @@ export function MappingForm({
                 {allLedgerNames.map((name) => <option key={name} value={name} />)}
               </datalist>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                <tr className="border-t border-gray-100">
-                  <td colSpan={6 + (hasPctDiscount || hasFlatDiscount ? 1 : 0)} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
-                  <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
-                </tr>
-                {!isInterstate && (
-                  <>
-                    <tr className="border-t border-gray-100">
-                      <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
-                      <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.cgstAmount)}</td>
-                    </tr>
-                    <tr className="border-t border-gray-100">
-                      <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
-                      <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.sgstAmount)}</td>
-                    </tr>
-                  </>
-                )}
-                {isInterstate && (
-                  <tr className="border-t border-gray-100">
-                    <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.igstAmount)}</td>
-                  </tr>
-                )}
-                {hasRoundOff && (
-                  <tr className="border-t border-gray-100">
-                    <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(roundOffValue!)}</td>
-                  </tr>
-                )}
-                <tr className="border-t-2 border-gray-300">
-                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
-                  <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>
-                </tr>
+                {/* Helper variable to keep colSpan consistent across all rows */}
+                {(() => {
+                  const baseColSpan = 6 + (hasPctDiscount || hasFlatDiscount ? 1 : 0);
+                  
+                  return (
+                    <>
+                      <tr className="border-t border-gray-100">
+                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
+                        <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
+                        <td></td> {/* Empty cell for 'Item as per' column */}
+                      </tr>
+
+                      {bill.extraCharges?.map((charge, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="px-2 py-1.5 text-right" colSpan={3}>
+                            <input
+                              {...register(`extraCharges.${i}.ledger`)}
+                              list="extra-charges-ledger-list"
+                              autoComplete="off"
+                              placeholder="Select ledger… *"
+                              className="w-56 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                            />
+                            {!extraChargesOk && (
+                              <p className="text-xs text-amber-600 mt-2">Select a ledger for every extra charge to enable sync.</p>
+                            )}
+                          </td>
+                          <td colSpan={3} className="px-3 py-2 text-sm text-gray-700 text-right">{charge.description}</td>
+                          <td colSpan={3} className="px-3 py-2 text-sm font-semibold text-gray-800">{formatCurrency(charge.amount)}</td>
+                        </tr>
+                      ))}
+
+                      {!isInterstate && (
+                        <>
+                          <tr className="border-t border-gray-100">
+                            <td colSpan={baseColSpan + 1} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
+                            <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(bill.cgstAmount)}</td>
+                          </tr>
+                          <tr className="border-t border-gray-100">
+                            <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
+                            <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(bill.sgstAmount)}</td>
+                          </tr>
+                        </>
+                      )}
+
+                      {isInterstate && (
+                        <tr className="border-t border-gray-100">
+                          <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
+                          <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(bill.igstAmount)}</td>
+                        </tr>
+                      )}
+
+                      {hasRoundOff && (
+                        <tr className="border-t border-gray-100">
+                          <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                          <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(roundOffValue!)}</td>
+                        </tr>
+                      )}
+
+                      <tr className="border-t-2 border-gray-300">
+                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
+                        <td className="px-3 py-2 text-xs font-bold text-teal-700" colSpan={3}>{formatCurrency(bill.totalAmount)}</td>
+                      </tr>
+                    </>
+                  );
+                })()}
               </tfoot>
             </table>
+            <datalist id="extra-charges-ledger-list">
+                {allLedgerNames.map((name) => <option key={name} value={name} />)}
+            </datalist>
           </div>
         </div>
       )}

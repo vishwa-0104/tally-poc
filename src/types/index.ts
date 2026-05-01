@@ -49,6 +49,12 @@ export function normalizeLedgerMapping(raw: unknown): LedgerMapping {
   return raw as LedgerMapping
 }
 
+export interface ExtraCharge {
+  description: string
+  amount: number
+  ledger?: string
+}
+
 // Ledger mapping chosen for a single bill before syncing to Tally.
 export interface TallyBillMapping {
   vendorLedger?: string
@@ -57,6 +63,7 @@ export interface TallyBillMapping {
   sgstLedger?: string
   igstLedger?: string
   godown?: string
+  extraCharges?: ExtraCharge[]
 }
 
 // ── Company Feature Flags ─────────────────────────────────────────────────────
@@ -113,6 +120,7 @@ export interface ParsedBillData {
   /** Invoice-level discount amount — null when discount is only per-line (Pattern A) */
   invoiceDiscountAmount?: number | null
   lineItems: Omit<LineItem, 'id'>[]
+  extraCharges?: ExtraCharge[]
 }
 
 export interface LineItem {
@@ -151,6 +159,7 @@ export interface Bill {
   imageUrl?: string
   roundOffAmount?: number
   invoiceDiscountAmount?: number | null
+  extraCharges?: ExtraCharge[]
   status: BillStatus
   tallyXml?: string
   tallyMapping?: TallyBillMapping

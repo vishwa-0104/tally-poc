@@ -102,6 +102,7 @@ export function buildTallyXml(params: {
   godown?: string
   lineItems?: LineItemParam[]
   miscLedgerItems?: { description: string; amount: number; ledger?: string }[]
+  extraCharges?: { description: string; amount: number; ledger?: string }[]
   narration?: string
 }): string {
   const esc = escapeXml
@@ -213,6 +214,19 @@ export function buildTallyXml(params: {
             </LEDGERENTRIES.LIST>`
     : ''
 
+  // Extra charges — debit entries (freight, insurance, etc.)
+  const extraChargeEntries = (params.extraCharges ?? [])
+    .filter((ec) => ec.ledger?.trim() && ec.amount)
+    .map((ec) => `
+            <LEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(ec.ledger!.trim())}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <LEDGERFROMITEM>No</LEDGERFROMITEM>
+              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
+              <ISPARTYLEDGER>No</ISPARTYLEDGER>
+              <AMOUNT>-${amt(ec.amount)}</AMOUNT>
+            </LEDGERENTRIES.LIST>`).join('')
+
   // Tax ledgers — debit
   const cgstEntry = params.cgstLedger?.trim() && params.cgstAmount !== 0
     ? `
@@ -308,7 +322,7 @@ export function buildTallyXml(params: {
             <NARRATION>${esc(params.narration)}</NARRATION>` : ''}
             <VCHENTRYMODE>${hasInventory ? 'Item Invoice' : 'Accounting Invoice'}</VCHENTRYMODE>
             <PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
-            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${partyEntry}${miscEntries}${purchaseEntry}${cgstEntry}${sgstEntry}${igstEntry}${discountEntry}${roundOffEntry}
+            <ISINVOICE>Yes</ISINVOICE>${inventoryEntries}${partyEntry}${miscEntries}${purchaseEntry}${extraChargeEntries}${cgstEntry}${sgstEntry}${igstEntry}${discountEntry}${roundOffEntry}
           </VOUCHER>
         </TALLYMESSAGE>
       </REQUESTDATA>

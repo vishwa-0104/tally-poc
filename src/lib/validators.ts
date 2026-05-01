@@ -82,6 +82,11 @@ export const mappingSchema = z.object({
   godownName:     z.string().optional(),
   discountLedger: z.string().optional(),
   narration:      z.string().optional(),
+  extraCharges:   z.array(z.object({
+    description: z.string(),
+    amount:      z.coerce.number(),
+    ledger:      z.string().optional(),
+  })).optional(),
 })
 
 export type LoginInput      = z.infer<typeof loginSchema>
