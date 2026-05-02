@@ -824,7 +824,7 @@ export function MappingForm({
                       {!isInterstate && (
                         <>
                           <tr className="border-t border-gray-100">
-                            <td colSpan={baseColSpan + 1} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
+                            <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
                             <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(bill.cgstAmount)}</td>
                           </tr>
                           <tr className="border-t border-gray-100">

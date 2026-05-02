@@ -3,9 +3,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: tally_bill_sync
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-tally_bill_sync}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -22,7 +22,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tally_bill_sync
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/tally_bill_sync}
       JWT_SECRET: ${JWT_SECRET:-please-change-this-secret}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
