@@ -296,13 +296,13 @@ export default function BillMapping() {
         await fetchBills(companyId)
 
         persistAliases(dataWithVoucher.lineItems)
-        toast.success('Bill synced to Tally successfully!')
+        toast.success('Bill pushed successfully!')
         setSyncDone(true)
         incrementSynced(companyId)
         decrementPending(companyId)
         fetchCompanies().catch(() => {})
       } else {
-        throw new Error(result.message ?? 'Tally returned 0 created vouchers')
+        throw new Error(result.message ?? 'App returned 0 created vouchers')
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sync failed'
@@ -337,7 +337,7 @@ export default function BillMapping() {
             <div className="flex items-start gap-3 p-5 bg-emerald-50 border border-emerald-200 rounded-xl mb-6">
               <CheckCircle className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-bold text-emerald-800">Successfully synced to Tally!</p>
+                <p className="text-sm font-bold text-emerald-800">Successfully synced!</p>
                 <p className="text-xs text-emerald-700 mt-0.5">
                   Voucher created in ERP. This bill is now marked as synced.
                 </p>
@@ -408,7 +408,7 @@ export default function BillMapping() {
               </p>
               <p>
                 Status:{' '}
-                {duplicateWarning.status === 'synced' && <span className="font-medium text-emerald-700">Already synced to Tally</span>}
+                {duplicateWarning.status === 'synced' && <span className="font-medium text-emerald-700">Already synced</span>}
                 {duplicateWarning.status === 'mapped' && <span className="font-medium text-blue-700">Already mapped, not yet synced</span>}
                 {duplicateWarning.status === 'parsed' && <span className="font-medium text-gray-700">Already parsed</span>}
                 {duplicateWarning.status === 'error' && <span className="font-medium text-red-700">Previous sync attempt failed</span>}

@@ -48,18 +48,18 @@ btn.addEventListener('click', async () => {
 
     if (response.ok) {
       msg.className = 'ok'
-      msg.textContent = `Connected to Tally on port ${port}`
+      msg.textContent = `Connected to Invoice on port ${port}`
     } else {
       msg.className = 'err'
-      msg.textContent = `Tally responded with HTTP ${response.status}`
+      msg.textContent = `Invoice responded with HTTP ${response.status}`
       console.log(">>>>>>>>>>>>>> ", response.status)
     }
   } 
   // catch {
   //   msg.className = 'err'
-  //   msg.textContent = `Could not reach Tally on port ${port}. Is Tally running?`
+  //   msg.textContent = `Could not reach Invoice on port ${port}. Is Invoice running?`
   // }
 
   // btn.disabled = false
-  // btn.textContent = 'Test Tally Connection'
+  // btn.textContent = 'Test Invoice Connection'
 )

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Tally Bill Sync",
+  "name": "Invoice Sync",
   "version": "1.0.0",
-  "description": "Connects Tally Bill Sync web app to your local Tally ERP server.",
+  "description": "Connects Invoice Bill Sync web app to your local Invoice ERP server.",
 
   "permissions": [],
   "host_permissions": [
@@ -16,7 +16,7 @@
 
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Tally Bill Sync"
+    "default_title": "Invoice Sync"
   },
 
   "content_scripts": [

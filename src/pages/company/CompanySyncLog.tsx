@@ -22,7 +22,7 @@ export default function CompanySyncLog() {
 
   return (
     <>
-      <PageHeader title="Sync Log" subtitle="History of all Tally sync operations" />
+      <PageHeader title="Sync Log" subtitle="History of all sync operations" />
 
       <div className="p-4 md:p-7 space-y-6">
 

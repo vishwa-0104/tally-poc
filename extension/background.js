@@ -124,9 +124,9 @@ async function handleFetchLedgers(tallyUrl, tallyCompany) {
   // so we can see the exact tag name Tally is using
   const gstinPatternInXml = responseText.match(/<LEDGER\b[^>]*>[\s\S]{0,2000}?[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z][\s\S]{0,200}?<\/LEDGER>/i)
   if (gstinPatternInXml) {
-    console.log('[Tally ledgers GSTIN block sample]', gstinPatternInXml[0])
+    console.log('[Invoice ledgers GSTIN block sample]', gstinPatternInXml[0])
   } else {
-    console.log('[Tally ledgers raw - first 8000]', responseText.slice(0, 8000))
+    console.log('[Invoice ledgers raw - first 8000]', responseText.slice(0, 8000))
   }
 
   const ledgers = parseLedgers(responseText)
@@ -642,7 +642,7 @@ async function postToTally(xml, tallyUrl) {
   })
 
   if (!response.ok) {
-    throw new Error(`Tally server responded with HTTP ${response.status}. Is Tally running?`)
+    throw new Error(`Invoice sync server responded with HTTP ${response.status}. Is Invoice ERP running?`)
   }
 
   return response.text()
