@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { loginSchema, type LoginInput } from '@/lib/validators'
 import { useAuthStore } from '@/store'
-import invoiceSyncSvg from '../assets/invoice-sync-logo-blue.svg'
+import invoiceSyncSvg from '../assets/sync-invoice-logo-blue.svg'
 
 export default function LoginPage() {
   const { role } = useParams<{ role?: string }>()

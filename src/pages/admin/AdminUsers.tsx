@@ -164,7 +164,7 @@ function UserPanel({ user, onClose, onChanged }: UserPanelProps) {
           {unlinked.length > 0 && (
             <div>
               <p className="text-xs font-bold text-gray-300 uppercase tracking-widest mb-2">Link a Company</p>
-              <div className="flex gap-2">
+              <div className="gap-2">
                 <select
                   value={selectedCompany}
                   onChange={(e) => setSelected(e.target.value)}

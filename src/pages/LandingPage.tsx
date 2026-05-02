@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { Upload, Brain, RefreshCw, Building2, Clock } from 'lucide-react'
 import { useAuthStore } from '@/store'
 import { LeadFormModal } from '@/components/LeadFormModal'
-import invoiceSyncSvg from '../assets/invoice-sync-logo-blue.svg'
+import invoiceSyncSvg from '../assets/sync-invoice-logo-blue.svg'
 import { Button } from '@/components/ui/Button'
 import { TypeAnimation } from 'react-type-animation'
 
@@ -58,7 +58,7 @@ export default function LandingPage() {
       </header>
 
       {/* ── Hero ── */}
-      <section className="relative bg-gradient-to-b from-gray-50 via-blue-400 to-gray-250 pt-20 pb-28 px-6 text-center overflow-hidden h-screen justify-center flex items-center">
+      <section className="relative bg-gradient-to-b from-gray-50 via-blue-400 to-gray-550 pt-20 pb-28 px-6 text-center overflow-hidden h-screen justify-center flex items-center">
         {/* Glow blobs */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -66,7 +66,7 @@ export default function LandingPage() {
 
           <h1 className="text-4xl sm:text-6xl font-extrabold leading-tight text-white mb-5">
             Feed invoices in{' '}
-            <span className="text-blue-500">seconds</span>,<br className="hidden sm:block" /> not hours.
+            <span className="text-blue-500">minutes</span>,<br className="hidden sm:block" /> not hours.
           </h1>
 
           <p className="text-lg text-white max-w-xl mx-auto mb-8 leading-relaxed">
@@ -192,11 +192,11 @@ export default function LandingPage() {
       <footer className="py-8 px-6 bg-gray-300 border-t border-white/5">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-teal-400">
           <div className="flex items-center gap-2">
-            <span>© 2026 InvoiceSync. All rights reserved.</span>
+            <span>© 2026 SyncInvoice. All rights reserved.</span>
           </div>
           <div className="flex items-center gap-4">
           <Link to="/terms-and-conditions" className="text-teal-400 hover:text-teal-300 hover:underline underline-offset-2 transition-colors">Terms & Conditions</Link>
-          <Link to="/privacy-policy" className="text-teal-400 hover:text-teal-300 hover:underline underline-offset-2 transition-colors">Privacy Policy</Link>
+          <Link to="/privacy-policy" className="text-teal-400 hover:text-teal-300 hover:underline underline-offset-2 transition-colors">Privacy</Link>
         </div>
         </div>
       </footer>

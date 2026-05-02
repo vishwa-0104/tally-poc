@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import invoiceSyncSvg from '../assets/invoice-sync-logo-blue.svg'
+import invoiceSyncSvg from '../assets/sync-invoice-logo-blue.svg'
 
 
 
@@ -52,7 +52,7 @@ export default function PrivacyPolicy() {
 
       {/* Content */}
       <main className="max-w-3xl mx-auto px-6 py-16">
-        <div className="bg-slate-800 py-8 px-8 text-white">
+        <div className="text-gray-700">
         <h1 className="text-3xl font-extrabold text-gray-700 mb-2">Privacy Policy</h1>
         <p className="text-sm text-gray-500 mb-10">Effective Date: April 29, 2026</p>
         </div>
@@ -177,7 +177,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2>8. Data Security</h2>
             <p>
-              We implement appropriate technical and organisational measures to protect your information. However, no method of transmission over the Internet or electronic storage is 100% secure. We cannot guarantee absolute security.
+              We take appropriate security measures to protect against any unauthorised access to or unauthorised alteration, disclosure or destruction of data.
             </p>
           </section>
 
@@ -190,20 +190,8 @@ export default function PrivacyPolicy() {
 
           <section>
             <h2>10. Changes to This Privacy Policy</h2>
-            <p>We may update this Privacy Policy from time to time. We will notify you of any material changes by:</p>
-            <ul>
-              <li>Posting the updated policy on this page</li>
-              <li>Updating the "Effective Date" at the top of this policy</li>
-              <li>Sending an email notification for significant changes</li>
-              <li>Providing notice through our website</li>
-            </ul>
-            <p className="mt-3">Your continued use of our services after any changes constitutes acceptance of the updated policy.</p>
-          </section>
-
-          <section>
-            <h2>11. Contact Us</h2>
             <p>
-              If you have any questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us via our Data Request Form.
+              We may update this privacy policy to reflect changes to our information practices. If we make any material changes we will notify you by email or by posting a notice on our website prior to the change becoming effective. We encourage you to periodically review this page for the latest information on our privacy practices.
             </p>
           </section>
 

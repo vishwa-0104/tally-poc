@@ -797,7 +797,7 @@ export function MappingForm({
                   return (
                     <>
                       <tr className="border-t border-gray-100">
-                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
+                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Taxable Amount</td>
                         <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
                         <td></td> {/* Empty cell for 'Item as per' column */}
                       </tr>

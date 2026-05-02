@@ -150,7 +150,7 @@ export function SyncedBillView({ bill }: SyncedBillViewProps) {
               </tbody>
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                 <tr>
-                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Raw Amount</td>
+                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Taxable Amount</td>
                   <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
                   <td />
                 </tr>

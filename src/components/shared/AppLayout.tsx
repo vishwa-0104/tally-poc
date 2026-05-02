@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { LogOut, Menu, X, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store'
-import invoiceSyncSvg from '../../assets/invoice-sync-logo-white.svg'
+import invoiceSyncSvg from '../../assets/sync-invoice-logo-white.svg'
 
 export interface NavItem {
   label: string
