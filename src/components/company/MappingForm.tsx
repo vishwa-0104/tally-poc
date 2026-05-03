@@ -5,8 +5,9 @@ import { AlertTriangle, CheckCircle, Plus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { CreateStockItemModal } from '@/components/company/CreateStockItemModal'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
-import type { Bill, TallyGodown, TallyLedger, TallyStockUnit, LedgerMapping, StockItemAlias } from '@/types'
+import type { Bill, TallyGodown, TallyLedger, TallyStockUnit, TallyStockItem, LedgerMapping, StockItemAlias } from '@/types'
 import { formatCurrency, decodeHtmlEntities } from '@/lib/utils'
+import { Modal } from '../ui'
 
 
 interface LedgerInputProps {
@@ -87,7 +88,7 @@ interface MappingFormProps {
   bill: Bill
   ledgers: TallyLedger[]
   ledgersLoading: boolean
-  stockItems: { name: string }[]
+  stockItems: TallyStockItem[]
   saving: boolean
   syncing: boolean
   savedLedgerSets?: LedgerMapping | null
@@ -125,6 +126,30 @@ export function MappingForm({
   onSyncToTally,
 }: MappingFormProps) {
   const [createItemRowIndex, setCreateItemRowIndex] = useState<number | null>(null)
+  const [showUnitMismatchModal, setShowUnitMismatchModal] = useState(false)
+  const [unitMismatchItems, setUnitMismatchItems] = useState<Array<{ index: number; description: string; selectedUnit: string; tallyUnit: string }>>([])
+
+  // Check for unit mismatches
+  const checkUnitMismatches = () => {
+    const mismatches: Array<{ index: number; description: string; selectedUnit: string; tallyUnit: string }> = []
+    
+    bill.lineItems.forEach((item, i) => {
+      const selectedItemName = watch(`lineItems.${i}.tallyStockItem`)
+      const selectedItem = selectedItemName ? stockItems.find((si) => si.name === selectedItemName) : null
+      const selectedUnit = watch(`lineItems.${i}.unit`)
+      
+      if (selectedItem && selectedUnit && selectedItem.unit !== selectedUnit) {
+        mismatches.push({
+          index: i + 1,
+          description: item.description,
+          selectedUnit,
+          tallyUnit: selectedItem.unit || 'N/A',
+        })
+      }
+    })
+    
+    return mismatches
+  }
 
   // Decode HTML entities in ledger names from existing DB data (&amp; → &, etc.)
   const ledgers = rawLedgers.map((l) => ({
@@ -340,6 +365,7 @@ export function MappingForm({
   const allLedgerNames = ledgers.map((l) => l.name)
 
   return (
+    <>
     <form onSubmit={handleSubmit(onSaveMapping)} noValidate>
       {/* Vendor status banner */}
       {gstinMatch && (
@@ -731,48 +757,66 @@ export function MappingForm({
               <tbody>
                 {bill.lineItems.map((_item, i) => (
                   <tr key={i} className="border-b border-gray-100 last:border-0">
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-5">
                       <input {...register(`lineItems.${i}.description`)} className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-5">
                       <input {...register(`lineItems.${i}.hsnCode`)} className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-5">
                       <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-1.5">
-                      <select
-                        {...register(`lineItems.${i}.unit`)}
-                        className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 bg-white"
-                      >
-                        {stockUnits.map((u) => (
-                          <option key={u.name} value={u.name}>{u.name}</option>
-                        ))}
-                        {watch(`lineItems.${i}.unit`) && !stockUnits.some((u) => u.name === watch(`lineItems.${i}.unit`)) && (
-                          <option value={watch(`lineItems.${i}.unit`)}>{watch(`lineItems.${i}.unit`)}</option>
-                        )}
-                      </select>
+                    <td className="px-2 py-5">
+                      {(() => {
+                        const selectedItemName = watch(`lineItems.${i}.tallyStockItem`);
+                        const selectedItem = selectedItemName ? stockItems.find((si) => si.name === selectedItemName) : null;
+                        const selectedUnit = watch(`lineItems.${i}.unit`);
+                        const unitMismatch = selectedItem && selectedUnit && selectedItem.unit !== selectedUnit;
+                        
+                        return (
+                          <div className="relative">
+                            <select
+                              {...register(`lineItems.${i}.unit`)}
+                              className={`w-20 px-2 py-1 text-xs border rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 bg-white ${
+                                unitMismatch ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'
+                              }`}
+                            >
+                              {stockUnits.map((u) => (
+                                <option key={u.name} value={u.name}>{u.name}</option>
+                              ))}
+                              {watch(`lineItems.${i}.unit`) && !stockUnits.some((u) => u.name === watch(`lineItems.${i}.unit`)) && (
+                                <option value={watch(`lineItems.${i}.unit`)}>{watch(`lineItems.${i}.unit`)}</option>
+                              )}
+                            </select>
+                            {unitMismatch && (
+                              <p className="absolute top-full left-0 text-xs text-amber-600 mt-0.5 whitespace-nowrap">
+                                Tally: <span className="font-semibold">{selectedItem?.unit}</span>
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-5">
                       <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     {hasPctDiscount && (
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-5">
                         <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     )}
                     {hasFlatDiscount && (
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-5">
                         <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     )}
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-5">
                       <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-5">
                       <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-5">
                       <TallyItemCell
                         index={i}
                         register={register}
@@ -981,12 +1025,60 @@ export function MappingForm({
             loading={syncing}
             disabled={saving || !canSync}
             className="whitespace-nowrap px-6 py-2.5"
-            onClick={handleSubmit(onSyncToTally, (errors) => console.error('[MappingForm] Sync validation failed:', errors))}
+            onClick={() => {
+              const mismatches = checkUnitMismatches()
+              if (mismatches.length > 0) {
+                setUnitMismatchItems(mismatches)
+                setShowUnitMismatchModal(true)
+              } else {
+                handleSubmit(onSyncToTally, (errors) => console.error('[MappingForm] Sync validation failed:', errors))()
+              }
+            }}
           >
             {syncing ? 'Pushing' : 'Push'}
           </Button>
         </div>
       </div>
     </form>
+    {showUnitMismatchModal && (
+      <Modal
+        open={!!showUnitMismatchModal}
+        onClose={() => { setShowUnitMismatchModal(false); setUnitMismatchItems([]) }}
+        title="Stock Item Unit Mismatched"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setShowUnitMismatchModal(false); setUnitMismatchItems([]) }}>
+              Cancel
+            </Button>
+            <Button
+              variant="teal"
+              onClick={async () => {
+                setShowUnitMismatchModal(false)
+                await handleSubmit(onSyncToTally, (errors) => console.error('[MappingForm] Sync validation failed:', errors))()
+              }}
+            >
+              Sync Anyway
+            </Button>
+          </>
+        }
+      >
+        <div className="flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-gray-700 space-y-2">
+            {unitMismatchItems.map((item, index) => (
+              <div key={index} className="p-2 bg-yellow-50 border border-yellow-200 rounded">
+                <p>
+                  Units of stock item <span className="font-semibold">{item.description}</span> does not match.
+                </p>
+              </div>
+            ))} 
+            <p>
+              Please correct the units for the above stock items before syncing.
+            </p>
+          </div>
+        </div>
+      </Modal>
+    )}
+    </>
   )
 }
