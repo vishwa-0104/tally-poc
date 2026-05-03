@@ -62,7 +62,7 @@ export default function PrivacyPolicy() {
           <section>
             <h2>1. Introduction</h2>
             <p>
-              Welcome to <span className="text-teal-400">https://www.invoiceSync.nextax.in</span> ("we," "us," or "our"), a product of <strong className="text-gray-700">Nextax Technologies Private Limited</strong>. We are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our website and services.
+              Welcome to <span className="text-teal-400">https://www.SyncInvoice.in</span> ("we," "us," or "our"), a product of <strong className="text-gray-700">Nextax Technologies Private Limited</strong>. We are committed to protecting your privacy and ensuring the security of your personal information. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our website and services.
             </p>
             <p className="mt-3">By using our website, you consent to the data practices described in this policy.</p>
           </section>
@@ -125,8 +125,6 @@ export default function PrivacyPolicy() {
                 </thead>
                 <tbody>
                   <tr><td>Parsed Bill Results</td><td>Not stored in our database</td></tr>
-                  <tr><td>Original Documents</td><td>Deleted immediately after AI processing</td></tr>
-                  <tr><td>Server Logs</td><td>10 days</td></tr>
                   <tr><td>Account Data</td><td>Duration of your account + 0 days post-deletion</td></tr>
                 </tbody>
               </table>
@@ -138,11 +136,9 @@ export default function PrivacyPolicy() {
             <p>Depending on applicable laws, you may have the right to:</p>
             <ul>
               <li>Access your personal data</li>
-              <li>Correct or update your information</li>
               <li>Request deletion of your data</li>
-              <li>Withdraw consent where applicable</li>
             </ul>
-            <p className="mt-3">To exercise these rights, please contact us using the form linked in Section 12.</p>
+           
           </section>
 
           <section>
@@ -158,7 +154,7 @@ export default function PrivacyPolicy() {
             </ul>
 
             <h3>Legal Requirements</h3>
-            <p>We may disclose your information if required by law, court order, or governmental regulation, or if we believe disclosure is necessary to:</p>
+            <p>We may disclose your information if required by law or governmental regulation, or if we believe disclosure is necessary to:</p>
             <ul>
               <li>Protect our rights, privacy, safety, or property</li>
               <li>Comply with legal process or governmental requests</li>

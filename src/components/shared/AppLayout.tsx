@@ -180,7 +180,7 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <span className="text-sm font-bold text-white">InvoiceSync</span>
+          <span className="text-sm font-bold text-white">SyncInvoice</span>
         </div>
         {children}
       </main>

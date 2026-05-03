@@ -44,7 +44,7 @@ export default function LandingPage() {
             className="px-4 py-2 sm:w-auto bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-md transition-colors text-sm shadow-lg shadow-blue-500/25"
           >
             
-            Sign In
+            Sign in
           </Link>
           <Button
             onClick={() => setShowLeadModal(true)}
