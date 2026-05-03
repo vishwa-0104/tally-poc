@@ -97,13 +97,27 @@ export default function CompanyBills() {
                 Parsing {bulkDone} / {bulkTotal} bills…
               </span>
             )}
-            <Button variant="teal" size="sm" onClick={() => setShowUpload(true)} disabled={bulkParsing}>
-              <Upload className="w-3.5 h-3.5" />
-              Upload Bills
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowMiscUpload(true)} disabled={bulkParsing}>
-              Upload Misc Bill
-            </Button>
+            <span className="relative group">
+              <Button variant="teal" size="sm" onClick={() => setShowUpload(true)} disabled={bulkParsing || !!company?.parseBlocked}>
+                <Upload className="w-3.5 h-3.5" />
+                Upload Bills
+              </Button>
+              {company?.parseBlocked && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-gray-800 text-[11px] text-white px-2 py-1 rounded whitespace-nowrap z-10 pointer-events-none">
+                  Parsing disabled by admin
+                </div>
+              )}
+            </span>
+            <span className="relative group">
+              <Button variant="outline" size="sm" onClick={() => setShowMiscUpload(true)} disabled={bulkParsing || !!company?.parseBlocked}>
+                Upload Misc Bill
+              </Button>
+              {company?.parseBlocked && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-gray-800 text-[11px] text-white px-2 py-1 rounded whitespace-nowrap z-10 pointer-events-none">
+                  Parsing disabled by admin
+                </div>
+              )}
+            </span>
           </>
         }
       />
