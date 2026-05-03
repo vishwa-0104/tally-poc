@@ -5,4 +5,7 @@ dist
 .env.*.local
 .env.production
 .DS_Store
+cert.pem
+key.pem
+extension.zip
 *.log
