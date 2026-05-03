@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "description": "Connects Invoice Bill Sync web app to your local Invoice ERP server.",
 
-  "permissions": [],
+  "externally_connectable": {
+    "matches": ["https://syncinvoice.in/*"]
+  },
   "host_permissions": [
     "http://localhost/*",
     "http://127.0.0.1/*"
