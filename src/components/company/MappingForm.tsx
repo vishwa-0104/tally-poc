@@ -357,7 +357,7 @@ export function MappingForm({
       {!gstinMatch && exactNameMatch && (
         <div className="flex gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-5">
           <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm font-medium text-emerald-800">Vendor ledger matched by name in Tally</p>
+          <p className="text-sm font-medium text-emerald-800">Vendor ledger matched by name in Accounting software</p>
         </div>
       )}
 
@@ -368,7 +368,7 @@ export function MappingForm({
             <p className="text-sm font-semibold text-amber-800">Vendor ledger not found</p>
             <p className="text-xs text-amber-700 mt-0.5">
               No ledger matched for "{bill.vendorName}" (GSTIN: {bill.vendorGstin ?? 'N/A'}).
-              Create it in Tally or re-sync ledgers.
+              Create it in Accounting software or re-sync ledgers.
             </p>
           </div>
         </div>
