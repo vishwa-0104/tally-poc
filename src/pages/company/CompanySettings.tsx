@@ -12,7 +12,6 @@ import type { LedgerMapping } from '@/types'
 
 export const TALLY_URL_KEY         = 'tally-server-url'
 export const DEFAULT_TALLY_URL     = 'http://localhost:9000'
-export const TALLY_VOUCHER_TYPE_KEY = 'tally-voucher-type'
 export const DEFAULT_VOUCHER_TYPE  = 'GST PURCHASE'
 
 
@@ -24,7 +23,6 @@ export function getTallyUrl(companyId: string, companyPort?: number): string {
   if (companyPort) return `http://localhost:${companyPort}`
   return DEFAULT_TALLY_URL
 }
-export function getTallyVoucherType(companyId: string): string { return localStorage.getItem(`${TALLY_VOUCHER_TYPE_KEY}-${companyId}`) || DEFAULT_VOUCHER_TYPE }
 
 // ── Single ledger combobox (input + datalist) ─────────────────────────────────
 
@@ -136,7 +134,7 @@ function TabBar({ active, onChange }: TabBarProps) {
 
 export default function CompanySettings() {
   const { activeCompanyId, companies: authCompanies } = useAuthStore()
-  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb, getVoucherTypes, fetchVoucherTypesFromDb, saveVoucherTypesToDb, saveSelectedVoucherType } = useCompanyStore()
   const company     = activeCompanyId ? getCompany(activeCompanyId) : null
   const companyId   = activeCompanyId ?? ''
   const companyName = company?.name ?? authCompanies.find((c) => c.id === activeCompanyId)?.name ?? ''
@@ -151,8 +149,8 @@ export default function CompanySettings() {
   const [syncingGodowns, setSyncingGodowns] = useState(false)
   const [savingMap,      setSavingMap]      = useState(false)
   const [tallyUrl,       setTallyUrl]       = useState(() => getTallyUrl(companyId, company?.port))
-  const [voucherType,    setVoucherType]    = useState(() => getTallyVoucherType(companyId))
-  const [voucherTypes,   setVoucherTypes]   = useState<string[]>([])
+  const [voucherType,    setVoucherType]    = useState(() => company?.voucherType || DEFAULT_VOUCHER_TYPE)
+  const [voucherTypes,   setVoucherTypes]   = useState<string[]>(() => companyId ? getVoucherTypes(companyId) : [])
   const [fetchingVTypes, setFetchingVTypes] = useState(false)
 
   const storedLedgers     = companyId ? getLedgers(companyId)     : []
@@ -169,11 +167,16 @@ export default function CompanySettings() {
   }, [company?.mapping]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (company?.voucherType) setVoucherType(company.voucherType)
+  }, [company?.voucherType]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (companyId && storedLedgers.length === 0)     fetchLedgersFromDb(companyId).catch(() => {})
     if (companyId && storedStockItems.length === 0)  fetchStockItemsFromDb(companyId).catch(() => {})
     if (companyId && storedStockGroups.length === 0) fetchStockGroupsFromDb(companyId).catch(() => {})
     if (companyId && storedStockUnits.length === 0)  fetchStockUnitsFromDb(companyId).catch(() => {})
     if (companyId && godownEnabled && storedGodowns.length === 0) fetchGodownsFromDb(companyId).catch(() => {})
+    if (companyId && voucherTypes.length === 0) fetchVoucherTypesFromDb(companyId).catch(() => {})
   }, [companyId, godownEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveTallyUrl = () => {
@@ -181,9 +184,13 @@ export default function CompanySettings() {
     toast.success('Tally server URL saved')
   }
 
-  const handleSaveVoucherType = () => {
-    localStorage.setItem(`${TALLY_VOUCHER_TYPE_KEY}-${companyId}`, voucherType.trim() || DEFAULT_VOUCHER_TYPE)
-    toast.success('Voucher type saved')
+  const handleSaveVoucherType = async () => {
+    try {
+      await saveSelectedVoucherType(companyId, voucherType.trim() || DEFAULT_VOUCHER_TYPE)
+      toast.success('Voucher type saved')
+    } catch {
+      toast.error('Failed to save voucher type')
+    }
   }
 
   const handleFetchVoucherTypes = async () => {
@@ -193,6 +200,7 @@ export default function CompanySettings() {
       const types = await fetchTallyVoucherTypes(getTallyUrl(companyId, company?.port), companyName || undefined)
       if (types.length === 0) { toast.error('No voucher types found in Tally'); return }
       setVoucherTypes(types)
+      await saveVoucherTypesToDb(companyId, types)
       toast.success(`${types.length} voucher types fetched`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch voucher types')

@@ -68,7 +68,9 @@ model Company {
   stockUnitCache   StockUnitCache[]
   stockItemAliases StockItemAlias[]
   godownCache      GodownCache[]
+  voucherTypeCache VoucherTypeCache[]
   features         CompanyFeature[]
+  voucherType      String         @default("GST PURCHASE")
   syncTimestamps   Json?
   createdAt        DateTime       @default(now())
 }
@@ -96,6 +98,15 @@ model CompanyFeature {
   enabled   Boolean @default(false)
 
   @@unique([companyId, feature])
+}
+
+model VoucherTypeCache {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  name      String
+
+  @@unique([companyId, name])
 }
 
 model GodownCache {

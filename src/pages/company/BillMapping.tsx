@@ -12,7 +12,7 @@ import { useTallyLedgers } from '@/hooks'
 import { syncToTally } from '@/services'
 import { buildTallyXml } from '@/lib/utils'
 import { getNextVoucherCounter } from '@/lib/api'
-import { getTallyUrl, getTallyVoucherType } from './CompanySettings'
+import { getTallyUrl } from './CompanySettings'
 import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { MappingInput } from '@/lib/validators'
 import type { Bill } from '@/types'
@@ -78,7 +78,7 @@ export default function BillMapping() {
 
   const tallyUrl     = getTallyUrl(companyId, company?.port)
   const tallyCompany = companyName
-  const voucherType  = getTallyVoucherType(companyId)
+  const voucherType  = company?.voucherType ?? 'GST PURCHASE'
 
   // Only live-fetch from Tally if no ledgers are stored yet
   const { ledgers: liveLedgers, loading: ledgersLoading } = useTallyLedgers(
@@ -357,7 +357,7 @@ export default function BillMapping() {
               saving={saving}
               syncing={syncing}
               savedLedgerSets={normalizeLedgerMapping(company?.mapping)}
-              nextVoucherNumber={`${bill.billNumber}_${(company?.voucherCounter ?? 0) + 1}`}
+              nextVoucherNumber={`VN_${(company?.voucherCounter ?? 0) + 1}`}
               stockItemAliases={storedAliases}
               companyId={companyId}
               tallyUrl={tallyUrl}

@@ -38,6 +38,11 @@ interface CompanyStore {
   getGodowns: (companyId: string) => TallyGodown[]
   fetchGodownsFromDb: (companyId: string) => Promise<void>
   saveGodownsToDb: (companyId: string, godowns: TallyGodown[]) => Promise<void>
+  voucherTypes: Record<string, string[]>
+  getVoucherTypes: (companyId: string) => string[]
+  fetchVoucherTypesFromDb: (companyId: string) => Promise<void>
+  saveVoucherTypesToDb: (companyId: string, types: string[]) => Promise<void>
+  saveSelectedVoucherType: (companyId: string, voucherType: string) => Promise<void>
   incrementBillCount: (companyId: string) => void
   incrementPending: (companyId: string) => void
   incrementSynced: (companyId: string) => void
@@ -55,6 +60,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   stockUnits: {},
   stockItemAliases: {},
   godowns: {},
+  voucherTypes: {},
 
   fetchCompanies: async () => {
     set({ loading: true })
@@ -222,6 +228,25 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
       companies: s.companies.map((c) => c.id === companyId
         ? { ...c, syncTimestamps: { ...c.syncTimestamps, godowns: data.syncedAt } }
         : c),
+    }))
+  },
+
+  getVoucherTypes: (companyId) => get().voucherTypes[companyId] ?? [],
+
+  fetchVoucherTypesFromDb: async (companyId) => {
+    const { data } = await api.get<string[]>(`/companies/${companyId}/voucher-types`)
+    set((s) => ({ voucherTypes: { ...s.voucherTypes, [companyId]: data } }))
+  },
+
+  saveVoucherTypesToDb: async (companyId, types) => {
+    await api.put(`/companies/${companyId}/voucher-types`, types)
+    set((s) => ({ voucherTypes: { ...s.voucherTypes, [companyId]: types } }))
+  },
+
+  saveSelectedVoucherType: async (companyId, voucherType) => {
+    await api.put(`/companies/${companyId}/voucher-type`, { voucherType })
+    set((s) => ({
+      companies: s.companies.map((c) => c.id === companyId ? { ...c, voucherType } : c),
     }))
   },
 

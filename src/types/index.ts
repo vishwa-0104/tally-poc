@@ -88,6 +88,7 @@ export interface Company {
   pendingBills: number
   errorBills: number
   voucherCounter: number
+  voucherType: string
   mapping: LedgerMapping | null
   features?: CompanyFeature[]
   syncTimestamps?: { ledgers?: string; stockItems?: string; stockGroups?: string; stockUnits?: string; godowns?: string } | null

@@ -570,3 +570,58 @@ companiesRouter.put('/companies/:id/godowns', async (req, res) => {
   res.json({ saved: incoming.length, syncedAt: now })
 })
 
+
+// GET /api/companies/:id/voucher-types
+companiesRouter.get('/companies/:id/voucher-types', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const types = await prisma.voucherTypeCache.findMany({
+    where: { companyId: req.params.id },
+    orderBy: { name: 'asc' },
+    select: { name: true },
+  })
+  res.json(types.map((t) => t.name))
+})
+
+// PUT /api/companies/:id/voucher-types — replace cached list
+companiesRouter.put('/companies/:id/voucher-types', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const result = z.array(z.string().min(1)).safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const companyId = req.params.id
+  const incoming  = result.data
+
+  await prisma.$transaction(async (tx) => {
+    for (const name of incoming) {
+      await tx.voucherTypeCache.upsert({
+        where:  { companyId_name: { companyId, name } },
+        update: {},
+        create: { companyId, name },
+      })
+    }
+    await tx.voucherTypeCache.deleteMany({
+      where: { companyId, name: { notIn: incoming } },
+    })
+  })
+
+  res.json({ saved: incoming.length })
+})
+
+// PUT /api/companies/:id/voucher-type — save selected voucher type
+companiesRouter.put('/companies/:id/voucher-type', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const result = z.object({ voucherType: z.string().min(1) }).safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const updated = await prisma.company.update({
+    where: { id: req.params.id },
+    data:  { voucherType: result.data.voucherType },
+  })
+  res.json({ voucherType: updated.voucherType })
+})

@@ -12,6 +12,7 @@ export const MOCK_COMPANIES: Company[] = [
     pendingBills: 3,
     errorBills: 1,
     voucherCounter: 0,
+    voucherType: 'GST PURCHASE',
     mapping: {
       purchase_up_5:   'Grocery Purchases',
       input_cgst_2_5:  'Input CGST @2.5%',
@@ -32,6 +33,7 @@ export const MOCK_COMPANIES: Company[] = [
     pendingBills: 0,
     errorBills: 2,
     voucherCounter: 0,
+    voucherType: 'GST PURCHASE',
     mapping: {
       purchase_up_18:  'Electronics Purchase',
       input_cgst_9:    'Input CGST @9%',
@@ -53,6 +55,7 @@ export const MOCK_COMPANIES: Company[] = [
     pendingBills: 0,
     errorBills: 0,
     voucherCounter: 0,
+    voucherType: 'GST PURCHASE',
     mapping: null,
     parseBillsLimit: 50, parseBillsUsed: 9, parseBlocked: false, parseService: 'gemini', parseModel: 'gemini-flash-latest',
     subscriptionExpiresAt: null, subscriptionRenewedAt: null,
