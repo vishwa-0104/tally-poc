@@ -6,7 +6,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost/api/health)",
       "Bash(docker-compose up *)",
       "Bash(mkcert -version)",
-      "Bash(openssl x509 *)"
+      "Bash(openssl x509 *)",
+      "Bash(curl -v http://localhost)"
     ]
   }
 }

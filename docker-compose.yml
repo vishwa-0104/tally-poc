@@ -38,11 +38,9 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_CHROME_EXTENSION_ID: ${VITE_CHROME_EXTENSION_ID:-}
+        VITE_EXTENSION_STORE_URL: ${VITE_EXTENSION_STORE_URL:-}
     ports:
       - "80:80"
-      - "443:443"
-    volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - backend
     restart: unless-stopped
