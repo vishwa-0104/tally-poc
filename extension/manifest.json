@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Invoice Sync",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Connects Invoice Bill Sync web app to your local Invoice ERP server.",
 
   "externally_connectable": {
-    "matches": ["https://syncinvoice.in/*"]
+    "matches": ["https://syncinvoice.in/*", "https://194.164.151.39/*", "https://localhost/*", "https://127.0.0.1/*", "http://localhost/*", "http://127.0.0.1/*"]
   },
   "host_permissions": [
+    "https://localhost/*",
+    "https://127.0.0.1/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
@@ -23,7 +25,7 @@
 
   "content_scripts": [
     {
-      "matches": ["http://localhost/*", "http://127.0.0.1/*"],
+      "matches": ["http://localhost/*", "http://127.0.0.1/*", "https://localhost/*", "https://127.0.0.1/*", "https://syncinvoice.in/*", "https://194.164.151.39/*"],
       "js": ["content.js"],
       "run_at": "document_start"
     }
