@@ -28,7 +28,7 @@ export default function BillMapping() {
 
   const { activeCompanyId, companies: authCompanies } = useAuthStore()
   const { getBill, getBills, updateBillStatus, fetchBills } = useBillStore()
-  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb, getStockUnits, fetchStockUnitsFromDb } = useCompanyStore()
+  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb, getStockUnits, fetchStockUnitsFromDb, getStockGroups, fetchStockGroupsFromDb } = useCompanyStore()
   const ledgersState          = useCompanyStore((s) => s.ledgers)
   const stockItemsState       = useCompanyStore((s) => s.stockItems)
   const stockItemAliasesState = useCompanyStore((s) => s.stockItemAliases)
@@ -39,12 +39,13 @@ export default function BillMapping() {
   const companyName = company?.name ?? authCompanies.find((c) => c.id === activeCompanyId)?.name ?? ''
   const bill      = companyId && billId ? getBill(companyId, billId) : null
 
-  const storedLedgers    = companyId ? (ledgersState[companyId] ?? []) : []
-  const storedStockItems = companyId ? (stockItemsState[companyId] ?? []) : []
-  const storedAliases    = companyId ? (stockItemAliasesState[companyId] ?? []) : []
-  const storedGodowns    = companyId ? getGodowns(companyId) : []
-  const storedStockUnits = companyId ? getStockUnits(companyId) : []
-  const godownEnabled    = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN && f.enabled) ?? false
+  const storedLedgers     = companyId ? (ledgersState[companyId] ?? []) : []
+  const storedStockItems  = companyId ? (stockItemsState[companyId] ?? []) : []
+  const storedAliases     = companyId ? (stockItemAliasesState[companyId] ?? []) : []
+  const storedGodowns     = companyId ? getGodowns(companyId) : []
+  const storedStockUnits  = companyId ? getStockUnits(companyId) : []
+  const storedStockGroups = companyId ? getStockGroups(companyId) : []
+  const godownEnabled     = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN && f.enabled) ?? false
 
   useEffect(() => {
     if (companyId && companies.length === 0) {
@@ -61,6 +62,9 @@ export default function BillMapping() {
     }
     if (companyId && storedStockUnits.length === 0) {
       fetchStockUnitsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load stock units from DB:', err))
+    }
+    if (companyId && storedStockGroups.length === 0) {
+      fetchStockGroupsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load stock groups from DB:', err))
     }
     if (companyId && godownEnabled && storedGodowns.length === 0) {
       fetchGodownsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load godowns from DB:', err))
