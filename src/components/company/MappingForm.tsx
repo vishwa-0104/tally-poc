@@ -336,6 +336,19 @@ export function MappingForm({
   const watchedRoundOff     = watch('roundOffAmount')
   const watchedExtraCharges = watch('extraCharges')
 
+  // When a stock item is selected, auto-fill the unit field with the Tally stock item's unit.
+  // Runs on mount (to handle pre-saved aliases) and whenever any tallyStockItem value changes.
+  const tallyStockItemKey = watchedLineItems?.map((item) => item?.tallyStockItem ?? '').join('|') ?? ''
+  useEffect(() => {
+    if (!stockItems.length) return
+    watchedLineItems?.forEach((item, i) => {
+      const name = item?.tallyStockItem?.trim()
+      if (!name) return
+      const si = stockItems.find((s) => s.name === name)
+      if (si?.unit) setValue(`lineItems.${i}.unit`, si.unit)
+    })
+  }, [tallyStockItemKey, stockItems]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Round off mismatch check — expected = totalAmount − (subtotal + taxes)
   // Same formula used server-side when correcting the AI-parsed sign.
   let roundOffSuggestion: number | null = null
@@ -770,15 +783,15 @@ export function MappingForm({
                       {(() => {
                         const selectedItemName = watch(`lineItems.${i}.tallyStockItem`);
                         const selectedItem = selectedItemName ? stockItems.find((si) => si.name === selectedItemName) : null;
-                        const selectedUnit = watch(`lineItems.${i}.unit`);
-                        const unitMismatch = selectedItem && selectedUnit && selectedItem.unit !== selectedUnit;
-                        
+                        const originalBillUnit = bill.lineItems[i]?.unit
+                        const showFromBill = !!(selectedItem?.unit && originalBillUnit && selectedItem.unit !== originalBillUnit)
+
                         return (
                           <div className="relative">
                             <select
                               {...register(`lineItems.${i}.unit`)}
                               className={`w-20 px-2 py-1 text-xs border rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 bg-white ${
-                                unitMismatch ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'
+                                showFromBill ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'
                               }`}
                             >
                               {stockUnits.map((u) => (
@@ -788,9 +801,9 @@ export function MappingForm({
                                 <option value={watch(`lineItems.${i}.unit`)}>{watch(`lineItems.${i}.unit`)}</option>
                               )}
                             </select>
-                            {unitMismatch && (
+                            {showFromBill && (
                               <p className="absolute top-full left-0 text-xs text-amber-600 mt-0.5 whitespace-nowrap">
-                                Tally: <span className="font-semibold">{selectedItem?.unit}</span>
+                                Bill Unit: <span className="font-semibold">{originalBillUnit}</span>
                               </p>
                             )}
                           </div>
