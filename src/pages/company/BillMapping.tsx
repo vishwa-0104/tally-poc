@@ -255,7 +255,7 @@ export default function BillMapping() {
 
       // Get next voucher counter and build voucher number
       const counter = await getNextVoucherCounter(companyId)
-      const voucherNumber = `${data.billNumber}_${counter}`
+      const voucherNumber = `VN_${counter}`
       const dataWithVoucher: MappingInput = { ...data, voucherNumber }
 
       const { generatedXml, tallyMapping } = buildArtifacts(dataWithVoucher)

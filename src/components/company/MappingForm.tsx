@@ -680,7 +680,7 @@ export function MappingForm({
             Voucher Number
           </label>
           <div className="input-base w-48 bg-gray-50 text-gray-500 cursor-not-allowed select-none">
-            {nextVoucherNumber ?? `${bill.billNumber}_1`}
+            {nextVoucherNumber ?? `VN_1`}
           </div>
           <p className="text-xs text-gray-500 mt-1">Auto-assigned on sync</p>
         </div>

@@ -14,7 +14,8 @@
     "docker:db": "docker-compose up postgres -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
-    "docker:psql": "docker-compose exec postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-tally_bill_sync}"
+    "docker:psql": "docker-compose exec postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-tally_bill_sync}",
+    "docker:psql-prod": "docker compose exec postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-tally_bill_sync}"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",
