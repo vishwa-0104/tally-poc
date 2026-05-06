@@ -68,7 +68,7 @@ function TallyItemCell({ index, register, watch, onCreateClick }: TallyItemCellP
         list="stock-items-list"
         autoComplete="off"
         placeholder="Select stock item…"
-        className="w-52 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+        className="w-40 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
       />
       {isEmpty && (
         <button
@@ -755,7 +755,7 @@ export function MappingForm({
             <table className="w-full border-collapse text-xs" aria-label="Line items">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[380px]">Description</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Description</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">HSN</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Qty</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit</th>
@@ -764,22 +764,22 @@ export function MappingForm({
                   {hasFlatDiscount && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc ₹</th>}
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">GST%</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[220px]">Item as defined in ERP</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[160px]">Item as defined in ERP</th>
                 </tr>
               </thead>
               <tbody>
                 {bill.lineItems.map((_item, i) => (
                   <tr key={i} className="border-b border-gray-100 last:border-0">
-                    <td className="px-2 py-5">
-                      <input {...register(`lineItems.${i}.description`)} className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-2 py-5" title={watchedLineItems?.[i]?.description ?? ''}>
+                      <input {...register(`lineItems.${i}.description`)} className="w-full min-w-[120px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5">
-                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-20 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-2 py-5" title={watchedLineItems?.[i]?.hsnCode ?? ''}>
+                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-16 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5">
-                      <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.quantity ?? '')}>
+                      <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5">
+                    <td className="px-2 py-5" title={watchedLineItems?.[i]?.unit ?? ''}>
                       {(() => {
                         const selectedItemName = watch(`lineItems.${i}.tallyStockItem`);
                         const selectedItem = selectedItemName ? stockItems.find((si) => si.name === selectedItemName) : null;
@@ -810,26 +810,26 @@ export function MappingForm({
                         );
                       })()}
                     </td>
-                    <td className="px-2 py-5">
-                      <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.unitPrice ?? '')}>
+                      <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     {hasPctDiscount && (
-                      <td className="px-2 py-5">
+                      <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountPercent ?? '')}>
                         <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     )}
                     {hasFlatDiscount && (
-                      <td className="px-2 py-5">
-                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountAmount ?? '')}>
+                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     )}
-                    <td className="px-2 py-5">
-                      <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.gstRate ?? '')}>
+                      <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-12 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5">
-                      <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.amount ?? '')}>
+                      <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5">
+                    <td className="px-2 py-5" title={watchedLineItems?.[i]?.tallyStockItem ?? ''}>
                       <TallyItemCell
                         index={i}
                         register={register}
