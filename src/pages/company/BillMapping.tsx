@@ -146,14 +146,20 @@ export default function BillMapping() {
     // a mismatch causes Tally to accept the voucher but silently drop the quantity.
     const rawLineItems = data.lineItems ?? bill.lineItems
     const resolvedLineItems = rawLineItems.map((item) => {
+      const gstLedger = item.gstRate === 5 ? trim(data.purchaseLedger_5) :
+                        item.gstRate === 18 ? trim(data.purchaseLedger_18) :
+                        item.gstRate === 40 ? trim(data.purchaseLedger_40) : undefined
       const mapped = item.tallyStockItem?.trim()
-      if (!mapped) return item
-      const cached = storedStockItems.find(
-        (s) => s.name.toLowerCase() === mapped.toLowerCase()
-      )
-      return cached?.unit ? { ...item, unit: cached.unit } : item
+      const cached = mapped
+        ? storedStockItems.find((s) => s.name.toLowerCase() === mapped.toLowerCase())
+        : undefined
+      return {
+        ...item,
+        ...(cached?.unit ? { unit: cached.unit } : {}),
+        ...(gstLedger ? { ledger: gstLedger } : {}),
+      }
     })
-
+    
     const generatedXml = buildTallyXml({
       vendorLedger:   trim(data.vendorLedger),
       purchaseLedger,

@@ -45,6 +45,7 @@ interface LineItemParam {
   gstRate: number
   amount: number
   tallyStockItem?: string | null
+  ledger?: string | null
 }
 
 export function decodeHtmlEntities(str: string): string {
@@ -128,7 +129,8 @@ export function buildTallyXml(params: {
         const quantity    = item.quantity
         const rate        = amt(item.unitPrice)
         const itemAmt     = amt(item.amount)
-        const purchLedger = params.purchaseLedger ? esc(params.purchaseLedger) : ''
+        const purchLedger = item.ledger?.trim() ? esc(item.ledger.trim())
+                          : params.purchaseLedger ? esc(params.purchaseLedger) : ''
 
         const discPct = (() => {
           if (item.discountPercent != null && item.discountPercent !== 0) {
@@ -144,6 +146,7 @@ export function buildTallyXml(params: {
           return ''
         })()
 
+        
         return `
             <ALLINVENTORYENTRIES.LIST>
               <STOCKITEMNAME>${stockName}</STOCKITEMNAME>
@@ -158,9 +161,9 @@ export function buildTallyXml(params: {
                 <AMOUNT>-${itemAmt}</AMOUNT>
                 <ACTUALQTY> ${quantity} ${unit}</ACTUALQTY>
                 <BILLEDQTY> ${quantity} ${unit}</BILLEDQTY>
-              </BATCHALLOCATIONS.LIST>${purchLedger ? `
+              </BATCHALLOCATIONS.LIST>${item.ledger || purchLedger ? `
               <ACCOUNTINGALLOCATIONS.LIST>
-                <LEDGERNAME>${purchLedger}</LEDGERNAME>
+                <LEDGERNAME>${item.ledger || purchLedger}</LEDGERNAME>
                 <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
                 <LEDGERFROMITEM>No</LEDGERFROMITEM>
                 <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
