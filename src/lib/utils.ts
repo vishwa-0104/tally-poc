@@ -82,18 +82,15 @@ function escapeXml(str: string): string {
 export function buildTallyXml(params: {
   vendorLedger?: string
   purchaseLedger?: string
-  cgstLedger?: string
-  sgstLedger?: string
-  igstLedger?: string
+  cgstEntries?: { ledger: string; amount: number }[]
+  sgstEntries?: { ledger: string; amount: number }[]
+  igstEntries?: { ledger: string; amount: number }[]
   billNumber: string        // supplier invoice number → REFERENCE
   billDate: string          // supplier invoice date  → REFERENCEDATE
   voucherDate?: string      // our entry date         → DATE (defaults to billDate)
   voucherNumber?: string    // Tally voucher number   → VOUCHERNUMBER (auto-assigned if omitted)
   totalAmount: number
   subtotal: number
-  cgstAmount: number
-  sgstAmount: number
-  igstAmount: number
   roundOffAmount?: number   // positive = debit round-off (e.g. 0.50), negative = credit
   roundOffLedger?: string   // defaults to 'Round Off'
   invoiceDiscountAmount?: number | null
@@ -230,42 +227,20 @@ export function buildTallyXml(params: {
               <AMOUNT>-${amt(ec.amount)}</AMOUNT>
             </LEDGERENTRIES.LIST>`).join('')
 
-  // Tax ledgers — debit
-  const cgstEntry = params.cgstLedger?.trim() && params.cgstAmount !== 0
-    ? `
+  // Tax ledgers — one debit entry per rate bucket
+  const taxEntry = ({ ledger, amount }: { ledger: string; amount: number }) => `
             <LEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.cgstLedger)}</LEDGERNAME>
+              <LEDGERNAME>${esc(ledger)}</LEDGERNAME>
               <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
               <LEDGERFROMITEM>No</LEDGERFROMITEM>
               <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
               <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>-${amt(params.cgstAmount)}</AMOUNT>
+              <AMOUNT>-${amt(amount)}</AMOUNT>
             </LEDGERENTRIES.LIST>`
-    : ''
 
-  const sgstEntry = params.sgstLedger?.trim() && params.sgstAmount !== 0
-    ? `
-            <LEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.sgstLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <LEDGERFROMITEM>No</LEDGERFROMITEM>
-              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
-              <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>-${amt(params.sgstAmount)}</AMOUNT>
-            </LEDGERENTRIES.LIST>`
-    : ''
-
-  const igstEntry = params.igstLedger?.trim() && params.igstAmount !== 0
-    ? `
-            <LEDGERENTRIES.LIST>
-              <LEDGERNAME>${esc(params.igstLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
-              <LEDGERFROMITEM>No</LEDGERFROMITEM>
-              <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
-              <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>-${amt(params.igstAmount)}</AMOUNT>
-            </LEDGERENTRIES.LIST>`
-    : ''
+  const cgstEntry = (params.cgstEntries ?? []).filter((e) => e.amount !== 0).map(taxEntry).join('')
+  const sgstEntry = (params.sgstEntries ?? []).filter((e) => e.amount !== 0).map(taxEntry).join('')
+  const igstEntry = (params.igstEntries ?? []).filter((e) => e.amount !== 0).map(taxEntry).join('')
 
   // Invoice-level discount — credit entry that reduces the amount payable to vendor.
   // ISDEEMEDPOSITIVE=No means credit side.

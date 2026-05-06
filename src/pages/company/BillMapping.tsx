@@ -102,12 +102,7 @@ export default function BillMapping() {
   const buildArtifacts = (data: MappingInput) => {
     const trim = (v?: string) => (v && v.trim() ? v.trim() : undefined)
 
-    // Derive single-value ledgers for XML (temporary until XML supports multi-ledger entries)
     const purchaseLedger = trim(data.purchaseLedger_40) ?? trim(data.purchaseLedger_18) ?? trim(data.purchaseLedger_5) ?? trim(data.purchaseLedger_exempt)
-    const cgstLedger     = trim(data.cgstLedger_40)     ?? trim(data.cgstLedger_18)     ?? trim(data.cgstLedger_5)
-    const sgstLedger     = trim(data.sgstLedger_40)     ?? trim(data.sgstLedger_18)     ?? trim(data.sgstLedger_5)
-    const igstLedger     = trim(data.igstLedger_40)     ?? trim(data.igstLedger_18)     ?? trim(data.igstLedger_5)
-
     const godown = godownEnabled ? trim(data.godownName) : undefined
 
     // For misc bills: extract expense ledger items from line items
@@ -122,16 +117,6 @@ export default function BillMapping() {
     const extraChargesForXml = (data.extraCharges ?? [])
       .filter((ec) => ec.ledger?.trim() && ec.amount)
       .map((ec) => ({ description: ec.description, amount: Number(ec.amount), ledger: ec.ledger!.trim() }))
-
-    const tallyMapping = {
-      vendorLedger: trim(data.vendorLedger),
-      purchaseLedger,
-      cgstLedger,
-      sgstLedger,
-      igstLedger,
-      godown,
-      extraCharges: extraChargesForXml,
-    }
 
     // Use the form's round-off value (user-editable, pre-filled from AI parse or computed).
     const roundOffAmt =
@@ -159,13 +144,72 @@ export default function BillMapping() {
         ...(gstLedger ? { ledger: gstLedger } : {}),
       }
     })
-    
+
+    // Build per-rate tax ledger entries from line items.
+    // Groups items by gstRate, computes the tax amount for each bucket,
+    // then maps to the corresponding rate-specific ledger chosen in the form.
+    type TaxEntry = { ledger: string; amount: number }
+    const cgstEntries: TaxEntry[] = []
+    const sgstEntries: TaxEntry[] = []
+    const igstEntries: TaxEntry[] = []
+
+    if (bill.billType !== 'misc' && resolvedLineItems.length > 0) {
+      const taxableByRate: Record<number, number> = {}
+      for (const item of resolvedLineItems) {
+        const rate = item.gstRate ?? 0
+        if (rate > 0) taxableByRate[rate] = (taxableByRate[rate] ?? 0) + (item.amount ?? 0)
+      }
+
+      for (const rate of [5, 18, 40] as const) {
+        const taxable = taxableByRate[rate]
+        if (!taxable) continue
+        const totalTax = parseFloat((taxable * rate / 100).toFixed(2))
+
+        const igstL = rate === 5 ? trim(data.igstLedger_5) : rate === 18 ? trim(data.igstLedger_18) : trim(data.igstLedger_40)
+        const cgstL = rate === 5 ? trim(data.cgstLedger_5) : rate === 18 ? trim(data.cgstLedger_18) : trim(data.cgstLedger_40)
+        const sgstL = rate === 5 ? trim(data.sgstLedger_5) : rate === 18 ? trim(data.sgstLedger_18) : trim(data.sgstLedger_40)
+        const half  = parseFloat((totalTax / 2).toFixed(2))
+
+        if (igstL) igstEntries.push({ ledger: igstL, amount: totalTax })
+        if (cgstL) cgstEntries.push({ ledger: cgstL, amount: half })
+        if (sgstL) sgstEntries.push({ ledger: sgstL, amount: half })
+      }
+
+      // Fallback: no rate info on items — use bill totals with whichever ledger is set
+      if (igstEntries.length === 0 && cgstEntries.length === 0 && sgstEntries.length === 0) {
+        const igstL = trim(data.igstLedger_40) ?? trim(data.igstLedger_18) ?? trim(data.igstLedger_5)
+        const cgstL = trim(data.cgstLedger_40) ?? trim(data.cgstLedger_18) ?? trim(data.cgstLedger_5)
+        const sgstL = trim(data.sgstLedger_40) ?? trim(data.sgstLedger_18) ?? trim(data.sgstLedger_5)
+        if (igstL && bill.igstAmount) igstEntries.push({ ledger: igstL, amount: bill.igstAmount })
+        if (cgstL && bill.cgstAmount) cgstEntries.push({ ledger: cgstL, amount: bill.cgstAmount })
+        if (sgstL && bill.sgstAmount) sgstEntries.push({ ledger: sgstL, amount: bill.sgstAmount })
+      }
+    } else {
+      // Misc bill or no line items: use bill totals with single ledger
+      const igstL = trim(data.igstLedger_40) ?? trim(data.igstLedger_18) ?? trim(data.igstLedger_5)
+      const cgstL = trim(data.cgstLedger_40) ?? trim(data.cgstLedger_18) ?? trim(data.cgstLedger_5)
+      const sgstL = trim(data.sgstLedger_40) ?? trim(data.sgstLedger_18) ?? trim(data.sgstLedger_5)
+      if (igstL && bill.igstAmount) igstEntries.push({ ledger: igstL, amount: bill.igstAmount })
+      if (cgstL && bill.cgstAmount) cgstEntries.push({ ledger: cgstL, amount: bill.cgstAmount })
+      if (sgstL && bill.sgstAmount) sgstEntries.push({ ledger: sgstL, amount: bill.sgstAmount })
+    }
+
+    const tallyMapping = {
+      vendorLedger: trim(data.vendorLedger),
+      purchaseLedger,
+      cgstLedger: cgstEntries[0]?.ledger,
+      sgstLedger: sgstEntries[0]?.ledger,
+      igstLedger: igstEntries[0]?.ledger,
+      godown,
+      extraCharges: extraChargesForXml,
+    }
+
     const generatedXml = buildTallyXml({
       vendorLedger:   trim(data.vendorLedger),
       purchaseLedger,
-      cgstLedger,
-      sgstLedger,
-      igstLedger,
+      cgstEntries,
+      sgstEntries,
+      igstEntries,
       godown,
       billNumber:    data.billNumber,
       billDate:      data.billDate,
@@ -173,9 +217,6 @@ export default function BillMapping() {
       voucherNumber: data.voucherNumber?.trim() || undefined,
       totalAmount:   data.totalAmount,
       subtotal:      bill.subtotal,
-      cgstAmount:    bill.cgstAmount,
-      sgstAmount:    bill.sgstAmount,
-      igstAmount:    bill.igstAmount,
       roundOffAmount: roundOffAmt,
       roundOffLedger: company?.mapping?.roundoff_ledger?.trim() || undefined,
       invoiceDiscountAmount: bill.invoiceDiscountAmount ?? undefined,
