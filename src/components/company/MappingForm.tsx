@@ -855,7 +855,7 @@ export function MappingForm({
                           || (originalItem?.discountPercent != null && originalItem.discountPercent !== 0)
                         return (
                           <div className="relative">
-                            <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             {hasItemDiscount && originalItem.unitPrice !== watch(`lineItems.${i}.unitPrice`) && (
                               <p className="absolute top-full left-0 text-xs text-amber-600 mt-0.5 whitespace-nowrap">
                                 Bill: <span className="font-semibold">{originalItem.unitPrice}</span>
@@ -869,7 +869,7 @@ export function MappingForm({
                       <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountPercent ?? '')}>
                         {discountColumnEnabled ? (
                           <div className="relative">
-                            <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             {(() => {
                               const orig = bill.lineItems[i]
                               if (orig?.discountAmount != null && orig.discountAmount !== 0) {
@@ -883,20 +883,20 @@ export function MappingForm({
                             })()}
                           </div>
                         ) : (
-                          <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                         )}
                       </td>
                     )}
                     {showDiscFlatCol && (
                       <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountAmount ?? '')}>
-                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     )}
                     <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.gstRate ?? '')}>
                       <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-12 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.amount ?? '')}>
-                      <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-5" title={watchedLineItems?.[i]?.tallyStockItem ?? ''}>
                       <TallyItemCell
