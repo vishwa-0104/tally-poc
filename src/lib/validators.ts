@@ -74,6 +74,10 @@ export const mappingSchema = z.object({
   billNumber:     z.string().min(1, 'Bill number is required'),
   voucherNumber:  z.string().optional(),
   totalAmount:    z.coerce.number().positive('Amount must be positive'),
+  subtotal:       z.coerce.number().optional(),
+  cgstAmount:     z.coerce.number().optional(),
+  sgstAmount:     z.coerce.number().optional(),
+  igstAmount:     z.coerce.number().optional(),
   roundOffAmount: z.preprocess(
     (v) => (v === '' || v === null || v === undefined ? undefined : Number(v)),
     z.number().optional()

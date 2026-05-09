@@ -271,8 +271,21 @@ export function MappingForm({
       voucherDate:    new Date().toISOString().split('T')[0],
       billNumber:     bill.billNumber,
       totalAmount:    bill.totalAmount,
+      subtotal:       bill.subtotal,
+      cgstAmount:     bill.cgstAmount,
+      sgstAmount:     bill.sgstAmount,
+      igstAmount:     bill.igstAmount,
       roundOffAmount: hasRoundOff ? roundOffValue! : undefined,
-      lineItems:      bill.lineItems,
+      lineItems: bill.lineItems.map((item) => {
+        const { unitPrice, quantity, discountAmount, discountPercent } = item
+        if (discountAmount != null && discountAmount !== 0 && quantity > 0) {
+          return { ...item, unitPrice: parseFloat((((unitPrice * quantity) - discountAmount) / quantity).toFixed(4)) }
+        }
+        if (discountPercent != null && discountPercent !== 0) {
+          return { ...item, unitPrice: parseFloat((unitPrice * (1 - discountPercent / 100)).toFixed(4)) }
+        }
+        return item
+      }),
     },
   })
 
@@ -470,48 +483,6 @@ export function MappingForm({
           </div>
         </div>
       )}
-
-
-      {/* ── Extra Charges ── */}
-      {/* {bill.extraCharges && bill.extraCharges.length > 0 && (
-        <div className="mt-2">
-          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Extra Charges</p>
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
-            <table className="w-full border-collapse text-xs" aria-label="Extra charges">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Description</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Ledger *</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bill.extraCharges.map((charge, i) => (
-                  <tr key={i} className="border-b border-gray-100 last:border-0">
-                    <td className="px-3 py-2 text-sm text-gray-700">{charge.description}</td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        {...register(`extraCharges.${i}.ledger`)}
-                        list="extra-charges-ledger-list"
-                        autoComplete="off"
-                        placeholder="Select ledger…"
-                        className="w-56 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-sm font-semibold text-gray-800">{formatCurrency(charge.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <datalist id="extra-charges-ledger-list">
-            {allLedgerNames.map((name) => <option key={name} value={name} />)}
-          </datalist>
-          {!extraChargesOk && (
-            <p className="text-xs text-amber-600 mt-2">Select a ledger for every extra charge to enable sync.</p>
-          )}
-        </div>
-      )} */}
 
       {/* ── CGST / SGST (intra-state) ── */}
       {!isInterstate && (show5 || show18 || show40) && (
@@ -855,8 +826,10 @@ export function MappingForm({
                     <>
                       <tr className="border-t border-gray-100">
                         <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Taxable Amount</td>
-                        <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
-                        <td></td> {/* Empty cell for 'Item as per' column */}
+                        <td className="px-3 py-2">
+                          <input {...register('subtotal')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        </td>
+                        <td></td>
                       </tr>
 
                       {bill.extraCharges?.map((charge, i) => (
@@ -882,11 +855,15 @@ export function MappingForm({
                         <>
                           <tr className="border-t border-gray-100">
                             <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
-                            <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(bill.cgstAmount)}</td>
+                            <td className="px-3 py-2" colSpan={3}>
+                              <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            </td>
                           </tr>
                           <tr className="border-t border-gray-100">
                             <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
-                            <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(bill.sgstAmount)}</td>
+                            <td className="px-3 py-2" colSpan={3}>
+                              <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            </td>
                           </tr>
                         </>
                       )}
@@ -894,20 +871,26 @@ export function MappingForm({
                       {isInterstate && (
                         <tr className="border-t border-gray-100">
                           <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
-                          <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(bill.igstAmount)}</td>
+                          <td className="px-3 py-2" colSpan={3}>
+                            <input {...register('igstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          </td>
                         </tr>
                       )}
 
                       {hasRoundOff && (
                         <tr className="border-t border-gray-100">
                           <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
-                          <td className="px-3 py-2 text-xs font-semibold text-gray-800" colSpan={3}>{formatCurrency(roundOffValue!)}</td>
+                          <td className="px-3 py-2" colSpan={3}>
+                            <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          </td>
                         </tr>
                       )}
 
                       <tr className="border-t-2 border-gray-300">
                         <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
-                        <td className="px-3 py-2 text-xs font-bold text-teal-700" colSpan={3}>{formatCurrency(bill.totalAmount)}</td>
+                        <td className="px-3 py-2" colSpan={3}>
+                          <input {...register('totalAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        </td>
                       </tr>
                     </>
                   );
@@ -958,19 +941,25 @@ export function MappingForm({
                 <tr className="border-t border-gray-100">
                   <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Subtotal</td>
                   <td></td>
-                  <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.subtotal)}</td>
+                  <td className="px-3 py-2">
+                    <input {...register('subtotal')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                  </td>
                 </tr>
                 {!isInterstate && (
                   <>
                     <tr className="border-t border-gray-100">
                       <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
                       <td></td>
-                      <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.cgstAmount)}</td>
+                      <td className="px-3 py-2">
+                        <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      </td>
                     </tr>
                     <tr className="border-t border-gray-100">
                       <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
                       <td></td>
-                      <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.sgstAmount)}</td>
+                      <td className="px-3 py-2">
+                        <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      </td>
                     </tr>
                   </>
                 )}
@@ -978,20 +967,26 @@ export function MappingForm({
                   <tr className="border-t border-gray-100">
                     <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
                     <td></td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.igstAmount)}</td>
+                    <td className="px-3 py-2">
+                      <input {...register('igstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    </td>
                   </tr>
                 )}
                 {hasRoundOff && (
                   <tr className="border-t border-gray-100">
                     <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
                     <td></td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(roundOffValue!)}</td>
+                    <td className="px-3 py-2">
+                      <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    </td>
                   </tr>
                 )}
                 <tr className="border-t-2 border-gray-300">
                   <td className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td></td>
-                  <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>
+                  <td className="px-3 py-2">
+                    <input {...register('totalAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                  </td>
                 </tr>
               </tfoot>
             </table>

@@ -11,12 +11,13 @@ export async function parseBillWithAI(
   companyId?: string,
 ): Promise<ParsedBillData> {
   onProgress?.(0)
-  const base64 = await fileToBase64(file)
+  const compressed = await compressImage(file)
+  const base64 = await fileToBase64(compressed)
   onProgress?.(1)
 
   const { data } = await api.post<ParsedBillData>('/bills/parse', {
     base64,
-    mediaType: file.type,
+    mediaType: compressed.type,
     billType,
     companyId,
   })
@@ -62,6 +63,38 @@ export function parsedDataToBill(
 }
 
 // ── Helpers ────────────────────────────────────────────────
+
+const MAX_DIMENSION = 1024
+const JPEG_QUALITY  = 0.80
+
+function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return Promise.resolve(file)
+
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const { width, height } = img
+      const scale = Math.min(1, MAX_DIMENSION / Math.max(width, height))
+      const canvas = document.createElement('canvas')
+      canvas.width  = Math.round(width  * scale)
+      canvas.height = Math.round(height * scale)
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return }
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }))
+        },
+        'image/jpeg',
+        JPEG_QUALITY,
+      )
+    }
+    img.onerror = reject
+    img.src = url
+  })
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {

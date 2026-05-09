@@ -179,23 +179,42 @@ export default function BillMapping() {
         if (sgstL) sgstEntries.push({ ledger: sgstL, amount: half })
       }
 
-      // Fallback: no rate info on items — use bill totals with whichever ledger is set
+      // Scale computed per-rate entries to match user-edited footer totals.
+      // Preserves ledger distribution across rate buckets; user's value wins on total.
+      const scaleTo = (entries: TaxEntry[], userTotal: number | undefined) => {
+        if (userTotal == null || entries.length === 0) return
+        const computed = entries.reduce((s, e) => s + e.amount, 0)
+        if (computed === 0 || Math.abs(computed - userTotal) < 0.005) return
+        const factor = userTotal / computed
+        entries.forEach((e, i) => { entries[i] = { ...e, amount: parseFloat((e.amount * factor).toFixed(2)) } })
+      }
+      scaleTo(cgstEntries, data.cgstAmount)
+      scaleTo(sgstEntries, data.sgstAmount)
+      scaleTo(igstEntries, data.igstAmount)
+
+      // Fallback: no rate info on items — use form-edited totals with whichever ledger is set
       if (igstEntries.length === 0 && cgstEntries.length === 0 && sgstEntries.length === 0) {
         const igstL = trim(data.igstLedger_40) ?? trim(data.igstLedger_18) ?? trim(data.igstLedger_5)
         const cgstL = trim(data.cgstLedger_40) ?? trim(data.cgstLedger_18) ?? trim(data.cgstLedger_5)
         const sgstL = trim(data.sgstLedger_40) ?? trim(data.sgstLedger_18) ?? trim(data.sgstLedger_5)
-        if (igstL && bill.igstAmount) igstEntries.push({ ledger: igstL, amount: bill.igstAmount })
-        if (cgstL && bill.cgstAmount) cgstEntries.push({ ledger: cgstL, amount: bill.cgstAmount })
-        if (sgstL && bill.sgstAmount) sgstEntries.push({ ledger: sgstL, amount: bill.sgstAmount })
+        const igst  = data.igstAmount ?? bill.igstAmount
+        const cgst  = data.cgstAmount ?? bill.cgstAmount
+        const sgst  = data.sgstAmount ?? bill.sgstAmount
+        if (igstL && igst) igstEntries.push({ ledger: igstL, amount: igst })
+        if (cgstL && cgst) cgstEntries.push({ ledger: cgstL, amount: cgst })
+        if (sgstL && sgst) sgstEntries.push({ ledger: sgstL, amount: sgst })
       }
     } else {
-      // Misc bill or no line items: use bill totals with single ledger
+      // Misc bill or no line items: use form-edited totals with single ledger
       const igstL = trim(data.igstLedger_40) ?? trim(data.igstLedger_18) ?? trim(data.igstLedger_5)
       const cgstL = trim(data.cgstLedger_40) ?? trim(data.cgstLedger_18) ?? trim(data.cgstLedger_5)
       const sgstL = trim(data.sgstLedger_40) ?? trim(data.sgstLedger_18) ?? trim(data.sgstLedger_5)
-      if (igstL && bill.igstAmount) igstEntries.push({ ledger: igstL, amount: bill.igstAmount })
-      if (cgstL && bill.cgstAmount) cgstEntries.push({ ledger: cgstL, amount: bill.cgstAmount })
-      if (sgstL && bill.sgstAmount) sgstEntries.push({ ledger: sgstL, amount: bill.sgstAmount })
+      const igst  = data.igstAmount ?? bill.igstAmount
+      const cgst  = data.cgstAmount ?? bill.cgstAmount
+      const sgst  = data.sgstAmount ?? bill.sgstAmount
+      if (igstL && igst) igstEntries.push({ ledger: igstL, amount: igst })
+      if (cgstL && cgst) cgstEntries.push({ ledger: cgstL, amount: cgst })
+      if (sgstL && sgst) sgstEntries.push({ ledger: sgstL, amount: sgst })
     }
 
     const tallyMapping = {
@@ -220,7 +239,7 @@ export default function BillMapping() {
       voucherDate:   data.voucherDate?.trim() || undefined,
       voucherNumber: data.voucherNumber?.trim() || undefined,
       totalAmount:   data.totalAmount,
-      subtotal:      bill.subtotal,
+      subtotal:      data.subtotal ?? bill.subtotal,
       roundOffAmount: roundOffAmt,
       roundOffLedger: company?.mapping?.roundoff_ledger?.trim() || undefined,
       invoiceDiscountAmount: bill.invoiceDiscountAmount ?? undefined,
