@@ -277,12 +277,15 @@ export function MappingForm({
       igstAmount:     bill.igstAmount,
       roundOffAmount: hasRoundOff ? roundOffValue! : undefined,
       lineItems: bill.lineItems.map((item) => {
-        const { unitPrice, quantity, discountAmount, discountPercent } = item
-        if (discountAmount != null && discountAmount !== 0 && quantity > 0) {
-          return { ...item, unitPrice: parseFloat((((unitPrice * quantity) - discountAmount) / quantity).toFixed(4)) }
-        }
-        if (discountPercent != null && discountPercent !== 0) {
-          return { ...item, unitPrice: parseFloat((unitPrice * (1 - discountPercent / 100)).toFixed(4)) }
+        const hasDiscount = (item.discountAmount != null && item.discountAmount !== 0)
+          || (item.discountPercent != null && item.discountPercent !== 0)
+        if (hasDiscount && item.quantity > 0) {
+          return {
+            ...item,
+            unitPrice: parseFloat((item.amount / item.quantity).toFixed(4)),
+            discountAmount: 0,
+            discountPercent: 0,
+          }
         }
         return item
       }),
@@ -782,7 +785,21 @@ export function MappingForm({
                       })()}
                     </td>
                     <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.unitPrice ?? '')}>
-                      <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      {(() => {
+                        const originalItem = bill.lineItems[i]
+                        const hasItemDiscount = (originalItem?.discountAmount != null && originalItem.discountAmount !== 0)
+                          || (originalItem?.discountPercent != null && originalItem.discountPercent !== 0)
+                        return (
+                          <div className="relative">
+                            <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            {hasItemDiscount && originalItem.unitPrice !== watch(`lineItems.${i}.unitPrice`) && (
+                              <p className="absolute top-full left-0 text-xs text-amber-600 mt-0.5 whitespace-nowrap">
+                                Bill: <span className="font-semibold">{originalItem.unitPrice}</span>
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </td>
                     {hasPctDiscount && (
                       <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountPercent ?? '')}>
