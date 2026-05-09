@@ -280,12 +280,7 @@ export function MappingForm({
         const hasDiscount = (item.discountAmount != null && item.discountAmount !== 0)
           || (item.discountPercent != null && item.discountPercent !== 0)
         if (hasDiscount && item.quantity > 0) {
-          return {
-            ...item,
-            unitPrice: parseFloat((item.amount / item.quantity).toFixed(4)),
-            discountAmount: 0,
-            discountPercent: 0,
-          }
+          return { ...item, unitPrice: parseFloat((item.amount / item.quantity).toFixed(4)) }
         }
         return item
       }),
