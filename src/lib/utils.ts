@@ -102,6 +102,7 @@ export function buildTallyXml(params: {
   miscLedgerItems?: { description: string; amount: number; ledger?: string }[]
   extraCharges?: { description: string; amount: number; ledger?: string }[]
   narration?: string
+  includeItemDiscount?: boolean
 }): string {
   const esc = escapeXml
   // Avoid floating-point noise like -90.00000000001
@@ -130,6 +131,7 @@ export function buildTallyXml(params: {
                           : params.purchaseLedger ? esc(params.purchaseLedger) : ''
 
         const discPct = (() => {
+          if (!params.includeItemDiscount) return ''
           if (item.discountPercent != null && item.discountPercent !== 0) {
             return `\n              <DISCOUNT>${item.discountPercent}</DISCOUNT>`
           }
