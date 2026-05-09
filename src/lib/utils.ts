@@ -131,13 +131,13 @@ export function buildTallyXml(params: {
 
         const discPct = (() => {
           if (item.discountPercent != null && item.discountPercent !== 0) {
-            return `\n              <DISCOUNTINPERCENT>${item.discountPercent}</DISCOUNTINPERCENT>`
+            return `\n              <DISCOUNT>${item.discountPercent}</DISCOUNT>`
           }
           if (item.discountAmount != null && item.discountAmount !== 0) {
             const grossAmt = item.quantity * item.unitPrice
             if (grossAmt > 0) {
               const equiv = parseFloat(((item.discountAmount / grossAmt) * 100).toFixed(4))
-              return `\n              <DISCOUNTINPERCENT>${equiv}</DISCOUNTINPERCENT>`
+              return `\n              <DISCOUNT>${equiv}</DISCOUNT>`
             }
           }
           return ''
