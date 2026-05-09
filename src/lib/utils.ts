@@ -132,6 +132,9 @@ export function buildTallyXml(params: {
 
         const discPct = (() => {
           if (!params.includeItemDiscount) return ''
+          if(params.includeItemDiscount && (item.discountAmount === 0 || item.discountPercent === 0)) {
+            return ''
+          }
           if (item.discountPercent != null && item.discountPercent !== 0) {
             return `\n              <DISCOUNT>${item.discountPercent}</DISCOUNT>`
           }
