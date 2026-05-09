@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Warehouse, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
+import { Plus, Warehouse, Percent, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
@@ -83,6 +83,17 @@ const FEATURE_CATALOGUE = [
     iconBg:      'bg-teal-500/10',
     iconColor:   'text-teal-400',
     dotOn:       'bg-teal-400',
+  },
+  {
+    key:         COMPANY_FEATURES.DISCOUNT_COLUMN,
+    label:       'Discount Column',
+    description: 'Show a per-item discount % column in bill mapping. Flat discounts are auto-converted to %. Taxable amount and Tally XML update in real time.',
+    Icon:        Percent,
+    gradient:    'from-amber-500/10 to-orange-500/10',
+    ring:        'ring-amber-500/30',
+    iconBg:      'bg-amber-500/10',
+    iconColor:   'text-amber-400',
+    dotOn:       'bg-amber-400',
   },
 ] as const
 

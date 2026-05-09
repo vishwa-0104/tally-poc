@@ -74,7 +74,8 @@ export interface CompanyFeature {
 
 /** Stable feature key constants — extend as new features are added */
 export const COMPANY_FEATURES = {
-  GODOWN: 'godown',
+  GODOWN:          'godown',
+  DISCOUNT_COLUMN: 'discount_column',
 } as const
 
 export interface Company {

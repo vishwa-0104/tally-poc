@@ -129,6 +129,7 @@ interface MappingFormProps {
   tallyUrl: string
   tallyCompany?: string
   godownEnabled?: boolean
+  discountColumnEnabled?: boolean
   godowns?: TallyGodown[]
   stockUnits?: TallyStockUnit[]
   billType?: 'purchase' | 'misc'
@@ -150,6 +151,7 @@ export function MappingForm({
   tallyUrl,
   tallyCompany = '',
   godownEnabled = false,
+  discountColumnEnabled = false,
   godowns = [],
   stockUnits = [],
   billType = 'purchase' as const,
@@ -278,6 +280,10 @@ export function MappingForm({
   // ── Discount column visibility ───────────────────────────────────────────────
   const hasFlatDiscount = bill.lineItems.some((i) => i.discountAmount != null && i.discountAmount !== 0)
   const hasPctDiscount  = !hasFlatDiscount && bill.lineItems.some((i) => i.discountPercent != null && i.discountPercent !== 0)
+  // When discount mode is ON: always show a % column (flat is converted to %).
+  // When mode is OFF: show % or flat column based on what the bill has.
+  const showDiscPctCol  = discountColumnEnabled || hasPctDiscount
+  const showDiscFlatCol = !discountColumnEnabled && hasFlatDiscount
 
   // ── Form ────────────────────────────────────────────────────────────────────
   const { register, handleSubmit, setValue, watch } = useForm<MappingInput>({
@@ -308,6 +314,16 @@ export function MappingForm({
       igstAmount:     bill.igstAmount,
       roundOffAmount: hasRoundOff ? roundOffValue! : undefined,
       lineItems: bill.lineItems.map((item) => {
+        if (discountColumnEnabled) {
+          // Keep original unitPrice; convert flat discount to % if needed
+          let discountPercent = item.discountPercent ?? 0
+          if ((!discountPercent) && item.discountAmount && item.discountAmount !== 0 && item.quantity > 0 && item.unitPrice > 0) {
+            const grossAmt = item.quantity * item.unitPrice
+            discountPercent = parseFloat(((item.discountAmount / grossAmt) * 100).toFixed(4))
+          }
+          return { ...item, discountPercent }
+        }
+        // Existing mode: bake discount into unit price
         const hasDiscount = (item.discountAmount != null && item.discountAmount !== 0)
           || (item.discountPercent != null && item.discountPercent !== 0)
         if (hasDiscount && item.quantity > 0) {
@@ -390,6 +406,28 @@ export function MappingForm({
       if (si?.unit) setValue(`lineItems.${i}.unit`, si.unit)
     })
   }, [tallyStockItemKey, stockItems]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Discount mode: auto-recalc amount = qty × unitPrice × (1 − disc%/100) ──
+  // Fires whenever discountPercent, quantity, or unitPrice changes for any item.
+  const discountModeKey = discountColumnEnabled
+    ? (watchedLineItems ?? []).map((item) =>
+        `${Number(item?.discountPercent ?? 0).toFixed(4)}|${Number(item?.quantity ?? 0)}|${Number(item?.unitPrice ?? 0)}`
+      ).join(';;')
+    : ''
+  useEffect(() => {
+    if (!discountColumnEnabled) return
+    if (!watchedLineItems?.length) return
+    let newSubtotal = 0
+    watchedLineItems.forEach((item, i) => {
+      const qty       = Number(item?.quantity  ?? 0)
+      const unitPrice = Number(item?.unitPrice ?? 0)
+      const discPct   = Number(item?.discountPercent ?? 0)
+      const newAmount = parseFloat((qty * unitPrice * (1 - discPct / 100)).toFixed(2))
+      setValue(`lineItems.${i}.amount`, newAmount)
+      newSubtotal += newAmount
+    })
+    setValue('subtotal', parseFloat(newSubtotal.toFixed(2)))
+  }, [discountModeKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Round off mismatch check — expected = totalAmount − (subtotal + taxes)
   // Same formula used server-side when correcting the AI-parsed sign.
@@ -760,8 +798,8 @@ export function MappingForm({
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Qty</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit Price</th>
-                  {hasPctDiscount  && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc%</th>}
-                  {hasFlatDiscount && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc ₹</th>}
+                  {showDiscPctCol  && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc%</th>}
+                  {showDiscFlatCol && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc ₹</th>}
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">GST%</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[160px]">Item as defined in ERP</th>
@@ -827,12 +865,29 @@ export function MappingForm({
                         )
                       })()}
                     </td>
-                    {hasPctDiscount && (
+                    {showDiscPctCol && (
                       <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountPercent ?? '')}>
-                        <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        {discountColumnEnabled ? (
+                          <div className="relative">
+                            <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            {(() => {
+                              const orig = bill.lineItems[i]
+                              if (orig?.discountAmount != null && orig.discountAmount !== 0) {
+                                return (
+                                  <p className="absolute top-full left-0 text-xs text-amber-600 mt-0.5 whitespace-nowrap">
+                                    Bill: <span className="font-semibold">₹{orig.discountAmount}</span>
+                                  </p>
+                                )
+                              }
+                              return null
+                            })()}
+                          </div>
+                        ) : (
+                          <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        )}
                       </td>
                     )}
-                    {hasFlatDiscount && (
+                    {showDiscFlatCol && (
                       <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountAmount ?? '')}>
                         <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-16 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
@@ -861,7 +916,7 @@ export function MappingForm({
               <tfoot className="bg-gray-50 border-t-2 border-gray-200">
                 {/* Helper variable to keep colSpan consistent across all rows */}
                 {(() => {
-                  const baseColSpan = 6 + (hasPctDiscount || hasFlatDiscount ? 1 : 0);
+                  const baseColSpan = 6 + (showDiscPctCol || showDiscFlatCol ? 1 : 0);
                   
                   return (
                     <>

@@ -45,7 +45,8 @@ export default function BillMapping() {
   const storedGodowns     = companyId ? getGodowns(companyId) : []
   const storedStockUnits  = companyId ? getStockUnits(companyId) : []
   const storedStockGroups = companyId ? getStockGroups(companyId) : []
-  const godownEnabled     = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN && f.enabled) ?? false
+  const godownEnabled          = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN          && f.enabled) ?? false
+  const discountColumnEnabled  = company?.features?.some((f) => f.feature === COMPANY_FEATURES.DISCOUNT_COLUMN && f.enabled) ?? false
 
   useEffect(() => {
     if (companyId && companies.length === 0) {
@@ -433,6 +434,7 @@ export default function BillMapping() {
               tallyUrl={tallyUrl}
               tallyCompany={tallyCompany}
               godownEnabled={godownEnabled}
+              discountColumnEnabled={discountColumnEnabled}
               godowns={storedGodowns}
               stockUnits={storedStockUnits}
               billType={bill.billType}
