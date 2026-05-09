@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import ReactSelect from 'react-select'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, CheckCircle, Plus, Zap } from 'lucide-react'
@@ -53,24 +54,54 @@ function LedgerInput({ id, label, required, matched, ledgers, pinnedNames = [], 
 
 interface TallyItemCellProps {
   index: number
-  register: ReturnType<typeof useForm<MappingInput>>['register']
-  watch: ReturnType<typeof useForm<MappingInput>>['watch']
+  stockItems: TallyStockItem[]
+  value: string
+  onChange: (val: string) => void
   onCreateClick: () => void
 }
 
-function TallyItemCell({ index, register, watch, onCreateClick }: TallyItemCellProps) {
-  const value = watch(`lineItems.${index}.tallyStockItem`)
-  const isEmpty = !value?.trim()
+function TallyItemCell({ stockItems, value, onChange, onCreateClick }: TallyItemCellProps) {
+  const options = stockItems.map((s) => ({ label: s.name, value: s.name }))
+  const selected = value ? { label: value, value } : null
+
   return (
-    <div className="flex items-center gap-1">
-      <input
-        {...register(`lineItems.${index}.tallyStockItem`)}
-        list="stock-items-list"
-        autoComplete="off"
-        placeholder="Select stock item…"
-        className="w-40 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+    <div className="flex items-center gap-1 w-full">
+      <ReactSelect
+        options={options}
+        value={selected}
+        onChange={(opt) => onChange(opt?.value ?? '')}
+        isClearable
+        isSearchable
+        placeholder="Select..."
+        menuPortalTarget={document.body}
+        menuPosition="fixed"
+        styles={{
+          container:   (b) => ({ ...b, width: '100%', minWidth: 120 }),
+          control:     (b, s) => ({
+            ...b,
+            minHeight: 28,
+            height: 28,
+            fontSize: 12,
+            borderColor: s.isFocused ? '#2dd4bf' : '#e5e7eb',
+            boxShadow: s.isFocused ? '0 0 0 1px #2dd4bf' : 'none',
+            '&:hover': { borderColor: '#2dd4bf' },
+          }),
+          valueContainer: (b) => ({ ...b, padding: '0 6px' }),
+          input:          (b) => ({ ...b, margin: 0, padding: 0, fontSize: 12 }),
+          indicatorSeparator: () => ({ display: 'none' }),
+          dropdownIndicator:  (b) => ({ ...b, padding: '0 4px' }),
+          clearIndicator:     (b) => ({ ...b, padding: '0 4px' }),
+          menu:           (b) => ({ ...b, fontSize: 12, zIndex: 9999 }),
+          option:         (b, s) => ({
+            ...b,
+            padding: '4px 10px',
+            backgroundColor: s.isSelected ? '#0d9488' : s.isFocused ? '#f0fdfa' : 'white',
+            color: s.isSelected ? 'white' : '#111827',
+            cursor: 'default',
+          }),
+        }}
       />
-      {isEmpty && (
+      {!value?.trim() && (
         <button
           type="button"
           title="Create new stock item in Tally"
@@ -815,17 +846,15 @@ export function MappingForm({
                     <td className="px-2 py-5" title={watchedLineItems?.[i]?.tallyStockItem ?? ''}>
                       <TallyItemCell
                         index={i}
-                        register={register}
-                        watch={watch}
+                        stockItems={stockItems}
+                        value={watch(`lineItems.${i}.tallyStockItem`) ?? ''}
+                        onChange={(val) => setValue(`lineItems.${i}.tallyStockItem`, val)}
                         onCreateClick={() => setCreateItemRowIndex(i)}
                       />
                     </td>
                   </tr>
                 ))}
               </tbody>
-              <datalist id="stock-items-list">
-                {stockItems.map((item) => <option key={item.name} value={item.name} />)}
-              </datalist>
               <datalist id="all-ledgers-list">
                 {allLedgerNames.map((name) => <option key={name} value={name} />)}
               </datalist>
