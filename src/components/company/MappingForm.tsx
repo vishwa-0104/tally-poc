@@ -746,7 +746,7 @@ export function MappingForm({
           />
           <p className="text-xs text-gray-500 mt-1">Entry date in Tally (<span className="font-mono">DATE</span>)</p>
         </div>
-        {hasRoundOff && (
+        {/* {hasRoundOff && (
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
               Round Off <span className="font-normal text-gray-500">(₹ — negative to deduct)</span>
@@ -764,7 +764,7 @@ export function MappingForm({
               </p>
             )}
           </div>
-        )}
+        )} */}
         {hasInvoiceDiscount && (
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
@@ -1074,6 +1074,7 @@ export function MappingForm({
                     <td></td>
                     <td className="px-3 py-2">
                       <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      Value seems incorrect, try ₹{roundOffSuggestion}
                     </td>
                   </tr>
                 )}
