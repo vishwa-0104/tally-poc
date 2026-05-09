@@ -165,6 +165,8 @@ billsRouter.post('/bills/parse', async (req, res) => {
 
   let text: string
   let usage: ParsedUsage
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rawUsage: any = null
 
   if (parseService === 'gemini') {
     let geminiRes: Response
@@ -200,12 +202,15 @@ billsRouter.post('/bills/parse', async (req, res) => {
 
     const geminiData = await geminiRes.json() as {
       candidates: Array<{ content: { parts: Array<{ text: string }> } }>
-      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number }
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }
     }
+    rawUsage = geminiData.usageMetadata ?? null
     text  = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    // thoughtsTokenCount = internal chain-of-thought reasoning, billed at the same rate as output tokens
+    const thinkingTokens = geminiData.usageMetadata?.thoughtsTokenCount ?? 0
     usage = {
       input_tokens:  geminiData.usageMetadata?.promptTokenCount    ?? 0,
-      output_tokens: geminiData.usageMetadata?.candidatesTokenCount ?? 0,
+      output_tokens: (geminiData.usageMetadata?.candidatesTokenCount ?? 0) + thinkingTokens,
     }
   } else {
     // Anthropic
@@ -251,6 +256,7 @@ billsRouter.post('/bills/parse', async (req, res) => {
       content: Array<{ type: string; text: string }>
       usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
     }
+    rawUsage = anthropicData.usage ?? null
     text  = anthropicData.content.find((b) => b.type === 'text')?.text ?? ''
     usage = anthropicData.usage ?? {}
   }
@@ -297,6 +303,7 @@ billsRouter.post('/bills/parse', async (req, res) => {
           cacheRead:    usage.cache_read_input_tokens ?? 0,
           cacheWrite:   usage.cache_creation_input_tokens ?? 0,
           success: true,
+          rawUsage,
         },
       }).catch(() => {})
     }

@@ -611,6 +611,97 @@ companiesRouter.put('/companies/:id/voucher-types', async (req, res) => {
   res.json({ saved: incoming.length })
 })
 
+// GET /api/admin/usage-dashboard?period=1d|7d|mtd&companyId=xxx — cross-company token & cost stats
+companiesRouter.get('/admin/usage-dashboard', requireAdmin, async (req, res) => {
+  const period    = (req.query.period    as string) ?? '7d'
+  const companyId = (req.query.companyId as string) || null
+
+  const now = new Date()
+  let since: Date | null = null
+  if (period === '1d') {
+    since = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  } else if (period === 'mtd') {
+    since = new Date(now.getFullYear(), now.getMonth(), 1)
+  } else if (period === 'ytd') {
+    since = new Date(now.getFullYear(), 0, 1)
+  } else if (period === 'all') {
+    since = null
+  } else {
+    since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  }
+
+  // USD per 1M tokens — confirmed from provider billing pages
+  const PRICING: Record<string, { input: number; output: number }> = {
+    'gemini-flash-latest':        { input: 0.25,  output: 1.50  },
+    'gemini-2.0-flash':           { input: 0.25,  output: 1.50  },
+    'gemini-2.0-flash-latest':    { input: 0.25,  output: 1.50  },
+    'gemini-1.5-flash':           { input: 0.25,  output: 1.50  },
+    'gemini-1.5-flash-latest':    { input: 0.25,  output: 1.50  },
+    'gemini-1.5-pro':             { input: 1.25,  output: 5.00  },
+    'gemini-1.5-pro-latest':      { input: 1.25,  output: 5.00  },
+    'claude-haiku-4-5':           { input: 0.25,  output: 1.25  },
+    'claude-haiku-4-5-20251001':  { input: 0.25,  output: 1.25  },
+    'claude-sonnet-4-6':          { input: 3.00,  output: 15.00 },
+    'claude-opus-4-7':            { input: 15.00, output: 75.00 },
+  }
+  const FALLBACK_PRICING = { input: 0.25, output: 1.50 }
+  const USD_TO_INR = 85
+
+  type RawRow = { model: string; requests: bigint; successRequests: bigint; inputTokens: bigint; outputTokens: bigint }
+  const rows: RawRow[] = await prisma.$queryRaw`
+    SELECT
+      model,
+      COUNT(*)                              AS requests,
+      COUNT(*) FILTER (WHERE success = true) AS "successRequests",
+      COALESCE(SUM("inputTokens"),  0)       AS "inputTokens",
+      COALESCE(SUM("outputTokens"), 0)       AS "outputTokens"
+    FROM "ParseUsageLog"
+    WHERE (${since}::timestamptz IS NULL OR "createdAt" >= ${since})
+      AND (${companyId}::text    IS NULL OR "companyId" = ${companyId})
+    GROUP BY model
+    ORDER BY "inputTokens" DESC
+  `
+
+  const modelMap: Record<string, {
+    requests: number; successRequests: number
+    inputTokens: number; outputTokens: number
+  }> = {}
+
+  for (const r of rows) {
+    modelMap[r.model] = {
+      requests:        Number(r.requests),
+      successRequests: Number(r.successRequests),
+      inputTokens:     Number(r.inputTokens),
+      outputTokens:    Number(r.outputTokens),
+    }
+  }
+
+  const byModel = Object.entries(modelMap).map(([model, s]) => {
+    const p           = PRICING[model] ?? FALLBACK_PRICING
+    const costUsd     = (s.inputTokens * p.input + s.outputTokens * p.output) / 1_000_000
+    const costInr     = parseFloat((costUsd * USD_TO_INR).toFixed(2))
+    const costPerBill = s.requests > 0 ? parseFloat((costInr / s.requests).toFixed(4)) : 0
+    return { model, ...s, costInr, costPerBill }
+  })
+
+  const total = byModel.reduce(
+    (acc, m) => ({
+      requests:        acc.requests        + m.requests,
+      successRequests: acc.successRequests + m.successRequests,
+      inputTokens:     acc.inputTokens     + m.inputTokens,
+      outputTokens:    acc.outputTokens    + m.outputTokens,
+      costInr:         parseFloat((acc.costInr + m.costInr).toFixed(2)),
+      costPerBill:     0,
+    }),
+    { requests: 0, successRequests: 0, inputTokens: 0, outputTokens: 0, costInr: 0, costPerBill: 0 },
+  )
+  total.costPerBill = total.requests > 0
+    ? parseFloat((total.costInr / total.requests).toFixed(4))
+    : 0
+
+  res.json({ period, byModel, total })
+})
+
 // PUT /api/companies/:id/voucher-type — save selected voucher type
 companiesRouter.put('/companies/:id/voucher-type', async (req, res) => {
   if (!(await canAccessCompany(req.auth, req.params.id))) {

@@ -85,6 +85,7 @@ model ParseUsageLog {
   cacheRead    Int      @default(0)
   cacheWrite   Int      @default(0)
   success      Boolean
+  rawUsage     Json?
   createdAt    DateTime @default(now())
 
   @@index([companyId, createdAt])
