@@ -10,7 +10,7 @@ import { BillsTable, UploadModal } from '@/components/company'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { parseBillWithAI, parsedDataToBill } from '@/services'
 
-type BillType = 'purchase' | 'debit' | 'misc'
+type BillType = 'purchase' | 'debit' | 'misc' | 'credit'
 
 export default function CompanyBills() {
   const [showUpload, setShowUpload]               = useState(false)
@@ -27,7 +27,8 @@ export default function CompanyBills() {
 
   const company = activeCompanyId ? getCompany(activeCompanyId) : null
   const bills   = activeCompanyId ? getBills(activeCompanyId) : []
-  const debitVoucherEnabled = company?.features?.some((f) => f.feature === 'debit_voucher' && f.enabled) ?? false
+  const debitVoucherEnabled  = company?.features?.some((f) => f.feature === 'debit_voucher'  && f.enabled) ?? false
+  const creditVoucherEnabled = company?.features?.some((f) => f.feature === 'credit_voucher' && f.enabled) ?? false
 
   const synced  = bills.filter((b) => b.status === 'synced').length
   const pending = bills.filter((b) => ['parsed', 'mapped'].includes(b.status)).length
@@ -37,7 +38,7 @@ export default function CompanyBills() {
     navigate(`/company/bills/${billId}`)
   }
 
-  const handleMultipleFiles = async (files: File[], billType: BillType = 'purchase', isMiscDebit = false) => {
+  const handleMultipleFiles = async (files: File[], billType: BillType = 'purchase', isMiscDebit = false, isMiscCredit = false) => {
     if (!activeCompanyId) return
     setBulkTotal(files.length)
     setBulkDone(0)
@@ -47,9 +48,11 @@ export default function CompanyBills() {
     let failed = 0
     for (const file of files) {
       try {
-        const parsed = await parseBillWithAI(file, undefined, billType, activeCompanyId)
-        let bill     = parsedDataToBill(parsed, activeCompanyId!, undefined, billType)
-        if (isMiscDebit) bill = { ...bill, tallyMapping: { isDebit: true } }
+        const safeType = billType === 'credit' ? 'misc' : billType
+        const parsed = await parseBillWithAI(file, undefined, safeType, activeCompanyId)
+        let bill     = parsedDataToBill(parsed, activeCompanyId!, undefined, safeType)
+        if (isMiscDebit)  bill = { ...bill, tallyMapping: { isDebit:  true } }
+        if (isMiscCredit) bill = { ...bill, tallyMapping: { isCredit: true } }
         addBill(bill)
         incrementBillCount(activeCompanyId!)
         succeeded++
@@ -149,6 +152,7 @@ export default function CompanyBills() {
         onMultipleFiles={handleMultipleFiles}
         initialType={uploadInitialType}
         debitVoucherEnabled={debitVoucherEnabled}
+        creditVoucherEnabled={creditVoucherEnabled}
         isMiscUpload={uploadIsMisc}
       />
     </>

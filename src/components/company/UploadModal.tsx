@@ -28,19 +28,20 @@ const STEPS = [
   { label: 'Almost done',               sub: 'Saving your bill…' },
 ]
 
-type BillType = 'purchase' | 'debit' | 'misc'
+type BillType = 'purchase' | 'debit' | 'misc' | 'credit'
 
 interface UploadModalProps {
   open: boolean
   onClose: () => void
   onParsed: (billId: string) => void
-  onMultipleFiles: (files: File[], type: BillType, isMiscDebit: boolean) => void
+  onMultipleFiles: (files: File[], type: BillType, isMiscDebit: boolean, isMiscCredit: boolean) => void
   initialType?: 'purchase' | 'debit'
   debitVoucherEnabled?: boolean
+  creditVoucherEnabled?: boolean
   isMiscUpload?: boolean
 }
 
-export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialType = 'purchase', debitVoucherEnabled = false, isMiscUpload = false }: UploadModalProps) {
+export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialType = 'purchase', debitVoucherEnabled = false, creditVoucherEnabled = false, isMiscUpload = false }: UploadModalProps) {
   const [file, setFile]             = useState<File | null>(null)
   const [multiFiles, setMultiFiles] = useState<File[]>([])
   const [parsing, setParsing]       = useState(false)
@@ -89,12 +90,13 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
   const handleParse = async () => {
     if (!activeCompanyId) return
 
-    const billTypeToSave = isMiscUpload ? 'misc' : selectedType
     const isMiscDebit    = isMiscUpload && selectedType === 'debit'
+    const isMiscCredit   = isMiscUpload && selectedType === 'credit'
+    const billTypeToSave: 'purchase' | 'debit' | 'misc' = isMiscUpload ? 'misc' : selectedType as 'purchase' | 'debit'
 
     // Multi-file: hand off to parent and close immediately
     if (multiFiles.length > 1) {
-      onMultipleFiles(multiFiles, billTypeToSave, isMiscDebit)
+      onMultipleFiles(multiFiles, billTypeToSave, isMiscDebit, isMiscCredit)
       handleClose()
       return
     }
@@ -105,7 +107,8 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
     try {
       const parsed = await parseBillWithAI(file, (s) => setStep(s), billTypeToSave, activeCompanyId)
       let bill     = parsedDataToBill(parsed, activeCompanyId, undefined, billTypeToSave)
-      if (isMiscDebit) bill = { ...bill, tallyMapping: { isDebit: true } }
+      if (isMiscDebit)  bill = { ...bill, tallyMapping: { isDebit:  true } }
+      if (isMiscCredit) bill = { ...bill, tallyMapping: { isCredit: true } }
       const saved  = await addBill(bill)
       incrementBillCount(activeCompanyId)
       toast.success('Bill parsed successfully!')
@@ -178,24 +181,49 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
         </div>
       ) : !parsing ? (
         <>
-          {/* Bill type selector — Purchase always shown, Debit only when feature enabled */}
-          {debitVoucherEnabled && (
+          {/* Bill type selector — Purchase always shown, Debit/Credit when features enabled */}
+          {(debitVoucherEnabled || creditVoucherEnabled) && (
             <div className="flex items-center gap-2 mb-4">
-              {(['purchase', 'debit'] as const).map((t) => (
+              <button
+                type="button"
+                onClick={() => setSelectedType('purchase')}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                  selectedType === 'purchase'
+                    ? 'bg-teal-500 text-white border-teal-500'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
+                )}
+              >
+                Misc. Purchases
+              </button>
+              {debitVoucherEnabled && (
                 <button
-                  key={t}
                   type="button"
-                  onClick={() => setSelectedType(t)}
+                  onClick={() => setSelectedType('debit')}
                   className={cn(
                     'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
-                    selectedType === t
+                    selectedType === 'debit'
                       ? 'bg-teal-500 text-white border-teal-500'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
                   )}
                 >
-                  {t === 'purchase' ? 'Purchase' : 'Debit Note'}
+                  Misc. Debit Note
                 </button>
-              ))}
+              )}
+              {creditVoucherEnabled && isMiscUpload && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedType('credit')}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                    selectedType === 'credit'
+                      ? 'bg-teal-500 text-white border-teal-500'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
+                  )}
+                >
+                  Misc. Credit Note
+                </button>
+              )}
             </div>
           )}
 

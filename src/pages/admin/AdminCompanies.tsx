@@ -109,6 +109,17 @@ const FEATURE_CATALOGUE = [
     iconColor:   'text-blue-400',
     dotOn:       'bg-blue-400',
   },
+  {
+    key:         COMPANY_FEATURES.CREDIT_VOUCHER,
+    label:       'Credit Voucher',
+    description: 'Enable a Credit Voucher Type setting. Allows specifying the voucher type used when creating credit notes in Tally.',
+    Icon:        Receipt,
+    gradient:    'from-purple-500/10 to-violet-500/10',
+    ring:        'ring-purple-500/30',
+    iconBg:      'bg-purple-500/10',
+    iconColor:   'text-purple-400',
+    dotOn:       'bg-purple-400',
+  },
 ] as const
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────

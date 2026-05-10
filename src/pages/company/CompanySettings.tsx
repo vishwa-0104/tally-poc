@@ -134,13 +134,14 @@ function TabBar({ active, onChange }: TabBarProps) {
 
 export default function CompanySettings() {
   const { activeCompanyId, companies: authCompanies } = useAuthStore()
-  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb, getVoucherTypes, fetchVoucherTypesFromDb, saveVoucherTypesToDb, saveSelectedVoucherType, saveSelectedDebitVoucherType } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb, getVoucherTypes, fetchVoucherTypesFromDb, saveVoucherTypesToDb, saveSelectedVoucherType, saveSelectedDebitVoucherType, saveSelectedCreditVoucherType } = useCompanyStore()
   const company     = activeCompanyId ? getCompany(activeCompanyId) : null
   const companyId   = activeCompanyId ?? ''
   const companyName = company?.name ?? authCompanies.find((c) => c.id === activeCompanyId)?.name ?? ''
 
   const godownEnabled        = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN          && f.enabled) ?? false
   const debitVoucherEnabled  = company?.features?.some((f) => f.feature === COMPANY_FEATURES.DEBIT_VOUCHER   && f.enabled) ?? false
+  const creditVoucherEnabled = company?.features?.some((f) => f.feature === COMPANY_FEATURES.CREDIT_VOUCHER  && f.enabled) ?? false
 
   const [activeTab,          setActiveTab]          = useState<Tab>('connection')
   const [syncing,            setSyncing]            = useState(false)
@@ -152,9 +153,11 @@ export default function CompanySettings() {
   const [tallyUrl,           setTallyUrl]           = useState(() => getTallyUrl(companyId, company?.port))
   const [voucherType,        setVoucherType]        = useState(() => company?.voucherType || DEFAULT_VOUCHER_TYPE)
   const [debitVoucherType,   setDebitVoucherType]   = useState(() => (company?.mapping as Record<string, string> | null)?.debit_voucher_type ?? '')
+  const [creditVoucherType,  setCreditVoucherType]  = useState(() => (company?.mapping as Record<string, string> | null)?.credit_voucher_type ?? '')
   const [voucherTypes,       setVoucherTypes]       = useState<string[]>(() => companyId ? getVoucherTypes(companyId) : [])
   const [fetchingVTypes,     setFetchingVTypes]     = useState(false)
   const [savingDebitVType,   setSavingDebitVType]   = useState(false)
+  const [savingCreditVType,  setSavingCreditVType]  = useState(false)
 
   const storedLedgers     = companyId ? getLedgers(companyId)     : []
   const storedStockItems  = companyId ? getStockItems(companyId)  : []
@@ -176,6 +179,8 @@ export default function CompanySettings() {
   useEffect(() => {
     const saved = (company?.mapping as Record<string, string> | null)?.debit_voucher_type
     if (saved !== undefined) setDebitVoucherType(saved)
+    const savedCredit = (company?.mapping as Record<string, string> | null)?.credit_voucher_type
+    if (savedCredit !== undefined) setCreditVoucherType(savedCredit)
   }, [company?.mapping]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -210,6 +215,18 @@ export default function CompanySettings() {
       toast.error('Failed to save debit voucher type')
     } finally {
       setSavingDebitVType(false)
+    }
+  }
+
+  const handleSaveCreditVoucherType = async () => {
+    setSavingCreditVType(true)
+    try {
+      await saveSelectedCreditVoucherType(companyId, creditVoucherType.trim())
+      toast.success('Credit voucher type saved')
+    } catch {
+      toast.error('Failed to save credit voucher type')
+    } finally {
+      setSavingCreditVType(false)
     }
   }
 
@@ -402,6 +419,34 @@ export default function CompanySettings() {
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
                     Voucher type used when creating a Debit Note in Accounting Software. Fetches the same list as Purchase Voucher Type.
+                  </p>
+                </div>
+              )}
+
+              {/* Credit Voucher Type — only when feature is enabled */}
+              {creditVoucherEnabled && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                    Credit Voucher Type
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      list="credit-voucher-type-list"
+                      value={creditVoucherType}
+                      onChange={(e) => setCreditVoucherType(e.target.value)}
+                      placeholder="Credit Note"
+                      className="input-base flex-1"
+                    />
+                    <datalist id="credit-voucher-type-list">
+                      {voucherTypes.map((t) => <option key={t} value={t} />)}
+                    </datalist>
+                    <Button variant="outline" size="sm" loading={fetchingVTypes} onClick={handleFetchVoucherTypes}>
+                      Fetch
+                    </Button>
+                    <Button variant="outline" size="sm" loading={savingCreditVType} onClick={handleSaveCreditVoucherType}>Save</Button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Voucher type used when creating a Credit Note in Accounting Software. Fetches the same list as Purchase Voucher Type.
                   </p>
                 </div>
               )}

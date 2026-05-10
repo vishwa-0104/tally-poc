@@ -83,11 +83,13 @@ export default function BillMapping() {
 
   const tallyUrl     = getTallyUrl(companyId, company?.port)
   const tallyCompany = companyName
-  const isDebitBill      = bill?.billType === 'debit'
-  const isMiscDebitBill  = bill?.billType === 'misc' && bill?.tallyMapping?.isDebit === true
-  const isReturn         = isDebitBill || isMiscDebitBill
-  const debitVoucherTypeSetting = (company?.mapping as Record<string, string> | null)?.debit_voucher_type ?? 'Debit Note'
-  const voucherType  = isReturn ? debitVoucherTypeSetting : (company?.voucherType ?? 'GST PURCHASE')
+  const isDebitBill       = bill?.billType === 'debit'
+  const isMiscDebitBill   = bill?.billType === 'misc' && bill?.tallyMapping?.isDebit  === true
+  const isMiscCreditBill  = bill?.billType === 'misc' && bill?.tallyMapping?.isCredit === true
+  const isReturn          = isDebitBill || isMiscDebitBill
+  const debitVoucherTypeSetting  = (company?.mapping as Record<string, string> | null)?.debit_voucher_type  ?? 'Debit Note'
+  const creditVoucherTypeSetting = (company?.mapping as Record<string, string> | null)?.credit_voucher_type ?? 'Credit Note'
+  const voucherType  = isMiscCreditBill ? creditVoucherTypeSetting : isReturn ? debitVoucherTypeSetting : (company?.voucherType ?? 'GST PURCHASE')
 
   // Only live-fetch from Tally if no ledgers are stored yet
   const { ledgers: liveLedgers, loading: ledgersLoading } = useTallyLedgers(

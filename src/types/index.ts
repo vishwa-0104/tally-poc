@@ -65,6 +65,7 @@ export interface TallyBillMapping {
   godown?: string
   extraCharges?: ExtraCharge[]
   isDebit?: boolean   // misc bills only — true when user chose Debit Note at upload
+  isCredit?: boolean  // misc bills only — true when user chose Credit Note at upload
 }
 
 // ── Company Feature Flags ─────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ export const COMPANY_FEATURES = {
   GODOWN:          'godown',
   DISCOUNT_COLUMN: 'discount_column',
   DEBIT_VOUCHER:   'debit_voucher',
+  CREDIT_VOUCHER:  'credit_voucher',
 } as const
 
 export interface Company {

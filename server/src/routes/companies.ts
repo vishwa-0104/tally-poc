@@ -736,3 +736,23 @@ companiesRouter.put('/companies/:id/debit-voucher-type', async (req, res) => {
   const mapping = (updated.mapping as Record<string, string>) ?? {}
   res.json({ debitVoucherType: mapping.debit_voucher_type ?? '' })
 })
+
+// PUT /api/companies/:id/credit-voucher-type — save selected credit note voucher type
+companiesRouter.put('/companies/:id/credit-voucher-type', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const result = z.object({ creditVoucherType: z.string() }).safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const company = await prisma.company.findUnique({ where: { id: req.params.id } })
+  if (!company) { res.status(404).json({ error: 'Not found' }); return }
+
+  const existingMapping = (company.mapping as Record<string, unknown>) ?? {}
+  const updated = await prisma.company.update({
+    where: { id: req.params.id },
+    data:  { mapping: { ...existingMapping, credit_voucher_type: result.data.creditVoucherType } },
+  })
+  const mapping = (updated.mapping as Record<string, string>) ?? {}
+  res.json({ creditVoucherType: mapping.credit_voucher_type ?? '' })
+})
