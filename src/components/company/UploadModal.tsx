@@ -34,12 +34,13 @@ interface UploadModalProps {
   open: boolean
   onClose: () => void
   onParsed: (billId: string) => void
-  onMultipleFiles: (files: File[], type: BillType) => void
-  initialType?: BillType
+  onMultipleFiles: (files: File[], type: BillType, isMiscDebit: boolean) => void
+  initialType?: 'purchase' | 'debit'
   debitVoucherEnabled?: boolean
+  isMiscUpload?: boolean
 }
 
-export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialType = 'purchase', debitVoucherEnabled = false }: UploadModalProps) {
+export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialType = 'purchase', debitVoucherEnabled = false, isMiscUpload = false }: UploadModalProps) {
   const [file, setFile]             = useState<File | null>(null)
   const [multiFiles, setMultiFiles] = useState<File[]>([])
   const [parsing, setParsing]       = useState(false)
@@ -88,9 +89,12 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
   const handleParse = async () => {
     if (!activeCompanyId) return
 
+    const billTypeToSave = isMiscUpload ? 'misc' : selectedType
+    const isMiscDebit    = isMiscUpload && selectedType === 'debit'
+
     // Multi-file: hand off to parent and close immediately
     if (multiFiles.length > 1) {
-      onMultipleFiles(multiFiles, selectedType)
+      onMultipleFiles(multiFiles, billTypeToSave, isMiscDebit)
       handleClose()
       return
     }
@@ -99,8 +103,9 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
     setParsing(true)
     setStep(0)
     try {
-      const parsed = await parseBillWithAI(file, (s) => setStep(s), selectedType, activeCompanyId)
-      const bill   = parsedDataToBill(parsed, activeCompanyId, undefined, selectedType)
+      const parsed = await parseBillWithAI(file, (s) => setStep(s), billTypeToSave, activeCompanyId)
+      let bill     = parsedDataToBill(parsed, activeCompanyId, undefined, billTypeToSave)
+      if (isMiscDebit) bill = { ...bill, tallyMapping: { isDebit: true } }
       const saved  = await addBill(bill)
       incrementBillCount(activeCompanyId)
       toast.success('Bill parsed successfully!')
@@ -130,23 +135,22 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
 
   const quotaFooter = <Button variant="outline" onClick={handleClose}>Close</Button>
 
-  const TITLES: Record<BillType, string> = {
-    purchase: 'Upload Bill',
-    debit:    'Upload Debit Note',
-    misc:     'Upload Misc Bill',
-  }
-  const SUBTITLES: Record<BillType, string> = {
-    purchase: "Upload a photo or PDF of your purchase bill and we'll read it for you",
-    debit:    'Upload a debit note — items will sync with reversed debit/credit signs in Accounting Software',
-    misc:     'Upload expense bills (stationery, repairs, utilities) — items map to expense ledgers',
-  }
+  const title = isMiscUpload
+    ? 'Upload Misc Bill'
+    : selectedType === 'debit' ? 'Upload Debit Note' : 'Upload Bill'
+
+  const subtitle = isMiscUpload
+    ? `Expense bill — will sync as a ${selectedType === 'debit' ? 'Debit Note' : 'Purchase'} voucher in Accounting Software`
+    : selectedType === 'debit'
+      ? 'Upload a debit note — items will sync with reversed debit/credit signs in Accounting software'
+      : "Upload a photo or PDF of your purchase bill and we'll read it for you"
 
   return (
     <Modal
       open={open}
       onClose={handleClose}
-      title={TITLES[selectedType]}
-      subtitle={SUBTITLES[selectedType]}
+      title={title}
+      subtitle={subtitle}
       footer={
         quotaError ? quotaFooter :
         parsing ? undefined : (
@@ -178,24 +182,26 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
         </div>
       ) : !parsing ? (
         <>
-          {/* Bill type selector */}
-          <div className="flex items-center gap-2 mb-4">
-            {(['purchase', ...(debitVoucherEnabled ? ['debit' as BillType] : []), 'misc'] as BillType[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setSelectedType(t)}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
-                  selectedType === t
-                    ? 'bg-teal-500 text-white border-teal-500'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
-                )}
-              >
-                {t === 'purchase' ? 'Purchase' : t === 'debit' ? 'Debit Note' : 'Misc'}
-              </button>
-            ))}
-          </div>
+          {/* Bill type selector — Purchase always shown, Debit only when feature enabled */}
+          {debitVoucherEnabled && (
+            <div className="flex items-center gap-2 mb-4">
+              {(['purchase', 'debit'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setSelectedType(t)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                    selectedType === t
+                      ? 'bg-teal-500 text-white border-teal-500'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
+                  )}
+                >
+                  {t === 'purchase' ? 'Purchase' : 'Debit Note'}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Dropzone */}
           <div

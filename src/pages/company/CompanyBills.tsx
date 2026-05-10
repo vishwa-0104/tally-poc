@@ -13,8 +13,9 @@ import { parseBillWithAI, parsedDataToBill } from '@/services'
 type BillType = 'purchase' | 'debit' | 'misc'
 
 export default function CompanyBills() {
-  const [showUpload, setShowUpload]   = useState(false)
-  const [uploadInitialType, setUploadInitialType] = useState<BillType>('purchase')
+  const [showUpload, setShowUpload]               = useState(false)
+  const [uploadInitialType, setUploadInitialType] = useState<'purchase' | 'debit'>('purchase')
+  const [uploadIsMisc, setUploadIsMisc]           = useState(false)
   const [bulkParsing, setBulkParsing] = useState(false)
   const [bulkDone, setBulkDone]       = useState(0)
   const [bulkTotal, setBulkTotal]     = useState(0)
@@ -36,7 +37,7 @@ export default function CompanyBills() {
     navigate(`/company/bills/${billId}`)
   }
 
-  const handleMultipleFiles = async (files: File[], billType: BillType = 'purchase') => {
+  const handleMultipleFiles = async (files: File[], billType: BillType = 'purchase', isMiscDebit = false) => {
     if (!activeCompanyId) return
     setBulkTotal(files.length)
     setBulkDone(0)
@@ -47,7 +48,8 @@ export default function CompanyBills() {
     for (const file of files) {
       try {
         const parsed = await parseBillWithAI(file, undefined, billType, activeCompanyId)
-        const bill   = parsedDataToBill(parsed, activeCompanyId!, undefined, billType)
+        let bill     = parsedDataToBill(parsed, activeCompanyId!, undefined, billType)
+        if (isMiscDebit) bill = { ...bill, tallyMapping: { isDebit: true } }
         addBill(bill)
         incrementBillCount(activeCompanyId!)
         succeeded++
@@ -101,7 +103,7 @@ export default function CompanyBills() {
               </span>
             )}
             <span className="relative group">
-              <Button variant="teal" size="sm" onClick={() => { setUploadInitialType('purchase'); setShowUpload(true) }} disabled={bulkParsing || !!company?.parseBlocked}>
+              <Button variant="teal" size="sm" onClick={() => { setUploadInitialType('purchase'); setUploadIsMisc(false); setShowUpload(true) }} disabled={bulkParsing || !!company?.parseBlocked}>
                 <Upload className="w-3.5 h-3.5" />
                 Upload Bills
               </Button>
@@ -112,7 +114,7 @@ export default function CompanyBills() {
               )}
             </span>
             <span className="relative group">
-              <Button variant="outline" size="sm" onClick={() => { setUploadInitialType('misc'); setShowUpload(true) }} disabled={bulkParsing || !!company?.parseBlocked}>
+              <Button variant="outline" size="sm" onClick={() => { setUploadInitialType('purchase'); setUploadIsMisc(true); setShowUpload(true) }} disabled={bulkParsing || !!company?.parseBlocked}>
                 Upload Misc Bill
               </Button>
               {company?.parseBlocked && (
@@ -142,11 +144,12 @@ export default function CompanyBills() {
 
       <UploadModal
         open={showUpload}
-        onClose={() => { setShowUpload(false); setUploadInitialType('purchase') }}
+        onClose={() => { setShowUpload(false); setUploadInitialType('purchase'); setUploadIsMisc(false) }}
         onParsed={handleParsed}
         onMultipleFiles={handleMultipleFiles}
         initialType={uploadInitialType}
         debitVoucherEnabled={debitVoucherEnabled}
+        isMiscUpload={uploadIsMisc}
       />
     </>
   )

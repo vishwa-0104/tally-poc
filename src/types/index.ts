@@ -64,6 +64,7 @@ export interface TallyBillMapping {
   igstLedger?: string
   godown?: string
   extraCharges?: ExtraCharge[]
+  isDebit?: boolean   // misc bills only — true when user chose Debit Note at upload
 }
 
 // ── Company Feature Flags ─────────────────────────────────────────────────────
