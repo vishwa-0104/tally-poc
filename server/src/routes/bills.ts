@@ -100,7 +100,7 @@ billsRouter.delete('/bills/:id', async (req, res) => {
   res.status(204).send()
 })
 
-const GEMINI_MODELS    = ['gemini-flash-latest', 'gemini-3.1-flash', 'gemini-2.0-flash']
+const GEMINI_MODELS    = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.1-flash', 'gemini-2.0-flash']
 const ANTHROPIC_MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-4-6', 'claude-opus-4-7']
 
 // POST /api/bills/parse — AI parse a bill image/PDF
@@ -203,11 +203,20 @@ billsRouter.post('/bills/parse', async (req, res) => {
     const geminiData = await geminiRes.json() as {
       candidates: Array<{ content: { parts: Array<{ text: string }> } }>
       usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }
+      modelVersion?: string
     }
+    const thinkingTokens = geminiData.usageMetadata?.thoughtsTokenCount ?? 0
+    console.log(">>>>>>>>>>>>>>>>>>>>>>>")
+    console.log(
+      `[Gemini] model=${geminiData.modelVersion ?? model}`,
+      `| input=${geminiData.usageMetadata?.promptTokenCount ?? 0}`,
+      `| output=${geminiData.usageMetadata?.candidatesTokenCount ?? 0}`,
+      `| thinking=${thinkingTokens}`,
+      `| total=${(geminiData.usageMetadata?.promptTokenCount ?? 0) + (geminiData.usageMetadata?.candidatesTokenCount ?? 0) + thinkingTokens}`,
+    )
+    console.log(">>>>>>>>>>>>>>>>>>>>>>>")
     rawUsage = geminiData.usageMetadata ?? null
     text  = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-    // thoughtsTokenCount = internal chain-of-thought reasoning, billed at the same rate as output tokens
-    const thinkingTokens = geminiData.usageMetadata?.thoughtsTokenCount ?? 0
     usage = {
       input_tokens:  geminiData.usageMetadata?.promptTokenCount    ?? 0,
       output_tokens: (geminiData.usageMetadata?.candidatesTokenCount ?? 0) + thinkingTokens,

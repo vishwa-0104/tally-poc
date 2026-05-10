@@ -18,9 +18,10 @@ interface ParseUsageStats {
 }
 
 const MODEL_LABELS: Record<string, string> = {
-  'gemini-flash-latest':       'Gemini Flash Latest',
-  'gemini-3.1-flash':          'Gemini Flash 3.1',
-  'gemini-2.0-flash':          'Gemini Flash 2.0',
+  'gemini-flash-latest':      'Gemini Flash Latest',
+  'gemini-flash-lite-latest': 'Gemini Flash Lite Latest',
+  'gemini-3.1-flash':         'Gemini Flash 3.1',
+  'gemini-2.0-flash':         'Gemini Flash 2.0',
   'claude-haiku-4-5-20251001': 'Claude Haiku',
   'claude-sonnet-4-6':         'Claude Sonnet',
   'claude-opus-4-7':           'Claude Opus',
@@ -28,9 +29,10 @@ const MODEL_LABELS: Record<string, string> = {
 
 const SERVICE_MODELS: Record<string, { value: string; label: string }[]> = {
   gemini: [
-    { value: 'gemini-flash-latest', label: 'Flash Latest — always up-to-date (~₹0.05/bill)' },
-    { value: 'gemini-3.1-flash',    label: 'Flash 3.1 (~₹0.05/bill)' },
-    { value: 'gemini-2.0-flash',    label: 'Flash 2.0 (~₹0.05/bill)' },
+    { value: 'gemini-flash-latest',      label: 'Flash Latest — always up-to-date (~₹0.13/bill)' },
+    { value: 'gemini-flash-lite-latest', label: 'Flash Lite Latest — cheaper, lighter (~₹0.07/bill)' },
+    { value: 'gemini-3.1-flash',         label: 'Flash 3.1 (~₹0.13/bill)' },
+    { value: 'gemini-2.0-flash',         label: 'Flash 2.0 (~₹0.05/bill)' },
   ],
   anthropic: [
     { value: 'claude-haiku-4-5-20251001', label: 'Haiku — fast & cheap (~₹0.40/bill)' },
@@ -46,9 +48,10 @@ const SERVICE_DEFAULT_MODEL: Record<string, string> = {
 
 function estimateCostInr(inputTokens: number, outputTokens: number, model: string): number {
   const rates: Record<string, [number, number]> = {
-    'gemini-flash-latest': [0.075, 0.30],
-    'gemini-3.1-flash':    [0.075, 0.30],
-    'gemini-2.0-flash':    [0.075, 0.30],
+    'gemini-flash-latest':      [0.50, 3.00],
+    'gemini-flash-lite-latest': [0.25, 1.50],
+    'gemini-3.1-flash':         [0.50, 3.00],
+    'gemini-2.0-flash':         [0.075, 0.30],
     'claude-haiku-4-5-20251001': [0.80,  4.00],
     'claude-sonnet-4-6':         [3.00, 15.00],
     'claude-opus-4-7':           [15.00, 75.00],
