@@ -84,6 +84,7 @@ export const mappingSchema = z.object({
   ),
   lineItems:      z.array(lineItemEditSchema).optional(),
   godownName:     z.string().optional(),
+  voucherType:    z.string().optional(),
   discountLedger: z.string().optional(),
   narration:      z.string().optional(),
   extraCharges:   z.array(z.object({

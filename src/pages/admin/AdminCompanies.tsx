@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Warehouse, Percent, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
+import { Plus, Warehouse, Percent, Receipt, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
@@ -94,6 +94,17 @@ const FEATURE_CATALOGUE = [
     iconBg:      'bg-amber-500/10',
     iconColor:   'text-amber-400',
     dotOn:       'bg-amber-400',
+  },
+  {
+    key:         COMPANY_FEATURES.DEBIT_VOUCHER,
+    label:       'Debit Voucher',
+    description: 'Show a Voucher Type selector on the bill mapping page. Defaults to company voucher type; can be overridden per bill.',
+    Icon:        Receipt,
+    gradient:    'from-blue-500/10 to-indigo-500/10',
+    ring:        'ring-blue-500/30',
+    iconBg:      'bg-blue-500/10',
+    iconColor:   'text-blue-400',
+    dotOn:       'bg-blue-400',
   },
 ] as const
 

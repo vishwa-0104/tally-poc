@@ -130,6 +130,9 @@ interface MappingFormProps {
   tallyCompany?: string
   godownEnabled?: boolean
   discountColumnEnabled?: boolean
+  debitVoucherEnabled?: boolean
+  voucherTypes?: string[]
+  defaultVoucherType?: string
   godowns?: TallyGodown[]
   stockUnits?: TallyStockUnit[]
   billType?: 'purchase' | 'misc'
@@ -152,6 +155,9 @@ export function MappingForm({
   tallyCompany = '',
   godownEnabled = false,
   discountColumnEnabled = false,
+  debitVoucherEnabled = false,
+  voucherTypes = [] as string[],
+  defaultVoucherType = 'GST PURCHASE',
   godowns = [],
   stockUnits = [],
   billType = 'purchase' as const,
@@ -290,6 +296,7 @@ export function MappingForm({
     resolver: zodResolver(mappingSchema),
     defaultValues: {
       vendorLedger:          resolvedVendor || undefined,
+      voucherType:           defaultVoucherType || undefined,
       extraCharges:          (bill.extraCharges ?? []).map((ec) => ({ ...ec, ledger: '' })),
       purchaseLedger_5:      show5      ? prefillPurchase5      || undefined : undefined,
       purchaseLedger_18:     show18     ? prefillPurchase18     || undefined : undefined,
@@ -494,7 +501,7 @@ export function MappingForm({
       )}
 
       {/* ── Vendor ── */}
-      <div className="mt-5">
+      <div className={cn('mt-5', debitVoucherEnabled && 'grid grid-cols-2 gap-x-4')}>
         <LedgerInput
           id="vendor"
           label="Vendor Ledger"
@@ -502,6 +509,22 @@ export function MappingForm({
           ledgers={ledgers}
           registration={register('vendorLedger')}
         />
+        {debitVoucherEnabled && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+              Voucher Type
+            </label>
+            <input
+              list="voucher-type-list-mapping"
+              placeholder="GST PURCHASE"
+              className="input-base w-full"
+              {...register('voucherType')}
+            />
+            <datalist id="voucher-type-list-mapping">
+              {voucherTypes.map((t) => <option key={t} value={t} />)}
+            </datalist>
+          </div>
+        )}
       </div>
 
       {billType !== 'misc' && (

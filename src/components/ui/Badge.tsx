@@ -26,7 +26,7 @@ export function Badge({ variant = 'gray', children, className }: BadgeProps) {
 
 const statusMap: Record<BillStatus, { variant: string; label: string }> = {
   synced:  { variant: 'green', label: 'Synced' },
-  parsed:  { variant: 'teal',  label: 'AI Parsed' },
+  parsed:  { variant: 'teal',  label: 'Parsed' },
   mapped:  { variant: 'amber', label: 'Ready to Sync' },
   pending: { variant: 'gray',  label: 'Pending' },
   error:   { variant: 'red',   label: 'Sync Error' },

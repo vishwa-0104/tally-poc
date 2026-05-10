@@ -76,6 +76,7 @@ export interface CompanyFeature {
 export const COMPANY_FEATURES = {
   GODOWN:          'godown',
   DISCOUNT_COLUMN: 'discount_column',
+  DEBIT_VOUCHER:   'debit_voucher',
 } as const
 
 export interface Company {
