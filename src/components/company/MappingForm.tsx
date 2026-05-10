@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { CreateStockItemModal } from '@/components/company/CreateStockItemModal'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
 import type { Bill, TallyGodown, TallyLedger, TallyStockUnit, TallyStockItem, LedgerMapping, StockItemAlias } from '@/types'
-import { formatCurrency, decodeHtmlEntities } from '@/lib/utils'
+import { cn, formatCurrency, decodeHtmlEntities } from '@/lib/utils'
 import { Modal } from '../ui'
 
 
