@@ -107,7 +107,7 @@ interface TabBarProps {
 
 function TabBar({ active, onChange }: TabBarProps) {
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'connection',   label: 'Tally Connection' },
+    { id: 'connection',   label: 'Connection' },
     { id: 'ledgers',      label: 'Default Ledgers' },
     { id: 'subscription', label: 'Subscription' },
   ]
@@ -218,7 +218,7 @@ export default function CompanySettings() {
     setFetchingVTypes(true)
     try {
       const types = await fetchTallyVoucherTypes(getTallyUrl(companyId, company?.port), companyName || undefined)
-      if (types.length === 0) { toast.error('No voucher types found in Tally'); return }
+      if (types.length === 0) { toast.error('No voucher types found'); return }
       setVoucherTypes(types)
       await saveVoucherTypesToDb(companyId, types)
       toast.success(`${types.length} voucher types fetched`)
@@ -237,7 +237,7 @@ export default function CompanySettings() {
       await saveLedgersToDb(companyId, ledgers)
       toast.success(`${ledgers.length} ledgers synced and saved`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to fetch ledgers. Is Tally running?')
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch ledgers. Is Accounting Software running?')
     } finally { setSyncing(false) }
   }
 
@@ -249,7 +249,7 @@ export default function CompanySettings() {
       await saveStockItemsToDb(companyId, items)
       toast.success(`${items.length} stock items synced and saved`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock items. Is Tally running?')
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock items. Is Accounting Software running?')
     } finally { setSyncingItems(false) }
   }
 
@@ -261,7 +261,7 @@ export default function CompanySettings() {
       await saveStockGroupsToDb(companyId, groups)
       toast.success(`${groups.length} stock groups synced and saved`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock groups. Is Tally running?')
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock groups. Is Accounting Software running?')
     } finally { setSyncingGroups(false) }
   }
 
@@ -273,7 +273,7 @@ export default function CompanySettings() {
       await saveStockUnitsToDb(companyId, units)
       toast.success(`${units.length} stock units synced and saved`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock units. Is Tally running?')
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch stock units. Is Accounting Software running?')
     } finally { setSyncingUnits(false) }
   }
 
@@ -285,7 +285,7 @@ export default function CompanySettings() {
       await saveGodownsToDb(companyId, godowns)
       toast.success(`${godowns.length} godowns synced and saved`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to fetch godowns. Is Tally running?')
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch godowns. Is Accounting Software running?')
     } finally { setSyncingGodowns(false) }
   }
 
@@ -305,7 +305,7 @@ export default function CompanySettings() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Tally connection and ledger defaults" />
+      <PageHeader title="Settings" subtitle="Accounting Software connection and ledger defaults" />
 
       <div className="p-4 md:p-7 max-w-3xl">
         <div className="card p-6">
@@ -321,7 +321,7 @@ export default function CompanySettings() {
               {/* Server URL */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-                  Tally Server URL
+                  Server URL
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -333,14 +333,14 @@ export default function CompanySettings() {
                   <Button variant="outline" size="sm" onClick={handleSaveTallyUrl}>Save</Button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Leave blank to use company port <span className="font-mono">(localhost:{company?.port ?? 9000})</span>. Set only for ngrok or remote Tally.
+                  Leave blank to use company port <span className="font-mono">(localhost:{company?.port ?? 9000})</span>.
                 </p>
               </div>
 
               {/* Tally Company Name */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-                  Tally Company Name
+                  Company Name
                 </label>
                 <input
                   value={companyName}
@@ -374,7 +374,7 @@ export default function CompanySettings() {
                   <Button variant="outline" size="sm" onClick={handleSaveVoucherType}>Save</Button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Click <strong>Fetch</strong> to load types from Tally, then pick one. Must match exactly as it appears in Tally.
+                  Click <strong>Fetch</strong> to load types, then pick one. Must match exactly as it appears in Accounting Software.
                 </p>
               </div>
 
@@ -401,15 +401,15 @@ export default function CompanySettings() {
                     <Button variant="outline" size="sm" loading={savingDebitVType} onClick={handleSaveDebitVoucherType}>Save</Button>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Voucher type used when creating a Debit Note in Tally. Fetches the same list as Purchase Voucher Type.
+                    Voucher type used when creating a Debit Note in Accounting Software. Fetches the same list as Purchase Voucher Type.
                   </p>
                 </div>
               )}
 
               {/* Tally data sync */}
               <div>
-                <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Tally Data Sync</p>
-                <p className="text-xs text-gray-500 mb-3">Sync once — data is saved to DB and available without Tally open.</p>
+                <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Data Sync</p>
+                <p className="text-xs text-gray-500 mb-3">Sync once — data is saved to DB and available without Accounting Software open.</p>
                 <SyncRow label="Ledgers"      count={storedLedgers.length}     loading={syncing}         lastSync={company?.syncTimestamps?.ledgers}     onSync={handleSyncLedgers} />
                 <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}    lastSync={company?.syncTimestamps?.stockItems}  onSync={handleSyncStockItems} />
                 <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups}   lastSync={company?.syncTimestamps?.stockGroups} onSync={handleSyncStockGroups} />
@@ -432,7 +432,7 @@ export default function CompanySettings() {
                 )}
               </div>
               <p className="text-xs text-gray-500 mb-5">
-                Assign one Tally ledger to each GST category. Used as defaults when syncing bills.
+                Assign one Accounting Software ledger to each GST category. Used as defaults when syncing bills.
               </p>
 
               {/* Purchase Ledgers */}

@@ -137,13 +137,9 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
 
   const title = isMiscUpload
     ? 'Upload Misc Bill'
-    : selectedType === 'debit' ? 'Upload Debit Note' : 'Upload Bill'
+    : 'Upload Bill'
 
-  const subtitle = isMiscUpload
-    ? `Expense bill — will sync as a ${selectedType === 'debit' ? 'Debit Note' : 'Purchase'} voucher in Accounting Software`
-    : selectedType === 'debit'
-      ? 'Upload a debit note — items will sync with reversed debit/credit signs in Accounting software'
-      : "Upload a photo or PDF of your purchase bill and we'll read it for you"
+  const subtitle = "Upload a photo or PDF of your purchase bill and we'll read it for you"
 
   return (
     <Modal
@@ -157,7 +153,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
           <>
             <Button variant="outline" onClick={handleClose}>Cancel</Button>
             <Button variant="teal" onClick={handleParse} disabled={!file && multiFiles.length === 0}>
-              {multiFiles.length > 1 ? `Upload ${multiFiles.length} Bills` : 'Read Bill'}
+              {multiFiles.length > 1 ? `Upload ${multiFiles.length} Bills` : 'Submit Bill'}
             </Button>
           </>
         )

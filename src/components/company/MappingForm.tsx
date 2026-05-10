@@ -702,7 +702,7 @@ export function MappingForm({
       {!canSync && !ledgersLoading && extraChargesOk && (
         <p className="text-xs text-amber-600 mt-1">
           {billType === 'misc' && !miscExpenseLedgersOk
-            ? 'Select an expense ledger for each row to enable sync.'
+            ? 'Select a ledger for each row to enable sync.'
             : 'Fill all required purchase and tax ledgers to enable sync.'}
         </p>
       )}
@@ -1020,13 +1020,13 @@ export function MappingForm({
       {/* Expense ledger rows — misc bill only */}
       {billType === 'misc' && bill.lineItems.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-sm font-bold text-gray-800 mb-3">Expense Ledgers <span className="text-gray-500 font-normal">(select a ledger for each expense)</span></h3>
+          <h3 className="text-sm font-bold text-gray-800 mb-3">Ledgers <span className="text-gray-500 font-normal">(select a ledger for each row)</span></h3>
           <div className="overflow-x-auto rounded-xl border border-gray-200">
             <table className="w-full border-collapse text-xs" aria-label="Expense ledger rows">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Description</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Expense Ledger *</th>
+                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Ledger *</th>
                   <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
                 </tr>
               </thead>
@@ -1039,7 +1039,7 @@ export function MappingForm({
                         {...register(`lineItems.${i}.tallyLedger`)}
                         list="all-ledgers-list"
                         autoComplete="off"
-                        placeholder="Select expense ledger…"
+                        placeholder="Select ledger…"
                         className="w-56 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                       />
                     </td>
