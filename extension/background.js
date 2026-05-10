@@ -71,6 +71,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
       return true
 
+    case 'CREATE_STOCK_GROUP':
+      handleCreateStockGroup(payload, payload.tallyUrl)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -527,6 +533,44 @@ function getTodayYYYYMMDD() {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}${m}${day}`
+}
+
+// ── Create stock group in Tally ───────────────────────────────────────────────
+
+async function handleCreateStockGroup(payload, tallyUrl) {
+  const xml = buildStockGroupXml(payload)
+  console.log('[CreateStockGroup] Full XML:\n', xml)
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log('[CreateStockGroup] Full Tally response:\n', responseText)
+  return parseSyncResponse(responseText)
+}
+
+function buildStockGroupXml({ name, parent, tallyCompany }) {
+  const companyBlock = tallyCompany
+    ? `\n        <STATICVARIABLES>\n          <SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>\n        </STATICVARIABLES>`
+    : ''
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>All Masters</REPORTNAME>${companyBlock}
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <STOCKGROUP NAME="${name}" ACTION="Create">
+            <NAME>${name}</NAME>
+            <PARENT>${parent || ''}</PARENT>
+          </STOCKGROUP>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`
 }
 
 function buildStockItemXml({ name, group, unit, description, gstApplicable, taxability, hsnCode, gstRate, typeOfSupply, tallyCompany }) {

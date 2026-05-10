@@ -85,6 +85,15 @@ export async function fetchTallyVoucherTypes(tallyUrl: string, tallyCompany?: st
   return result.voucherTypes
 }
 
+export async function createTallyStockGroup(
+  payload: { name: string; parent: string; tallyCompany?: string },
+  tallyUrl: string,
+): Promise<TallySyncResult> {
+  const result = await sendToExtension<TallySyncResult>('CREATE_STOCK_GROUP', { ...payload, tallyUrl })
+  console.log('[CreateStockGroup] Tally response:', result)
+  return result
+}
+
 export async function createTallyStockItem(payload: CreateStockItemPayload, tallyUrl: string): Promise<TallySyncResult> {
   const result = await sendToExtension<TallySyncResult>('CREATE_STOCK_ITEM', { ...payload, tallyUrl })
   console.log('[CreateStockItem] Tally response:', result)

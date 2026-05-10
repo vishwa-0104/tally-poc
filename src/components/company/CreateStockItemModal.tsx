@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
-import { X } from 'lucide-react'
+import { X, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useCompanyStore } from '@/store'
 import { createTallyStockItem } from '@/services/tallyService'
+import { CreateStockGroupModal } from './CreateStockGroupModal'
 
 interface CreateStockItemModalProps {
   open: boolean
@@ -32,6 +33,7 @@ export function CreateStockItemModal({
 
   const [creating, setCreating]               = useState(false)
   const [error, setError]                     = useState<string | null>(null)
+  const [groupModalOpen, setGroupModalOpen]   = useState(false)
   const [name, setName]                       = useState(billItemDescription)
   const [description, setDescription]         = useState('')
   const [group, setGroup]                     = useState('')
@@ -115,12 +117,22 @@ export function CreateStockItemModal({
 
           {/* Group */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-              Group *
-              {stockGroups.length === 0 && (
-                <span className="ml-2 text-amber-500 font-normal">— sync stock groups in Settings first</span>
-              )}
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-gray-700">
+                Group *
+                {stockGroups.length === 0 && (
+                  <span className="ml-2 text-amber-500 font-normal">— sync stock groups in Settings first</span>
+                )}
+              </label>
+              <button
+                type="button"
+                onClick={() => setGroupModalOpen(true)}
+                className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 font-medium"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                New
+              </button>
+            </div>
             <input
               value={group}
               onChange={(e) => setGroup(e.target.value)}
@@ -254,6 +266,15 @@ export function CreateStockItemModal({
           </Button>
         </div>
       </div>
+
+      <CreateStockGroupModal
+        open={groupModalOpen}
+        companyId={companyId}
+        tallyUrl={tallyUrl}
+        tallyCompany={tallyCompany}
+        onSuccess={(groupName) => { setGroup(groupName); setGroupModalOpen(false) }}
+        onClose={() => setGroupModalOpen(false)}
+      />
     </div>
   )
 }

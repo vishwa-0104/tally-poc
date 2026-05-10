@@ -28,6 +28,7 @@ interface CompanyStore {
   fetchStockItemsFromDb: (companyId: string) => Promise<void>
   saveStockItemsToDb: (companyId: string, items: TallyStockItem[]) => Promise<void>
   getStockGroups: (companyId: string) => TallyStockGroup[]
+  addStockGroup: (companyId: string, group: TallyStockGroup) => Promise<void>
   fetchStockGroupsFromDb: (companyId: string) => Promise<void>
   saveStockGroupsToDb: (companyId: string, groups: TallyStockGroup[]) => Promise<void>
   getStockUnits: (companyId: string) => TallyStockUnit[]
@@ -124,6 +125,11 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   },
 
   getStockGroups: (companyId) => get().stockGroups[companyId] ?? [],
+
+  addStockGroup: async (companyId, group) => {
+    const current = get().stockGroups[companyId] ?? []
+    await get().saveStockGroupsToDb(companyId, [...current, group])
+  },
 
   fetchStockGroupsFromDb: async (companyId) => {
     const { data } = await api.get<TallyStockGroup[]>(`/companies/${companyId}/stock-groups`)
