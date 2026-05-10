@@ -103,10 +103,18 @@ export function buildTallyXml(params: {
   extraCharges?: { description: string; amount: number; ledger?: string }[]
   narration?: string
   includeItemDiscount?: boolean
+  isReturn?: boolean   // true for Debit Note — flips all debit/credit signs in XML
 }): string {
   const esc = escapeXml
   // Avoid floating-point noise like -90.00000000001
   const amt = (n: number) => parseFloat(n.toFixed(2))
+
+  // Sign helpers: for a Debit Note every debit/credit polarity inverts.
+  const flip      = params.isReturn ?? false
+  const debitPos  = flip ? 'No'  : 'Yes'
+  const creditPos = flip ? 'Yes' : 'No'
+  const debitAmt  = (n: number) => flip ?  amt(n) : -amt(n)
+  const creditAmt = (n: number) => flip ? -amt(n) :  amt(n)
 
   const entryDate       = buildTallyDate(params.voucherDate || params.billDate)
   const invoiceDate     = buildTallyDate(params.billDate)
@@ -152,25 +160,25 @@ export function buildTallyXml(params: {
         return `
             <ALLINVENTORYENTRIES.LIST>
               <STOCKITEMNAME>${stockName}</STOCKITEMNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <ISDEEMEDPOSITIVE>${debitPos}</ISDEEMEDPOSITIVE>
               <RATE>${rate}/${unit}</RATE>${discPct}
-              <AMOUNT>-${itemAmt}</AMOUNT>
+              <AMOUNT>${debitAmt(itemAmt)}</AMOUNT>
               <ACTUALQTY> ${quantity} ${unit}</ACTUALQTY>
               <BILLEDQTY> ${quantity} ${unit}</BILLEDQTY>
               <BATCHALLOCATIONS.LIST>
                 <GODOWNNAME>${esc(params.godown?.trim() || 'Main Location')}</GODOWNNAME>
                 <BATCHNAME>Primary Batch</BATCHNAME>
-                <AMOUNT>-${itemAmt}</AMOUNT>
+                <AMOUNT>${debitAmt(itemAmt)}</AMOUNT>
                 <ACTUALQTY> ${quantity} ${unit}</ACTUALQTY>
                 <BILLEDQTY> ${quantity} ${unit}</BILLEDQTY>
               </BATCHALLOCATIONS.LIST>${item.ledger || purchLedger ? `
               <ACCOUNTINGALLOCATIONS.LIST>
                 <LEDGERNAME>${item.ledger || purchLedger}</LEDGERNAME>
-                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                <ISDEEMEDPOSITIVE>${debitPos}</ISDEEMEDPOSITIVE>
                 <LEDGERFROMITEM>No</LEDGERFROMITEM>
                 <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
                 <ISPARTYLEDGER>No</ISPARTYLEDGER>
-                <AMOUNT>-${itemAmt}</AMOUNT>
+                <AMOUNT>${debitAmt(itemAmt)}</AMOUNT>
               </ACCOUNTINGALLOCATIONS.LIST>` : ''}
             </ALLINVENTORYENTRIES.LIST>`
       }).join('')
@@ -183,26 +191,26 @@ export function buildTallyXml(params: {
         .map((item) => `
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>${esc(item.ledger!.trim())}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <ISDEEMEDPOSITIVE>${debitPos}</ISDEEMEDPOSITIVE>
               <LEDGERFROMITEM>No</LEDGERFROMITEM>
               <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
               <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>-${amt(item.amount)}</AMOUNT>
+              <AMOUNT>${debitAmt(item.amount)}</AMOUNT>
             </LEDGERENTRIES.LIST>`).join('')
     : ''
 
   // ── Ledger entries — using LEDGERENTRIES.LIST as per real Tally XML ────────
 
-  // Party ledger (vendor) — credit
+  // Party ledger (vendor) — credit in purchase, debit in debit note
   const partyEntry = params.vendorLedger
     ? `
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>${esc(params.vendorLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <ISDEEMEDPOSITIVE>${creditPos}</ISDEEMEDPOSITIVE>
               <LEDGERFROMITEM>No</LEDGERFROMITEM>
               <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
               <ISPARTYLEDGER>Yes</ISPARTYLEDGER>
-              <AMOUNT>${amt(params.totalAmount)}</AMOUNT>
+              <AMOUNT>${creditAmt(params.totalAmount)}</AMOUNT>
             </LEDGERENTRIES.LIST>`
     : ''
 
@@ -211,11 +219,11 @@ export function buildTallyXml(params: {
     ? `
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>${esc(params.purchaseLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <ISDEEMEDPOSITIVE>${debitPos}</ISDEEMEDPOSITIVE>
               <LEDGERFROMITEM>No</LEDGERFROMITEM>
               <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
               <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>-${amt(params.subtotal)}</AMOUNT>
+              <AMOUNT>${debitAmt(params.subtotal)}</AMOUNT>
             </LEDGERENTRIES.LIST>`
     : ''
 
@@ -225,44 +233,42 @@ export function buildTallyXml(params: {
     .map((ec) => `
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>${esc(ec.ledger!.trim())}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <ISDEEMEDPOSITIVE>${debitPos}</ISDEEMEDPOSITIVE>
               <LEDGERFROMITEM>No</LEDGERFROMITEM>
               <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
               <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>-${amt(ec.amount)}</AMOUNT>
+              <AMOUNT>${debitAmt(ec.amount)}</AMOUNT>
             </LEDGERENTRIES.LIST>`).join('')
 
   // Tax ledgers — one debit entry per rate bucket
   const taxEntry = ({ ledger, amount }: { ledger: string; amount: number }) => `
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>${esc(ledger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <ISDEEMEDPOSITIVE>${debitPos}</ISDEEMEDPOSITIVE>
               <LEDGERFROMITEM>No</LEDGERFROMITEM>
               <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
               <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>-${amt(amount)}</AMOUNT>
+              <AMOUNT>${debitAmt(amount)}</AMOUNT>
             </LEDGERENTRIES.LIST>`
 
   const cgstEntry = (params.cgstEntries ?? []).filter((e) => e.amount !== 0).map(taxEntry).join('')
   const sgstEntry = (params.sgstEntries ?? []).filter((e) => e.amount !== 0).map(taxEntry).join('')
   const igstEntry = (params.igstEntries ?? []).filter((e) => e.amount !== 0).map(taxEntry).join('')
 
-  // Invoice-level discount — credit entry that reduces the amount payable to vendor.
-  // ISDEEMEDPOSITIVE=No means credit side.
+  // Invoice-level discount — normally a credit entry reducing the amount payable.
   const discountEntry = params.discountLedger?.trim() && params.invoiceDiscountAmount && params.invoiceDiscountAmount > 0
     ? `
             <LEDGERENTRIES.LIST>
               <LEDGERNAME>${esc(params.discountLedger)}</LEDGERNAME>
-              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <ISDEEMEDPOSITIVE>${creditPos}</ISDEEMEDPOSITIVE>
               <LEDGERFROMITEM>No</LEDGERFROMITEM>
               <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
               <ISPARTYLEDGER>No</ISPARTYLEDGER>
-              <AMOUNT>${amt(params.invoiceDiscountAmount)}</AMOUNT>
+              <AMOUNT>${creditAmt(params.invoiceDiscountAmount)}</AMOUNT>
             </LEDGERENTRIES.LIST>`
     : ''
 
   // Round-off — ROUNDTYPE and ROUNDLIMIT match real Tally export.
-  // ISDEEMEDPOSITIVE=Yes means debit (positive roundoff reduces vendor payable).
   const roundOffLedger = esc(params.roundOffLedger?.trim() || 'Round Off')
 
   const roundOffEntry = params.roundOffAmount && params.roundOffAmount !== 0
@@ -270,11 +276,11 @@ export function buildTallyXml(params: {
             <LEDGERENTRIES.LIST>
              <ROUNDTYPE>Normal Rounding</ROUNDTYPE>
                 <LEDGERNAME>${roundOffLedger}</LEDGERNAME>
-                <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+                <ISDEEMEDPOSITIVE>${debitPos}</ISDEEMEDPOSITIVE>
                 <LEDGERFROMITEM>No</LEDGERFROMITEM>
                 <REMOVEZEROENTRIES>No</REMOVEZEROENTRIES>
                 <ISPARTYLEDGER>No</ISPARTYLEDGER>
-                <AMOUNT>${amt(params.roundOffAmount * -1)}</AMOUNT>
+                <AMOUNT>${flip ? amt(params.roundOffAmount) : amt(params.roundOffAmount * -1)}</AMOUNT>
                 <ROUNDLIMIT>1</ROUNDLIMIT>
             </LEDGERENTRIES.LIST>`
     : ''

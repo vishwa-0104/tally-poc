@@ -10,9 +10,11 @@ import { BillsTable, UploadModal } from '@/components/company'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { parseBillWithAI, parsedDataToBill } from '@/services'
 
+type BillType = 'purchase' | 'debit' | 'misc'
+
 export default function CompanyBills() {
-  const [showUpload, setShowUpload]         = useState(false)
-  const [showMiscUpload, setShowMiscUpload] = useState(false)
+  const [showUpload, setShowUpload]   = useState(false)
+  const [uploadInitialType, setUploadInitialType] = useState<BillType>('purchase')
   const [bulkParsing, setBulkParsing] = useState(false)
   const [bulkDone, setBulkDone]       = useState(0)
   const [bulkTotal, setBulkTotal]     = useState(0)
@@ -24,6 +26,7 @@ export default function CompanyBills() {
 
   const company = activeCompanyId ? getCompany(activeCompanyId) : null
   const bills   = activeCompanyId ? getBills(activeCompanyId) : []
+  const debitVoucherEnabled = company?.features?.some((f) => f.feature === 'debit_voucher' && f.enabled) ?? false
 
   const synced  = bills.filter((b) => b.status === 'synced').length
   const pending = bills.filter((b) => ['parsed', 'mapped'].includes(b.status)).length
@@ -33,7 +36,7 @@ export default function CompanyBills() {
     navigate(`/company/bills/${billId}`)
   }
 
-  const handleMultipleFiles = async (files: File[], billType: 'purchase' | 'misc' = 'purchase') => {
+  const handleMultipleFiles = async (files: File[], billType: BillType = 'purchase') => {
     if (!activeCompanyId) return
     setBulkTotal(files.length)
     setBulkDone(0)
@@ -98,7 +101,7 @@ export default function CompanyBills() {
               </span>
             )}
             <span className="relative group">
-              <Button variant="teal" size="sm" onClick={() => setShowUpload(true)} disabled={bulkParsing || !!company?.parseBlocked}>
+              <Button variant="teal" size="sm" onClick={() => { setUploadInitialType('purchase'); setShowUpload(true) }} disabled={bulkParsing || !!company?.parseBlocked}>
                 <Upload className="w-3.5 h-3.5" />
                 Upload Bills
               </Button>
@@ -109,7 +112,7 @@ export default function CompanyBills() {
               )}
             </span>
             <span className="relative group">
-              <Button variant="outline" size="sm" onClick={() => setShowMiscUpload(true)} disabled={bulkParsing || !!company?.parseBlocked}>
+              <Button variant="outline" size="sm" onClick={() => { setUploadInitialType('misc'); setShowUpload(true) }} disabled={bulkParsing || !!company?.parseBlocked}>
                 Upload Misc Bill
               </Button>
               {company?.parseBlocked && (
@@ -139,17 +142,11 @@ export default function CompanyBills() {
 
       <UploadModal
         open={showUpload}
-        onClose={() => setShowUpload(false)}
+        onClose={() => { setShowUpload(false); setUploadInitialType('purchase') }}
         onParsed={handleParsed}
-        onMultipleFiles={(files) => handleMultipleFiles(files, 'purchase')}
-      />
-
-      <UploadModal
-        open={showMiscUpload}
-        onClose={() => setShowMiscUpload(false)}
-        onParsed={handleParsed}
-        onMultipleFiles={(files) => handleMultipleFiles(files, 'misc')}
-        billType="misc"
+        onMultipleFiles={handleMultipleFiles}
+        initialType={uploadInitialType}
+        debitVoucherEnabled={debitVoucherEnabled}
       />
     </>
   )

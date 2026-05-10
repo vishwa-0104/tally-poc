@@ -43,6 +43,7 @@ interface CompanyStore {
   fetchVoucherTypesFromDb: (companyId: string) => Promise<void>
   saveVoucherTypesToDb: (companyId: string, types: string[]) => Promise<void>
   saveSelectedVoucherType: (companyId: string, voucherType: string) => Promise<void>
+  saveSelectedDebitVoucherType: (companyId: string, debitVoucherType: string) => Promise<void>
   incrementBillCount: (companyId: string) => void
   incrementPending: (companyId: string) => void
   incrementSynced: (companyId: string) => void
@@ -247,6 +248,17 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
     await api.put(`/companies/${companyId}/voucher-type`, { voucherType })
     set((s) => ({
       companies: s.companies.map((c) => c.id === companyId ? { ...c, voucherType } : c),
+    }))
+  },
+
+  saveSelectedDebitVoucherType: async (companyId, debitVoucherType) => {
+    await api.put(`/companies/${companyId}/debit-voucher-type`, { debitVoucherType })
+    set((s) => ({
+      companies: s.companies.map((c) =>
+        c.id === companyId
+          ? { ...c, mapping: { ...(c.mapping ?? {}), debit_voucher_type: debitVoucherType } as unknown as Company['mapping'] }
+          : c
+      ),
     }))
   },
 

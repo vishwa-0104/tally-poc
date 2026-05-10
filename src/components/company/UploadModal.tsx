@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ChangeEvent } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Camera, Upload, CheckCircle, Circle, Loader, AlertTriangle } from 'lucide-react'
@@ -28,20 +28,24 @@ const STEPS = [
   { label: 'Almost done',               sub: 'Saving your bill…' },
 ]
 
+type BillType = 'purchase' | 'debit' | 'misc'
+
 interface UploadModalProps {
   open: boolean
   onClose: () => void
   onParsed: (billId: string) => void
-  onMultipleFiles: (files: File[]) => void
-  billType?: 'purchase' | 'misc'
+  onMultipleFiles: (files: File[], type: BillType) => void
+  initialType?: BillType
+  debitVoucherEnabled?: boolean
 }
 
-export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType = 'purchase' }: UploadModalProps) {
+export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialType = 'purchase', debitVoucherEnabled = false }: UploadModalProps) {
   const [file, setFile]             = useState<File | null>(null)
   const [multiFiles, setMultiFiles] = useState<File[]>([])
   const [parsing, setParsing]       = useState(false)
   const [step, setStep]             = useState(-1)
   const [quotaError, setQuotaError] = useState<QuotaError | null>(null)
+  const [selectedType, setSelectedType] = useState<BillType>(initialType)
   const cameraInputRef              = useRef<HTMLInputElement>(null)
 
   const handleCameraCapture = (e: ChangeEvent<HTMLInputElement>) => {
@@ -78,12 +82,15 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
     },
   })
 
+  // Reset type selection when modal reopens with a different initialType
+  useEffect(() => { setSelectedType(initialType) }, [initialType])
+
   const handleParse = async () => {
     if (!activeCompanyId) return
 
     // Multi-file: hand off to parent and close immediately
     if (multiFiles.length > 1) {
-      onMultipleFiles(multiFiles)
+      onMultipleFiles(multiFiles, selectedType)
       handleClose()
       return
     }
@@ -92,8 +99,8 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
     setParsing(true)
     setStep(0)
     try {
-      const parsed = await parseBillWithAI(file, (s) => setStep(s), billType, activeCompanyId)
-      const bill   = parsedDataToBill(parsed, activeCompanyId, undefined, billType)
+      const parsed = await parseBillWithAI(file, (s) => setStep(s), selectedType, activeCompanyId)
+      const bill   = parsedDataToBill(parsed, activeCompanyId, undefined, selectedType)
       const saved  = await addBill(bill)
       incrementBillCount(activeCompanyId)
       toast.success('Bill parsed successfully!')
@@ -123,14 +130,23 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
 
   const quotaFooter = <Button variant="outline" onClick={handleClose}>Close</Button>
 
+  const TITLES: Record<BillType, string> = {
+    purchase: 'Upload Bill',
+    debit:    'Upload Debit Note',
+    misc:     'Upload Misc Bill',
+  }
+  const SUBTITLES: Record<BillType, string> = {
+    purchase: "Upload a photo or PDF of your purchase bill and we'll read it for you",
+    debit:    'Upload a debit note — items will sync with reversed debit/credit signs in Accounting Software',
+    misc:     'Upload expense bills (stationery, repairs, utilities) — items map to expense ledgers',
+  }
+
   return (
     <Modal
       open={open}
       onClose={handleClose}
-      title={billType === 'misc' ? 'Upload Misc Bill' : 'Upload Bill'}
-      subtitle={billType === 'misc'
-        ? 'Upload expense bills (stationery, repairs, utilities) — items map to expense ledgers'
-        : "Upload a photo or PDF of your purchase bill and we'll read it for you"}
+      title={TITLES[selectedType]}
+      subtitle={SUBTITLES[selectedType]}
       footer={
         quotaError ? quotaFooter :
         parsing ? undefined : (
@@ -162,6 +178,25 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, billType
         </div>
       ) : !parsing ? (
         <>
+          {/* Bill type selector */}
+          <div className="flex items-center gap-2 mb-4">
+            {(['purchase', ...(debitVoucherEnabled ? ['debit' as BillType] : []), 'misc'] as BillType[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setSelectedType(t)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                  selectedType === t
+                    ? 'bg-teal-500 text-white border-teal-500'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
+                )}
+              >
+                {t === 'purchase' ? 'Purchase' : t === 'debit' ? 'Debit Note' : 'Misc'}
+              </button>
+            ))}
+          </div>
+
           {/* Dropzone */}
           <div
             {...getRootProps()}

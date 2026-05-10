@@ -134,24 +134,27 @@ function TabBar({ active, onChange }: TabBarProps) {
 
 export default function CompanySettings() {
   const { activeCompanyId, companies: authCompanies } = useAuthStore()
-  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb, getVoucherTypes, fetchVoucherTypesFromDb, saveVoucherTypesToDb, saveSelectedVoucherType } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb, getVoucherTypes, fetchVoucherTypesFromDb, saveVoucherTypesToDb, saveSelectedVoucherType, saveSelectedDebitVoucherType } = useCompanyStore()
   const company     = activeCompanyId ? getCompany(activeCompanyId) : null
   const companyId   = activeCompanyId ?? ''
   const companyName = company?.name ?? authCompanies.find((c) => c.id === activeCompanyId)?.name ?? ''
 
-  const godownEnabled = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN && f.enabled) ?? false
+  const godownEnabled        = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN          && f.enabled) ?? false
+  const debitVoucherEnabled  = company?.features?.some((f) => f.feature === COMPANY_FEATURES.DEBIT_VOUCHER   && f.enabled) ?? false
 
-  const [activeTab,      setActiveTab]      = useState<Tab>('connection')
-  const [syncing,        setSyncing]        = useState(false)
-  const [syncingItems,   setSyncingItems]   = useState(false)
-  const [syncingGroups,  setSyncingGroups]  = useState(false)
-  const [syncingUnits,   setSyncingUnits]   = useState(false)
-  const [syncingGodowns, setSyncingGodowns] = useState(false)
-  const [savingMap,      setSavingMap]      = useState(false)
-  const [tallyUrl,       setTallyUrl]       = useState(() => getTallyUrl(companyId, company?.port))
-  const [voucherType,    setVoucherType]    = useState(() => company?.voucherType || DEFAULT_VOUCHER_TYPE)
-  const [voucherTypes,   setVoucherTypes]   = useState<string[]>(() => companyId ? getVoucherTypes(companyId) : [])
-  const [fetchingVTypes, setFetchingVTypes] = useState(false)
+  const [activeTab,          setActiveTab]          = useState<Tab>('connection')
+  const [syncing,            setSyncing]            = useState(false)
+  const [syncingItems,       setSyncingItems]       = useState(false)
+  const [syncingGroups,      setSyncingGroups]      = useState(false)
+  const [syncingUnits,       setSyncingUnits]       = useState(false)
+  const [syncingGodowns,     setSyncingGodowns]     = useState(false)
+  const [savingMap,          setSavingMap]          = useState(false)
+  const [tallyUrl,           setTallyUrl]           = useState(() => getTallyUrl(companyId, company?.port))
+  const [voucherType,        setVoucherType]        = useState(() => company?.voucherType || DEFAULT_VOUCHER_TYPE)
+  const [debitVoucherType,   setDebitVoucherType]   = useState(() => (company?.mapping as Record<string, string> | null)?.debit_voucher_type ?? '')
+  const [voucherTypes,       setVoucherTypes]       = useState<string[]>(() => companyId ? getVoucherTypes(companyId) : [])
+  const [fetchingVTypes,     setFetchingVTypes]     = useState(false)
+  const [savingDebitVType,   setSavingDebitVType]   = useState(false)
 
   const storedLedgers     = companyId ? getLedgers(companyId)     : []
   const storedStockItems  = companyId ? getStockItems(companyId)  : []
@@ -169,6 +172,11 @@ export default function CompanySettings() {
   useEffect(() => {
     if (company?.voucherType) setVoucherType(company.voucherType)
   }, [company?.voucherType]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const saved = (company?.mapping as Record<string, string> | null)?.debit_voucher_type
+    if (saved !== undefined) setDebitVoucherType(saved)
+  }, [company?.mapping]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (companyId && storedLedgers.length === 0)     fetchLedgersFromDb(companyId).catch(() => {})
@@ -190,6 +198,18 @@ export default function CompanySettings() {
       toast.success('Voucher type saved')
     } catch {
       toast.error('Failed to save voucher type')
+    }
+  }
+
+  const handleSaveDebitVoucherType = async () => {
+    setSavingDebitVType(true)
+    try {
+      await saveSelectedDebitVoucherType(companyId, debitVoucherType.trim())
+      toast.success('Debit voucher type saved')
+    } catch {
+      toast.error('Failed to save debit voucher type')
+    } finally {
+      setSavingDebitVType(false)
     }
   }
 
@@ -357,6 +377,34 @@ export default function CompanySettings() {
                   Click <strong>Fetch</strong> to load types from Tally, then pick one. Must match exactly as it appears in Tally.
                 </p>
               </div>
+
+              {/* Debit Voucher Type — only when feature is enabled */}
+              {debitVoucherEnabled && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                    Debit Voucher Type
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      list="debit-voucher-type-list"
+                      value={debitVoucherType}
+                      onChange={(e) => setDebitVoucherType(e.target.value)}
+                      placeholder="Debit Note"
+                      className="input-base flex-1"
+                    />
+                    <datalist id="debit-voucher-type-list">
+                      {voucherTypes.map((t) => <option key={t} value={t} />)}
+                    </datalist>
+                    <Button variant="outline" size="sm" loading={fetchingVTypes} onClick={handleFetchVoucherTypes}>
+                      Fetch
+                    </Button>
+                    <Button variant="outline" size="sm" loading={savingDebitVType} onClick={handleSaveDebitVoucherType}>Save</Button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Voucher type used when creating a Debit Note in Tally. Fetches the same list as Purchase Voucher Type.
+                  </p>
+                </div>
+              )}
 
               {/* Tally data sync */}
               <div>

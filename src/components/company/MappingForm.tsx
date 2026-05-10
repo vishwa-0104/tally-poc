@@ -131,11 +131,10 @@ interface MappingFormProps {
   godownEnabled?: boolean
   discountColumnEnabled?: boolean
   debitVoucherEnabled?: boolean
-  voucherTypes?: string[]
   defaultVoucherType?: string
   godowns?: TallyGodown[]
   stockUnits?: TallyStockUnit[]
-  billType?: 'purchase' | 'misc'
+  billType?: 'purchase' | 'debit' | 'misc'
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -156,7 +155,6 @@ export function MappingForm({
   godownEnabled = false,
   discountColumnEnabled = false,
   debitVoucherEnabled = false,
-  voucherTypes = [] as string[],
   defaultVoucherType = 'GST PURCHASE',
   godowns = [],
   stockUnits = [],
@@ -515,14 +513,10 @@ export function MappingForm({
               Voucher Type
             </label>
             <input
-              list="voucher-type-list-mapping"
-              placeholder="GST PURCHASE"
-              className="input-base w-full"
+              readOnly
+              className="input-base w-full bg-gray-100 text-gray-500 cursor-not-allowed"
               {...register('voucherType')}
             />
-            <datalist id="voucher-type-list-mapping">
-              {voucherTypes.map((t) => <option key={t} value={t} />)}
-            </datalist>
           </div>
         )}
       </div>

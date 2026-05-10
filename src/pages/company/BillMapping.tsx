@@ -28,7 +28,7 @@ export default function BillMapping() {
 
   const { activeCompanyId, companies: authCompanies } = useAuthStore()
   const { getBill, getBills, updateBillStatus, fetchBills } = useBillStore()
-  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb, getStockUnits, fetchStockUnitsFromDb, getStockGroups, fetchStockGroupsFromDb, getVoucherTypes, fetchVoucherTypesFromDb } = useCompanyStore()
+  const { getCompany, fetchCompanies, fetchLedgersFromDb, fetchStockItemsFromDb, fetchAliases, saveAliases, incrementSynced, decrementPending, incrementPending, incrementError, decrementError, getGodowns, fetchGodownsFromDb, getStockUnits, fetchStockUnitsFromDb, getStockGroups, fetchStockGroupsFromDb } = useCompanyStore()
   const ledgersState          = useCompanyStore((s) => s.ledgers)
   const stockItemsState       = useCompanyStore((s) => s.stockItems)
   const stockItemAliasesState = useCompanyStore((s) => s.stockItemAliases)
@@ -48,8 +48,6 @@ export default function BillMapping() {
   const godownEnabled          = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN          && f.enabled) ?? false
   const discountColumnEnabled  = company?.features?.some((f) => f.feature === COMPANY_FEATURES.DISCOUNT_COLUMN && f.enabled) ?? false
   const debitVoucherEnabled    = company?.features?.some((f) => f.feature === COMPANY_FEATURES.DEBIT_VOUCHER   && f.enabled) ?? false
-  const storedVoucherTypes     = companyId ? getVoucherTypes(companyId) : []
-
   useEffect(() => {
     if (companyId && companies.length === 0) {
       fetchCompanies().catch((err) => console.error('[BillMapping] Failed to load companies:', err))
@@ -72,10 +70,7 @@ export default function BillMapping() {
     if (companyId && godownEnabled && storedGodowns.length === 0) {
       fetchGodownsFromDb(companyId).catch((err: unknown) => console.error('[BillMapping] Failed to load godowns from DB:', err))
     }
-    if (companyId && debitVoucherEnabled && storedVoucherTypes.length === 0) {
-      fetchVoucherTypesFromDb(companyId).catch(() => {})
-    }
-  }, [companyId, godownEnabled, debitVoucherEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [companyId, godownEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist stock item aliases for any line item that has a tallyStockItem mapped
   const persistAliases = (lineItems: MappingInput['lineItems']) => {
@@ -88,8 +83,9 @@ export default function BillMapping() {
 
   const tallyUrl     = getTallyUrl(companyId, company?.port)
   const tallyCompany = companyName
-  const voucherType  = company?.voucherType ?? 'GST PURCHASE'
-  const defaultVoucherType = (bill?.tallyMapping as Record<string, string> | null)?.voucherType ?? voucherType
+  const isDebitBill  = bill?.billType === 'debit'
+  const debitVoucherTypeSetting = (company?.mapping as Record<string, string> | null)?.debit_voucher_type ?? 'Debit Note'
+  const voucherType  = isDebitBill ? debitVoucherTypeSetting : (company?.voucherType ?? 'GST PURCHASE')
 
   // Only live-fetch from Tally if no ledgers are stored yet
   const { ledgers: liveLedgers, loading: ledgersLoading } = useTallyLedgers(
@@ -259,6 +255,7 @@ export default function BillMapping() {
       miscLedgerItems,
       extraCharges:  extraChargesForXml.length > 0 ? extraChargesForXml : undefined,
       narration:     data.narration?.trim() || undefined,
+      isReturn:      isDebitBill,
     })
 
     return { generatedXml, tallyMapping }
@@ -444,8 +441,7 @@ export default function BillMapping() {
               godownEnabled={godownEnabled}
               discountColumnEnabled={discountColumnEnabled}
               debitVoucherEnabled={debitVoucherEnabled}
-              voucherTypes={storedVoucherTypes}
-              defaultVoucherType={defaultVoucherType}
+              defaultVoucherType={voucherType}
               godowns={storedGodowns}
               stockUnits={storedStockUnits}
               billType={bill.billType}
