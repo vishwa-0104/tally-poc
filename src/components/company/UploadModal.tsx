@@ -194,7 +194,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
                     : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
                 )}
               >
-                Misc. Purchases
+                {isMiscUpload ? 'Misc. Purchases' : 'Purchase'}
               </button>
               {debitVoucherEnabled && (
                 <button
@@ -207,7 +207,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
                       : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
                   )}
                 >
-                  Misc. Debit Note
+                  {isMiscUpload ? 'Misc. Debit Note' : 'Debit Note'}
                 </button>
               )}
               {creditVoucherEnabled && isMiscUpload && (
