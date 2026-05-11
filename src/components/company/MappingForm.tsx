@@ -911,7 +911,7 @@ export function MappingForm({
                             <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             {hasItemDiscount && originalItem.unitPrice !== watch(`lineItems.${i}.unitPrice`) && (
                               <p className="absolute top-full left-0 text-xs text-amber-600 mt-0.5 whitespace-nowrap">
-                                Bill: <span className="font-semibold">{originalItem.unitPrice}</span>
+                                Bill: <span className="font-semibold">{originalItem.unitPrice.toFixed(2)}</span>
                               </p>
                             )}
                           </div>
