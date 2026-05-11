@@ -461,7 +461,20 @@ export function MappingForm({
     })
 
     const extraChargesSum = parseFloat(((watchedExtraCharges ?? []).reduce((s, ec) => s + Number(ec?.amount ?? 0), 0)).toFixed(2))
-    const roundedSubtotal = parseFloat((lineItemsTotal + extraChargesSum).toFixed(2))
+    const fullTaxable     = lineItemsTotal + extraChargesSum
+
+    // GST on full taxable base (line items + extra charges) — scale by fullTaxable / lineItemsTotal
+    if (lineItemsTotal > 0 && extraChargesSum > 0) {
+      const scale = fullTaxable / lineItemsTotal
+      if (isInterstate) {
+        newIgst = newIgst * scale
+      } else {
+        newCgst = newCgst * scale
+        newSgst = newSgst * scale
+      }
+    }
+
+    const roundedSubtotal = parseFloat(fullTaxable.toFixed(2))
     const roundedCgst     = parseFloat(newCgst.toFixed(2))
     const roundedSgst     = parseFloat(newSgst.toFixed(2))
     const roundedIgst     = parseFloat(newIgst.toFixed(2))
