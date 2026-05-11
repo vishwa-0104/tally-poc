@@ -412,27 +412,63 @@ export function MappingForm({
     })
   }, [tallyStockItemKey, stockItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Discount mode: auto-recalc amount = qty × unitPrice × (1 − disc%/100) ──
-  // Fires whenever discountPercent, quantity, or unitPrice changes for any item.
-  const discountModeKey = discountColumnEnabled
-    ? (watchedLineItems ?? []).map((item) =>
-        `${Number(item?.discountPercent ?? 0).toFixed(4)}|${Number(item?.quantity ?? 0)}|${Number(item?.unitPrice ?? 0)}`
-      ).join(';;')
+  // ── Line-item recalculation: qty/unitPrice/discPct/gstRate/extraCharges → amount, subtotal, GST, total ──
+  const lineItemCalcKey = billType !== 'misc'
+    ? `${(watchedLineItems ?? []).map((item) =>
+        `${Number(item?.quantity ?? 0)}|${Number(item?.unitPrice ?? 0)}|${Number(item?.discountPercent ?? 0)}|${Number(item?.gstRate ?? 0)}`
+      ).join(';;')}::${(watchedExtraCharges ?? []).map((ec) => Number(ec?.amount ?? 0)).join('|')}`
     : ''
+
   useEffect(() => {
-    if (!discountColumnEnabled) return
+    if (billType === 'misc') return
     if (!watchedLineItems?.length) return
-    let newSubtotal = 0
+
+    let lineItemsTotal = 0
+    let newCgst = 0
+    let newSgst = 0
+    let newIgst = 0
+
     watchedLineItems.forEach((item, i) => {
       const qty       = Number(item?.quantity  ?? 0)
       const unitPrice = Number(item?.unitPrice ?? 0)
       const discPct   = Number(item?.discountPercent ?? 0)
-      const newAmount = parseFloat((qty * unitPrice * (1 - discPct / 100)).toFixed(2))
+      const gstRate   = Number(item?.gstRate ?? 0)
+
+      const newAmount = discountColumnEnabled
+        ? parseFloat((qty * unitPrice * (1 - discPct / 100)).toFixed(2))
+        : parseFloat((qty * unitPrice).toFixed(2))
+
       setValue(`lineItems.${i}.amount`, newAmount)
-      newSubtotal += newAmount
+      lineItemsTotal += newAmount
+
+      if (isInterstate) {
+        newIgst += newAmount * gstRate / 100
+      } else {
+        newCgst += newAmount * gstRate / 2 / 100
+        newSgst += newAmount * gstRate / 2 / 100
+      }
     })
-    setValue('subtotal', parseFloat(newSubtotal.toFixed(2)))
-  }, [discountModeKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    const extraChargesSum = parseFloat(((watchedExtraCharges ?? []).reduce((s, ec) => s + Number(ec?.amount ?? 0), 0)).toFixed(2))
+    const roundedSubtotal = parseFloat((lineItemsTotal + extraChargesSum).toFixed(2))
+    const roundedCgst     = parseFloat(newCgst.toFixed(2))
+    const roundedSgst     = parseFloat(newSgst.toFixed(2))
+    const roundedIgst     = parseFloat(newIgst.toFixed(2))
+
+    setValue('subtotal', roundedSubtotal)
+
+    if (isInterstate) {
+      setValue('igstAmount', roundedIgst)
+    } else {
+      setValue('cgstAmount', roundedCgst)
+      setValue('sgstAmount', roundedSgst)
+    }
+
+    const taxTotal = isInterstate ? roundedIgst : roundedCgst + roundedSgst
+    const roundOff = Number(watchedRoundOff ?? 0)
+    const newTotal = parseFloat((roundedSubtotal + taxTotal + roundOff).toFixed(2))
+    setValue('totalAmount', Math.max(0, newTotal))
+  }, [lineItemCalcKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Round off mismatch check — expected = totalAmount − (subtotal + taxes)
   // Same formula used server-side when correcting the AI-parsed sign.
@@ -832,7 +868,7 @@ export function MappingForm({
                       <input {...register(`lineItems.${i}.hsnCode`)} className="w-16 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.quantity ?? '')}>
-                      <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-14 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                     <td className="px-2 py-5" title={watchedLineItems?.[i]?.unit ?? ''}>
                       {(() => {
@@ -937,17 +973,9 @@ export function MappingForm({
                   
                   return (
                     <>
-                      <tr className="border-t border-gray-100">
-                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Taxable Amount</td>
-                        <td className="px-3 py-2">
-                          <input {...register('subtotal')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
-                        </td>
-                        <td></td>
-                      </tr>
-
                       {bill.extraCharges?.map((charge, i) => (
                         <tr key={i} className="border-t border-gray-100">
-                          <td className="px-2 py-1.5 text-right" colSpan={3}>
+                          <td className="px-2 py-1.5 text-right" colSpan={discountColumnEnabled ? 4 : 3}>
                             <input
                               {...register(`extraCharges.${i}.ledger`)}
                               list="extra-charges-ledger-list"
@@ -960,22 +988,37 @@ export function MappingForm({
                             )}
                           </td>
                           <td colSpan={3} className="px-3 py-2 text-sm text-gray-700 text-right">{charge.description}</td>
-                          <td colSpan={3} className="px-3 py-2 text-sm font-semibold text-gray-800">{formatCurrency(charge.amount)}</td>
+                          <td colSpan={3} className="px-3 py-2">
+                            <input
+                              {...register(`extraCharges.${i}.amount`)}
+                              type="number"
+                              step="0.01"
+                              className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                            />
+                          </td>
                         </tr>
                       ))}
+
+                      <tr className="border-t border-gray-100">
+                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Taxable Amount</td>
+                        <td className="px-3 py-2">
+                          <input {...register('subtotal')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        </td>
+                        <td></td>
+                      </tr>
 
                       {!isInterstate && (
                         <>
                           <tr className="border-t border-gray-100">
                             <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
                             <td className="px-3 py-2" colSpan={3}>
-                              <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                              <input {...register('cgstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             </td>
                           </tr>
                           <tr className="border-t border-gray-100">
                             <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
                             <td className="px-3 py-2" colSpan={3}>
-                              <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                              <input {...register('sgstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             </td>
                           </tr>
                         </>
@@ -985,7 +1028,7 @@ export function MappingForm({
                         <tr className="border-t border-gray-100">
                           <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
                           <td className="px-3 py-2" colSpan={3}>
-                            <input {...register('igstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register('igstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                           </td>
                         </tr>
                       )}
@@ -994,7 +1037,7 @@ export function MappingForm({
                         <tr className="border-t border-gray-100">
                           <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
                           <td className="px-3 py-2" colSpan={3}>
-                            <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register('roundOffAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                           </td>
                         </tr>
                       )}
@@ -1002,7 +1045,7 @@ export function MappingForm({
                       <tr className="border-t-2 border-gray-300">
                         <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                         <td className="px-3 py-2" colSpan={3}>
-                          <input {...register('totalAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register('totalAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                         </td>
                       </tr>
                     </>
@@ -1055,7 +1098,7 @@ export function MappingForm({
                   <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Subtotal</td>
                   <td></td>
                   <td className="px-3 py-2">
-                    <input {...register('subtotal')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <input {...register('subtotal')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                   </td>
                 </tr>
                 {!isInterstate && (
@@ -1064,14 +1107,14 @@ export function MappingForm({
                       <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
                       <td></td>
                       <td className="px-3 py-2">
-                        <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        <input {...register('cgstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     </tr>
                     <tr className="border-t border-gray-100">
                       <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
                       <td></td>
                       <td className="px-3 py-2">
-                        <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        <input {...register('sgstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     </tr>
                   </>
@@ -1081,7 +1124,7 @@ export function MappingForm({
                     <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
                     <td></td>
                     <td className="px-3 py-2">
-                      <input {...register('igstAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register('igstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                   </tr>
                 )}
@@ -1090,7 +1133,7 @@ export function MappingForm({
                     <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
                     <td></td>
                     <td className="px-3 py-2">
-                      <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register('roundOffAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       Value seems incorrect, try ₹{roundOffSuggestion}
                     </td>
                   </tr>
@@ -1099,7 +1142,7 @@ export function MappingForm({
                   <td className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td></td>
                   <td className="px-3 py-2">
-                    <input {...register('totalAmount')} type="number" step="any" className="w-24 px-2 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <input {...register('totalAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                   </td>
                 </tr>
               </tfoot>
