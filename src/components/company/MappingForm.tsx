@@ -431,8 +431,19 @@ export function MappingForm({
     watchedLineItems.forEach((item, i) => {
       const qty       = Number(item?.quantity  ?? 0)
       const unitPrice = Number(item?.unitPrice ?? 0)
-      const discPct   = Number(item?.discountPercent ?? 0)
+      let   discPct   = Number(item?.discountPercent ?? 0)
       const gstRate   = Number(item?.gstRate ?? 0)
+
+      if (discountColumnEnabled) {
+        const origDiscAmount = bill.lineItems[i]?.discountAmount
+        if (origDiscAmount != null && origDiscAmount !== 0 && qty > 0 && unitPrice > 0) {
+          const newDiscPct = parseFloat(((origDiscAmount / (qty * unitPrice)) * 100).toFixed(4))
+          if (Math.abs(newDiscPct - discPct) > 0.00005) {
+            setValue(`lineItems.${i}.discountPercent`, newDiscPct)
+          }
+          discPct = newDiscPct
+        }
+      }
 
       const newAmount = discountColumnEnabled
         ? parseFloat((qty * unitPrice * (1 - discPct / 100)).toFixed(2))
