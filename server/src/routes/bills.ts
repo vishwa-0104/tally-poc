@@ -358,15 +358,18 @@ FIELD RULES
 - lineItem.unitPrice: The original/gross rate per unit before any deductions.
 - lineItem.discountAmount: The total ₹ value deducted from the line item. If multiple discount columns exist, sum them.
 - lineItem.gstRate: The COMBINED GST percentage (CGST% + SGST% or IGST%).
-- Verify: (qty × unitPrice) - lineItem.discountAmount ≈ lineItem.amount.
-- lineItem.unit: read from bill (Ltr/Kg/Pc/Pkt/Strip/Ctn/Nos). Default: "blank".
+- Verify: (qty × unitPrice) - lineItem.discountAmount === lineItem.amount.
+- lineItem.unit: read from bill (Ltr/Kg/Pc/Pkt/Strip/Ctn/Nos/NOP). Default: "blank".
 
-QUANTITY DISAMBIGUATION
+QUANTITY DISAMBIGUATIO
 - Some bills (paint, chemical, liquid, packed goods) show multiple quantity-like columns: NOP (Number of Packages), "Qty Lt/Kg" (total volume/weight), Pack or Pack Size (volume per unit).
-- RULE: The correct quantity is whichever value satisfies: quantity × unitPrice ≈ grossValue (line gross before discounts).
-- Test each candidate against this equation and use the one that matches.
-- Example: NOP=1, Qty Lt/Kg=18, Rate=3005, Gross=3005 → 1×3005=3005 ✓ → quantity=1 (not 18).
+- STEP 1: Read the rate directly from the bill's "Rate" column — this is the original printed price per unit (e.g. ₹/Ltr, ₹/Kg, ₹/Can, ₹/Pkt, ₹/Strip, ₹/Ctn, ₹/NOP) BEFORE any discount. Store this as lineItem.unitPrice.
+- STEP 2: The correct quantity is whichever candidate value satisfies: quantity = (lineItem.amount + lineItem.discountAmount) / lineItem.unitPrice
+- IMPORTANT: Always use the rate read from the bill's Rate column in the denominator — never a derived or back-calculated price.
+- Test each candidate (NOP, Qty Lt/Kg, Pack count, etc.) against this equation and use the one that matches.
 - Set lineItem.unit to match the chosen quantity (e.g. "Nos"/"Drum"/"Can" for NOP; "Lt"/"Kg" for volume qty).
+- in case of Berger Paints India Limited, Qty is always the NOP (Number of Packages) column, even if a "Qty Lt/Kg" column exists. This is an exception to the above rules based on observed billing patterns.
+
 
 EXTRA CHARGES
 - Some bills include additional charges outside the main item table (freight, insurance, loading, unloading, rakhsawa, auto charges, handling, cartage, octroi, etc.).
@@ -442,12 +445,22 @@ FIELD RULES
 - Verify: (qty × unitPrice) - lineItem.discountAmount ≈ lineItem.amount.
 - lineItem.unit: read from bill (Ltr/Kg/Pc/Pkt/Strip/Ctn/Nos).  Default: "blank".
 
-QUANTITY DISAMBIGUATION
+TAX TYPE RULE (IGST vs CGST/SGST — mutually exclusive)
+const interstate = bill has supplier and buyer in different states (state codes in GSTIN differ) → IGST applies.
+- IGST applies to interstate supply; CGST+SGST applies to intra-state supply. A single bill NEVER has both non-zero.
+- If the bill shows IGST amounts (even if CGST/SGST columns exist but show 0): set igstAmount = total IGST, cgstAmount = 0, sgstAmount = 0.
+- If the bill shows CGST and SGST amounts (even if an IGST column exists but shows 0): set cgstAmount and sgstAmount to their values, igstAmount = 0.
+- Columns printed as 0 mean absent — do NOT copy those 0s into cgstAmount/sgstAmount when IGST is the actual tax charged.
+- lineItem.gstRate should equal the rate actually charged: IGST% for interstate, or CGST%+SGST% for intra-state.
+
+QUANTITY DISAMBIGUATIO
 - Some bills (paint, chemical, liquid, packed goods) show multiple quantity-like columns: NOP (Number of Packages), "Qty Lt/Kg" (total volume/weight), Pack or Pack Size (volume per unit).
-- RULE: The correct quantity is whichever value satisfies: quantity × unitPrice ≈ grossValue (line gross before discounts).
-- Test each candidate against this equation and use the one that matches.
-- Example: NOP=1, Qty Lt/Kg=18, Rate=3005, Gross=3005 → 1×3005=3005 ✓ → quantity=1 (not 18).
+- STEP 1: Read the rate directly from the bill's "Rate" column — this is the original printed price per unit (e.g. ₹/Ltr, ₹/Kg, ₹/Can, ₹/Pkt, ₹/Strip, ₹/Ctn, ₹/NOP) BEFORE any discount. Store this as lineItem.unitPrice.
+- STEP 2: The correct quantity is whichever candidate value satisfies: quantity = (lineItem.amount + lineItem.discountAmount) / lineItem.unitPrice
+- IMPORTANT: Always use the rate read from the bill's Rate column in the denominator — never a derived or back-calculated price.
+- Test each candidate (NOP, Qty Lt/Kg, Pack count, etc.) against this equation and use the one that matches.
 - Set lineItem.unit to match the chosen quantity (e.g. "Nos"/"Drum"/"Can" for NOP; "Lt"/"Kg" for volume qty).
+- in case of Berger Paints India Limited, Qty is always the NOP (Number of Packages) column, even if a "Qty Lt/Kg" column exists. This is an exception to the above rules based on observed billing patterns.
 
 EXTRA CHARGES
 - Some bills include additional charges outside the main item table (freight, insurance, loading, unloading, rakhsawa, auto charges, handling, cartage, octroi, etc.).

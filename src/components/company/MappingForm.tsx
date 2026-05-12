@@ -309,7 +309,7 @@ export function MappingForm({
       igstLedger_5:  isInterstate  && show5  ? prefillIgst5  || undefined : undefined,
       igstLedger_18: isInterstate  && show18 ? prefillIgst18 || undefined : undefined,
       igstLedger_40: isInterstate  && show40 ? prefillIgst40 || undefined : undefined,
-      billDate:       bill.billDate,
+      billDate:       bill.billDate?.trim().split('T')[0] ?? '',
       voucherDate:    new Date().toISOString().split('T')[0],
       billNumber:     bill.billNumber,
       totalAmount:    bill.totalAmount,

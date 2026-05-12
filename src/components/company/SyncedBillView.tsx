@@ -100,13 +100,11 @@ export function SyncedBillView({ bill }: SyncedBillViewProps) {
                     <td />
                   </tr>
                 )}
-                {bill.roundOffAmount != null && Math.abs(bill.roundOffAmount) >= 0.01 && (
-                  <tr>
-                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.roundOffAmount)}</td>
-                    <td />
-                  </tr>
-                )}
+                <tr>
+                  <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                  <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.roundOffAmount ?? 0)}</td>
+                  <td />
+                </tr>
                 <tr className="border-t-2 border-gray-300">
                   <td className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>
@@ -175,13 +173,11 @@ export function SyncedBillView({ bill }: SyncedBillViewProps) {
                     <td />
                   </tr>
                 )}
-                {bill.roundOffAmount != null && Math.abs(bill.roundOffAmount) >= 0.01 && (
-                  <tr>
-                    <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.roundOffAmount)}</td>
-                    <td />
-                  </tr>
-                )}
+                <tr>
+                  <td colSpan={7} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                  <td className="px-3 py-2 text-xs font-semibold text-gray-800">{formatCurrency(bill.roundOffAmount ?? 0)}</td>
+                  <td />
+                </tr>
                 <tr className="border-t-2 border-gray-300">
                   <td colSpan={7} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td className="px-3 py-2 text-xs font-bold text-teal-700">{formatCurrency(bill.totalAmount)}</td>

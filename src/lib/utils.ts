@@ -14,7 +14,10 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString('en-IN', {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return date
+  return d.toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -31,7 +34,14 @@ export function getInitials(name: string): string {
 }
 
 export function buildTallyDate(dateStr: string): string {
-  return dateStr.replace(/-/g, '')
+  if (!dateStr) return ''
+  // Strip time component from ISO strings like "2025-01-15T00:00:00.000Z"
+  const s = dateStr.trim().split('T')[0]
+  // DD-MM-YYYY or DD/MM/YYYY → YYYYMMDD
+  const dmy = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/)
+  if (dmy) return `${dmy[3]}${dmy[2]}${dmy[1]}`
+  // YYYY-MM-DD or YYYY/MM/DD → remove separators
+  return s.replace(/[-/]/g, '')
 }
 
 interface LineItemParam {
