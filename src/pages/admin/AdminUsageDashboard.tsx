@@ -281,7 +281,7 @@ export default function AdminUsageDashboard() {
         </div>
 
         <p className="text-xs text-gray-400">
-          Gemini Flash: $0.25/1M input · $1.50/1M output. USD → INR at ₹85. Output tokens include thinking (chain-of-thought) tokens billed at the same rate.
+          Gemini Flash: $0.25/1M input · $1.50/1M output. USD → INR at ₹94.5. Output tokens include thinking (chain-of-thought) tokens billed at the same rate.
         </p>
       </div>
     </>

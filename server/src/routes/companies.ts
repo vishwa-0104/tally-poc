@@ -645,7 +645,7 @@ companiesRouter.get('/admin/usage-dashboard', requireAdmin, async (req, res) => 
     'claude-opus-4-7':            { input: 15.00, output: 75.00 },
   }
   const FALLBACK_PRICING = { input: 0.25, output: 1.50 }
-  const USD_TO_INR = 85
+  const USD_TO_INR = 94.5
 
   type RawRow = { model: string; requests: bigint; successRequests: bigint; inputTokens: bigint; outputTokens: bigint }
   const rows: RawRow[] = await prisma.$queryRaw`
