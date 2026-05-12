@@ -370,14 +370,13 @@ QUANTITY DISAMBIGUATIO
 - Set lineItem.unit to match the chosen quantity (e.g. "Nos"/"Drum"/"Can" for NOP; "Lt"/"Kg" for volume qty).
 - in case of Berger Paints India Limited, Qty is always the NOP (Number of Packages) column, even if a "Qty Lt/Kg" column exists. This is an exception to the above rules based on observed billing patterns.
 
-
 EXTRA CHARGES
 - Some bills include additional charges outside the main item table (freight, insurance, loading, unloading, rakhsawa, auto charges, handling, cartage, octroi, etc.).
 - These typically appear after the line items and before the GST row.
 - Extract each such charge into extraCharges with its description and amount (pre-tax value).
 - Do NOT include GST rows (CGST/SGST/IGST) or round-off in extraCharges.
+- create input tags for these extra charges entry seperatly for all charges (pre-tax value) mentioned in the bill and do not club them together as one entry in extraCharges array. 
 - If no extra charges exist, return [].
-- subtotal = sum of lineItem amounts ONLY (do not include extra charges in subtotal).
 
 VERIFICATION & HIERARCHY
 - The "Value Before Tax" printed on the invoice is the absolute truth for lineItem.amount.
@@ -467,8 +466,9 @@ EXTRA CHARGES
 - These typically appear after the line items and before the GST row.
 - Extract each such charge into extraCharges with its description and amount (pre-tax value).
 - Do NOT include GST rows (CGST/SGST/IGST) or round-off in extraCharges.
+- create input tags for these extra charges entry seperatly for all charges (pre-tax value) mentioned in the bill and do not club them together as one entry in extraCharges array. 
 - If no extra charges exist, return [].
-- subtotal = sum of lineItem amounts ONLY (do not include extra charges in subtotal).
+
 
 VERIFICATION & HIERARCHY
 - The "Value Before Tax" printed on the invoice is the absolute truth for lineItem.amount.

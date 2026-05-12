@@ -289,7 +289,7 @@ export function MappingForm({
   const showDiscFlatCol = !discountColumnEnabled && hasFlatDiscount
 
   // ── Form ────────────────────────────────────────────────────────────────────
-  const { register, handleSubmit, setValue, watch } = useForm<MappingInput>({
+  const { register, handleSubmit, setValue, watch, getValues } = useForm<MappingInput>({
     resolver: zodResolver(mappingSchema),
     defaultValues: {
       vendorLedger:          resolvedVendor || undefined,
@@ -430,19 +430,8 @@ export function MappingForm({
     watchedLineItems.forEach((item, i) => {
       const qty       = Number(item?.quantity  ?? 0)
       const unitPrice = Number(item?.unitPrice ?? 0)
-      let   discPct   = Number(item?.discountPercent ?? 0)
+      const discPct   = Number(item?.discountPercent ?? 0)
       const gstRate   = Number(item?.gstRate ?? 0)
-
-      if (discountColumnEnabled) {
-        const origDiscAmount = bill.lineItems[i]?.discountAmount
-        if (origDiscAmount != null && origDiscAmount !== 0 && qty > 0 && unitPrice > 0) {
-          const newDiscPct = parseFloat(((origDiscAmount / (qty * unitPrice)) * 100).toFixed(4))
-          if (Math.abs(newDiscPct - discPct) > 0.00005) {
-            setValue(`lineItems.${i}.discountPercent`, newDiscPct)
-          }
-          discPct = newDiscPct
-        }
-      }
 
       const newAmount = discountColumnEnabled
         ? parseFloat((qty * unitPrice * (1 - discPct / 100)).toFixed(2))
@@ -487,11 +476,26 @@ export function MappingForm({
       setValue('sgstAmount', roundedSgst)
     }
 
-    const taxTotal = isInterstate ? roundedIgst : roundedCgst + roundedSgst
-    const roundOff = Number(watchedRoundOff ?? 0)
-    const newTotal = parseFloat((roundedSubtotal + taxTotal + roundOff).toFixed(2))
-    setValue('totalAmount', Math.max(0, newTotal))
-  }, [lineItemCalcKey, watchedRoundOff]) // eslint-disable-line react-hooks/exhaustive-deps
+    // Auto round-off to nearest ₹1 (+ or −) when line items change
+    const taxTotal      = isInterstate ? roundedIgst : roundedCgst + roundedSgst
+    const preRoundTotal = parseFloat((roundedSubtotal + taxTotal).toFixed(2))
+    const roundedTotal  = Math.round(preRoundTotal)
+    const autoRoundOff  = parseFloat((roundedTotal - preRoundTotal).toFixed(2))
+    setValue('roundOffAmount', autoRoundOff)
+    setValue('totalAmount', roundedTotal)
+  }, [lineItemCalcKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When user manually edits round-off, recompute total.
+  // Uses getValues() to read the latest subtotal/taxes (avoids stale closure).
+  useEffect(() => {
+    if (billType === 'misc') return
+    const { subtotal, cgstAmount, sgstAmount, igstAmount } = getValues()
+    const taxes = isInterstate
+      ? Number(igstAmount ?? 0)
+      : Number(cgstAmount ?? 0) + Number(sgstAmount ?? 0)
+    const ro = Number(watchedRoundOff ?? 0)
+    setValue('totalAmount', parseFloat((Number(subtotal ?? 0) + taxes + ro).toFixed(2)))
+  }, [watchedRoundOff]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Round off mismatch check — expected = totalAmount − (subtotal + taxes)
   // Same formula used server-side when correcting the AI-parsed sign.
