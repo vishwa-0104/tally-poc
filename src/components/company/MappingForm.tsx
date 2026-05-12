@@ -276,7 +276,6 @@ export function MappingForm({
   const roundOffValue = (bill.roundOffAmount != null && Math.abs(bill.roundOffAmount) >= 0.01)
     ? bill.roundOffAmount
     : null
-  const hasRoundOff = roundOffValue !== null
 
   // ── Invoice-level discount ───────────────────────────────────────────────────
   const hasInvoiceDiscount = bill.invoiceDiscountAmount != null && bill.invoiceDiscountAmount > 0
@@ -317,7 +316,7 @@ export function MappingForm({
       cgstAmount:     bill.cgstAmount,
       sgstAmount:     bill.sgstAmount,
       igstAmount:     bill.igstAmount,
-      roundOffAmount: hasRoundOff ? roundOffValue! : undefined,
+      roundOffAmount: roundOffValue ?? 0,
       lineItems: bill.lineItems.map((item) => {
         if (discountColumnEnabled) {
           // Keep original unitPrice; convert flat discount to % if needed
@@ -492,17 +491,17 @@ export function MappingForm({
     const roundOff = Number(watchedRoundOff ?? 0)
     const newTotal = parseFloat((roundedSubtotal + taxTotal + roundOff).toFixed(2))
     setValue('totalAmount', Math.max(0, newTotal))
-  }, [lineItemCalcKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lineItemCalcKey, watchedRoundOff]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Round off mismatch check — expected = totalAmount − (subtotal + taxes)
   // Same formula used server-side when correcting the AI-parsed sign.
   let roundOffSuggestion: number | null = null
-  if (hasRoundOff) {
+  {
     const recomputedSubtotal = (watchedLineItems ?? bill.lineItems)
       .reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
     const net      = recomputedSubtotal + bill.cgstAmount + bill.sgstAmount + bill.igstAmount
     const expected = parseFloat((bill.totalAmount + (bill.invoiceDiscountAmount ?? 0) - net).toFixed(2))
-    if (Math.abs(expected - Number(watchedRoundOff)) >= 0.01) {
+    if (Math.abs(expected) >= 0.01 && Math.abs(expected - Number(watchedRoundOff)) >= 0.01) {
       roundOffSuggestion = expected
     }
   }
@@ -823,25 +822,23 @@ export function MappingForm({
           />
           <p className="text-xs text-gray-500 mt-1">Entry date in Tally (<span className="font-mono">DATE</span>)</p>
         </div>
-        {/* {hasRoundOff && (
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-              Round Off <span className="font-normal text-gray-500">(₹ — negative to deduct)</span>
-            </label>
-            <input
-              {...register('roundOffAmount')}
-              type="number"
-              step="0.01"
-              placeholder="0.00"
-              className="input-base w-32"
-            />
-            {roundOffSuggestion !== null && (
-              <p className="text-xs text-amber-600 mt-1">
-                Value seems incorrect, try ₹{roundOffSuggestion}
-              </p>
-            )}
-          </div>
-        )} */}
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+            Round Off <span className="font-normal text-gray-500">(₹ — negative to deduct)</span>
+          </label>
+          <input
+            {...register('roundOffAmount')}
+            type="number"
+            step="0.01"
+            placeholder="0.00"
+            className="input-base w-32"
+          />
+          {roundOffSuggestion !== null && (
+            <p className="text-xs text-amber-600 mt-1">
+              Value seems incorrect, try ₹{roundOffSuggestion}
+            </p>
+          )}
+        </div>
         {hasInvoiceDiscount && (
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
@@ -1057,14 +1054,12 @@ export function MappingForm({
                         </tr>
                       )}
 
-                      {hasRoundOff && (
-                        <tr className="border-t border-gray-100">
-                          <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
-                          <td className="px-3 py-2" colSpan={3}>
-                            <input {...register('roundOffAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
-                          </td>
-                        </tr>
-                      )}
+                      <tr className="border-t border-gray-100">
+                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                        <td className="px-3 py-2" colSpan={3}>
+                          <input {...register('roundOffAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        </td>
+                      </tr>
 
                       <tr className="border-t-2 border-gray-300">
                         <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
@@ -1152,16 +1147,16 @@ export function MappingForm({
                     </td>
                   </tr>
                 )}
-                {hasRoundOff && (
-                  <tr className="border-t border-gray-100">
-                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
-                    <td></td>
-                    <td className="px-3 py-2">
-                      <input {...register('roundOffAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
-                      Value seems incorrect, try ₹{roundOffSuggestion}
-                    </td>
-                  </tr>
-                )}
+                <tr className="border-t border-gray-100">
+                  <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                  <td></td>
+                  <td className="px-3 py-2">
+                    <input {...register('roundOffAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    {roundOffSuggestion !== null && (
+                      <p className="text-xs text-amber-600 mt-1">Value seems incorrect, try ₹{roundOffSuggestion}</p>
+                    )}
+                  </td>
+                </tr>
                 <tr className="border-t-2 border-gray-300">
                   <td className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td></td>
