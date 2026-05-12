@@ -138,6 +138,7 @@ export function buildTallyXml(params: {
   // ── Inventory entries (VOUCHER level) ─────────────────────────────────────
   // Matches real Tally export: ALLINVENTORYENTRIES.LIST at voucher level,
   // each containing BATCHALLOCATIONS.LIST and ACCOUNTINGALLOCATIONS.LIST.
+console.log('>>> line items', params)
   const inventoryEntries = hasInventory
     ? params.lineItems!.map((item) => {
         const stockName   = esc(item.tallyStockItem?.trim() || item.description)
@@ -150,9 +151,6 @@ export function buildTallyXml(params: {
 
         const discPct = (() => {
           if (!params.includeItemDiscount) return ''
-          if(params.includeItemDiscount && (item.discountAmount === 0 || item.discountPercent === 0)) {
-            return ''
-          }
           if (item.discountPercent != null && item.discountPercent !== 0) {
             return `\n              <DISCOUNT>${item.discountPercent}</DISCOUNT>`
           }
