@@ -534,6 +534,24 @@ async function handleCreateLedger(payload, tallyUrl) {
   return parseSyncResponse(responseText)
 }
 
+// Maps first-2-digit GSTIN state code → Tally state name
+const GSTIN_STATE_MAP = {
+  '01': 'Jammu & Kashmir',   '02': 'Himachal Pradesh',  '03': 'Punjab',
+  '04': 'Chandigarh',        '05': 'Uttarakhand',        '06': 'Haryana',
+  '07': 'Delhi',             '08': 'Rajasthan',          '09': 'Uttar Pradesh',
+  '10': 'Bihar',             '11': 'Sikkim',             '12': 'Arunachal Pradesh',
+  '13': 'Nagaland',          '14': 'Manipur',            '15': 'Mizoram',
+  '16': 'Tripura',           '17': 'Meghalaya',          '18': 'Assam',
+  '19': 'West Bengal',       '20': 'Jharkhand',          '21': 'Odisha',
+  '22': 'Chhattisgarh',      '23': 'Madhya Pradesh',     '24': 'Gujarat',
+  '25': 'Daman & Diu',       '26': 'Dadra & Nagar Haveli', '27': 'Maharashtra',
+  '28': 'Andhra Pradesh',    '29': 'Karnataka',          '30': 'Goa',
+  '31': 'Lakshadweep',       '32': 'Kerala',             '33': 'Tamil Nadu',
+  '34': 'Puducherry',        '35': 'Andaman & Nicobar Islands',
+  '36': 'Telangana',         '37': 'Andhra Pradesh',     '38': 'Ladakh',
+  '97': 'Other Territory',   '99': 'Centre Jurisdiction',
+}
+
 function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tallyCompany }) {
   const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const parent = under || 'Sundry Creditors'
@@ -542,30 +560,23 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tall
     : ''
   const date = getTodayYYYYMMDD()
 
-  // Mailing block always present so MAILINGNAME is set
-  const mailingBlock = `
-            <LEDGERMAILINGDETAILS.LIST>
-              <MAILINGNAME>${esc(name)}</MAILINGNAME>${address ? `
-              <ADDRESS.LIST>
-                <ADDRESS>${esc(address)}</ADDRESS>
-              </ADDRESS.LIST>` : ''}${state ? `
-              <STATENAME>${esc(state)}</STATENAME>` : ''}
-              <COUNTRYNAME>India</COUNTRYNAME>${pincode ? `
-              <PINCODE>${esc(pincode)}</PINCODE>` : ''}
-            </LEDGERMAILINGDETAILS.LIST>`
+  // Derive state from GSTIN code if user didn't provide one
+  const resolvedState = state?.trim() || (gstin ? (GSTIN_STATE_MAP[gstin.slice(0, 2)] || '') : '')
 
-  // TallyPrime uses PARTYGSTIN at the ledger level for the main GST number field.
-  // LEDGSTREGDETAILS.LIST stores the GST registration history (effective-from date etc.)
-  const gstLedgerAttr = gstin ? `
-            <PARTYGSTIN>${esc(gstin)}</PARTYGSTIN>` : ''
-
+  // LEDGSTREGDETAILS.LIST — structure matches actual TallyPrime XML export
   const gstBlock = gstin ? `
             <LEDGSTREGDETAILS.LIST>
-              <APPLICABLEFROM>${date}</APPLICABLEFROM>${pan ? `
+              <APPLICABLEFROM>${date}</APPLICABLEFROM>
+              <GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>
+              <TRANSPORTERID/>${pan ? `
               <ITPAN>${esc(pan)}</ITPAN>` : ''}
-              <PARTYGSTIN>${esc(gstin)}</PARTYGSTIN>
-              <REGISTRATIONTYPE>Regular</REGISTRATIONTYPE>
-              <PARTYTYPE>Not Applicable</PARTYTYPE>
+              <STATE>${esc(resolvedState)}</STATE>
+              <PLACEOFSUPPLY>${esc(resolvedState)}</PLACEOFSUPPLY>
+              <GSTIN>${esc(gstin)}</GSTIN>
+              <ISOTHTERRITORYASSESSEE/>
+              <CONSIDERPURCHASEFOREXPORT/>
+              <ISTRANSPORTER/>
+              <ISCOMMONPARTY/>
             </LEDGSTREGDETAILS.LIST>` : ''
 
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -580,14 +591,25 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tall
       </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <LEDGER NAME="${esc(name)}" ACTION="Create">
+          <LEDGER NAME="${esc(name)}" RESERVEDNAME="" ACTION="Create">
+            <COUNTRYNAME>India</COUNTRYNAME>
+            <GSTREGISTRATIONTYPE>${gstin ? 'Regular' : ''}</GSTREGISTRATIONTYPE>
             <NAME>${esc(name)}</NAME>
             <PARENT>${esc(parent)}</PARENT>
+            <MAILINGNAME>${esc(name)}</MAILINGNAME>${address ? `
+            <LEDGERADDRESS>${esc(address)}</LEDGERADDRESS>` : ''}${pincode ? `
+            <PINCODE>${esc(pincode)}</PINCODE>` : ''}${gstin ? `
+            <PARTYGSTIN>${esc(gstin)}</PARTYGSTIN>` : ''}
             <ISBILLWISEON>Yes</ISBILLWISEON>
             <MAINTAINBILLBYBILL>Yes</MAINTAINBILLBYBILL>
-            <DEFAULTCREDITPERIOD></DEFAULTCREDITPERIOD>
-            <ISCHECKFORCREDITDAYS>No</ISCHECKFORCREDITDAYS>
-            <CREDITLIMIT>0</CREDITLIMIT>${gstLedgerAttr}${mailingBlock}${gstBlock}
+            <OPENINGBALANCE>0.00</OPENINGBALANCE>
+            <CREDITLIMIT/>
+            <LANGUAGENAME.LIST>
+              <NAME.LIST TYPE="String">
+                <NAME>${esc(name)}</NAME>
+              </NAME.LIST>
+              <LANGUAGEID> 1033</LANGUAGEID>
+            </LANGUAGENAME.LIST>${gstBlock}
           </LEDGER>
         </TALLYMESSAGE>
       </REQUESTDATA>
