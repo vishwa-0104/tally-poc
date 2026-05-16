@@ -21,7 +21,7 @@ export function CreateStockGroupModal({
   onSuccess,
   onClose,
 }: CreateStockGroupModalProps) {
-  const { getStockGroups, addStockGroup, fetchStockGroupsFromDb } = useCompanyStore()
+  const { getStockGroups, addStockGroup } = useCompanyStore()
   const stockGroups = getStockGroups(companyId)
 
   const [name, setName]     = useState('')
@@ -53,7 +53,6 @@ export function CreateStockGroupModal({
       }
 
       await addStockGroup(companyId, { name: trimmed, parent: under })
-      fetchStockGroupsFromDb(companyId).catch(() => {})
       onSuccess(trimmed)
       onClose()
     } catch (err) {
