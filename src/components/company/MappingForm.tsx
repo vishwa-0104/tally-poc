@@ -10,6 +10,7 @@ import { mappingSchema, type MappingInput } from '@/lib/validators'
 import type { Bill, TallyGodown, TallyLedger, TallyStockUnit, TallyStockItem, LedgerMapping, StockItemAlias } from '@/types'
 import { cn, formatCurrency, decodeHtmlEntities } from '@/lib/utils'
 import { Modal } from '../ui'
+import { useCompanyStore } from '@/store'
 
 
 interface LedgerInputProps {
@@ -167,6 +168,7 @@ export function MappingForm({
   onSaveMapping,
   onSyncToTally,
 }: MappingFormProps) {
+  const { saveAliases } = useCompanyStore()
   const [createItemRowIndex, setCreateItemRowIndex] = useState<number | null>(null)
   const [ledgerModalOpen, setLedgerModalOpen]       = useState(false)
   const [showUnitMismatchModal, setShowUnitMismatchModal] = useState(false)
@@ -1211,7 +1213,13 @@ export function MappingForm({
           tallyCompany={tallyCompany}
           billItemDescription={bill.lineItems[createItemRowIndex]?.description ?? ''}
           hsnCode={bill.lineItems[createItemRowIndex]?.hsnCode ?? ''}
-          onSuccess={(itemName) => setValue(`lineItems.${createItemRowIndex}.tallyStockItem`, itemName)}
+          onSuccess={(itemName) => {
+            setValue(`lineItems.${createItemRowIndex}.tallyStockItem`, itemName)
+            const description = bill.lineItems[createItemRowIndex]?.description
+            if (description) {
+              saveAliases(companyId, [{ billItemName: description.toLowerCase(), tallyStockItemName: itemName }]).catch(() => {})
+            }
+          }}
           onClose={() => setCreateItemRowIndex(null)}
         />
       )}

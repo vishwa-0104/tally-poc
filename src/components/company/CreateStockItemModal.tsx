@@ -27,7 +27,7 @@ export function CreateStockItemModal({
   onSuccess,
   onClose,
 }: CreateStockItemModalProps) {
-  const { getStockGroups, getStockUnits, getStockItems, addStockItem, saveStockItemsToDb } = useCompanyStore()
+  const { getStockGroups, getStockUnits, addStockItem } = useCompanyStore()
   const stockGroups = getStockGroups(companyId)
   const stockUnits  = getStockUnits(companyId)
 
@@ -76,10 +76,7 @@ export function CreateStockItemModal({
 
       if (result.success && result.created > 0) {
         const itemName = name.trim()
-        const newItem  = { name: itemName, group: group.trim(), unit: unit.trim() }
-        addStockItem(companyId, newItem)
-        const updatedItems = [...getStockItems(companyId), newItem]
-        saveStockItemsToDb(companyId, updatedItems).catch(() => {})
+        addStockItem(companyId, { name: itemName, group: group.trim(), unit: unit.trim() })
         toast.success(`"${itemName}" created in Tally`)
         onSuccess(itemName)
         onClose()
