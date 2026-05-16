@@ -100,6 +100,23 @@ export async function createTallyStockItem(payload: CreateStockItemPayload, tall
   return result
 }
 
+export interface CreateLedgerPayload {
+  name: string
+  gstin?: string
+  pan?: string
+  address?: string
+  state?: string
+  pincode?: string
+  under?: string
+  tallyCompany?: string
+}
+
+export async function createTallyLedger(payload: CreateLedgerPayload, tallyUrl: string): Promise<TallySyncResult> {
+  const result = await sendToExtension<TallySyncResult>('CREATE_LEDGER', { ...payload, tallyUrl })
+  console.log('[CreateLedger] Tally response:', result)
+  return result
+}
+
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
   console.group('[Sync] Tally XML Payload')
   console.log('URL:', tallyUrl)

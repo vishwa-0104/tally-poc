@@ -77,6 +77,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
       return true
 
+    case 'CREATE_LEDGER':
+      handleCreateLedger(payload, payload.tallyUrl)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -516,6 +522,78 @@ function parseSyncResponse(xml) {
   }
 
   return { success: true, created, altered, errors }
+}
+
+// ── Create ledger in Tally ────────────────────────────────────────────────────
+
+async function handleCreateLedger(payload, tallyUrl) {
+  const xml = buildLedgerXml(payload)
+  console.log('[CreateLedger] Full XML:\n', xml)
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log('[CreateLedger] Tally raw response:', responseText.slice(0, 3000))
+  return parseSyncResponse(responseText)
+}
+
+function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tallyCompany }) {
+  const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const parent = under || 'Sundry Creditors'
+  const companyBlock = tallyCompany
+    ? `\n        <STATICVARIABLES>\n          <SVCURRENTCOMPANY>${esc(tallyCompany)}</SVCURRENTCOMPANY>\n        </STATICVARIABLES>`
+    : ''
+  const date = getTodayYYYYMMDD()
+
+  // Mailing block always present so MAILINGNAME is set
+  const mailingBlock = `
+            <LEDGERMAILINGDETAILS.LIST>
+              <MAILINGNAME>${esc(name)}</MAILINGNAME>${address ? `
+              <ADDRESS.LIST>
+                <ADDRESS>${esc(address)}</ADDRESS>
+              </ADDRESS.LIST>` : ''}${state ? `
+              <STATENAME>${esc(state)}</STATENAME>` : ''}
+              <COUNTRYNAME>India</COUNTRYNAME>${pincode ? `
+              <PINCODE>${esc(pincode)}</PINCODE>` : ''}
+            </LEDGERMAILINGDETAILS.LIST>`
+
+  // TallyPrime uses PARTYGSTIN at the ledger level for the main GST number field.
+  // LEDGSTREGDETAILS.LIST stores the GST registration history (effective-from date etc.)
+  const gstLedgerAttr = gstin ? `
+            <PARTYGSTIN>${esc(gstin)}</PARTYGSTIN>` : ''
+
+  const gstBlock = gstin ? `
+            <LEDGSTREGDETAILS.LIST>
+              <APPLICABLEFROM>${date}</APPLICABLEFROM>${pan ? `
+              <ITPAN>${esc(pan)}</ITPAN>` : ''}
+              <PARTYGSTIN>${esc(gstin)}</PARTYGSTIN>
+              <REGISTRATIONTYPE>Regular</REGISTRATIONTYPE>
+              <PARTYTYPE>Not Applicable</PARTYTYPE>
+            </LEDGSTREGDETAILS.LIST>` : ''
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>All Masters</REPORTNAME>${companyBlock}
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <LEDGER NAME="${esc(name)}" ACTION="Create">
+            <NAME>${esc(name)}</NAME>
+            <PARENT>${esc(parent)}</PARENT>
+            <ISBILLWISEON>Yes</ISBILLWISEON>
+            <MAINTAINBILLBYBILL>Yes</MAINTAINBILLBYBILL>
+            <DEFAULTCREDITPERIOD></DEFAULTCREDITPERIOD>
+            <ISCHECKFORCREDITDAYS>No</ISCHECKFORCREDITDAYS>
+            <CREDITLIMIT>0</CREDITLIMIT>${gstLedgerAttr}${mailingBlock}${gstBlock}
+          </LEDGER>
+        </TALLYMESSAGE>
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`
 }
 
 // ── Create stock item in Tally ────────────────────────────────────────────────

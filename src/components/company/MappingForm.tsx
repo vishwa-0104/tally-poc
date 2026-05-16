@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import ReactSelect from 'react-select'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, CheckCircle, Plus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { CreateStockItemModal } from '@/components/company/CreateStockItemModal'
+import { CreateLedgerModal } from '@/components/company/CreateLedgerModal'
 import { mappingSchema, type MappingInput } from '@/lib/validators'
 import type { Bill, TallyGodown, TallyLedger, TallyStockUnit, TallyStockItem, LedgerMapping, StockItemAlias } from '@/types'
 import { cn, formatCurrency, decodeHtmlEntities } from '@/lib/utils'
@@ -19,9 +20,10 @@ interface LedgerInputProps {
   ledgers: TallyLedger[]
   pinnedNames?: string[]
   registration: ReturnType<ReturnType<typeof useForm<MappingInput>>['register']>
+  action?: React.ReactNode
 }
 
-function LedgerInput({ id, label, required, matched, ledgers, pinnedNames = [], registration }: LedgerInputProps) {
+function LedgerInput({ id, label, required, matched, ledgers, pinnedNames = [], registration, action }: LedgerInputProps) {
   const allNames = [
     ...pinnedNames,
     ...ledgers.map((l) => l.name).filter((n) => !pinnedNames.includes(n)),
@@ -32,11 +34,14 @@ function LedgerInput({ id, label, required, matched, ledgers, pinnedNames = [], 
         <label className="block text-xs font-semibold text-gray-700 tracking-wide">
           {label}{required && ' *'}
         </label>
-        {matched && (
-          <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
-            <CheckCircle className="w-3 h-3" /> matched
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {action}
+          {matched && (
+            <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
+              <CheckCircle className="w-3 h-3" /> matched
+            </span>
+          )}
+        </div>
       </div>
       <input
         {...registration}
@@ -163,6 +168,7 @@ export function MappingForm({
   onSyncToTally,
 }: MappingFormProps) {
   const [createItemRowIndex, setCreateItemRowIndex] = useState<number | null>(null)
+  const [ledgerModalOpen, setLedgerModalOpen]       = useState(false)
   const [showUnitMismatchModal, setShowUnitMismatchModal] = useState(false)
   const [unitMismatchItems, setUnitMismatchItems] = useState<Array<{ index: number; description: string; selectedUnit: string; tallyUnit: string }>>([])
 
@@ -569,6 +575,16 @@ export function MappingForm({
           matched={!!resolvedVendor}
           ledgers={ledgers}
           registration={register('vendorLedger')}
+          action={!gstinMatch && !exactNameMatch && !ledgersLoading ? (
+            <button
+              type="button"
+              onClick={() => setLedgerModalOpen(true)}
+              className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 font-medium"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New
+            </button>
+          ) : undefined}
         />
         {debitVoucherEnabled && (
           <div>
@@ -1173,6 +1189,18 @@ export function MappingForm({
           </div>
         </div>
       )}
+
+      {/* Create vendor ledger modal */}
+      <CreateLedgerModal
+        open={ledgerModalOpen}
+        companyId={companyId}
+        vendorName={bill.vendorName}
+        vendorGstin={bill.vendorGstin}
+        tallyUrl={tallyUrl}
+        tallyCompany={tallyCompany}
+        onSuccess={(ledgerName) => { setValue('vendorLedger', ledgerName); setLedgerModalOpen(false) }}
+        onClose={() => setLedgerModalOpen(false)}
+      />
 
       {/* Create stock item modal */}
       {billType !== 'misc' && createItemRowIndex !== null && (
