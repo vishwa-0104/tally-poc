@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -7,14 +7,13 @@ import type { BankSyncRow } from '@/services/tallyService'
 
 const PAGE_SIZE = 15
 
-const DEFAULT_VOUCHER_TYPES = ['Payment', 'Receipt', 'Journal', 'Contra']
+const BANK_VOUCHER_TYPES = ['Contra', 'Payment Voucher', 'Receipt Voucher'] as const
 
 interface BankMappingFormProps {
   statement: ParsedBankStatement
   bankLedger: string
   onBankLedgerChange: (v: string) => void
   ledgers: TallyLedger[]
-  voucherTypes: string[]
   onSync: (rows: BankSyncRow[], bankLedger: string) => Promise<void>
   syncing: boolean
 }
@@ -24,20 +23,21 @@ export function BankMappingForm({
   bankLedger,
   onBankLedgerChange,
   ledgers,
-  voucherTypes,
   onSync,
   syncing,
 }: BankMappingFormProps) {
-  const allVoucherTypes = useMemo(
-    () => (voucherTypes.length > 0 ? voucherTypes : DEFAULT_VOUCHER_TYPES),
-    [voucherTypes],
-  )
-
   const [rows, setRows] = useState<BankTransaction[]>(() =>
     statement.transactions.map((t) => ({
       ...t,
-      ledger:      '',
-      voucherType: t.debit != null ? 'Receipt' : 'Payment',
+      ledger: '',
+      // Auto-select: money received (bank Credit) → Receipt Voucher
+      //              money paid   (bank Debit)   → Payment Voucher
+      //              both non-null               → Contra (inter-account transfer)
+      voucherType: (t.debit != null && t.credit != null)
+        ? 'Contra'
+        : t.debit != null
+        ? 'Receipt Voucher'
+        : 'Payment Voucher',
       selected:    true,
     })),
   )
@@ -57,6 +57,17 @@ export function BankMappingForm({
   }
 
   const ledgerNames = ledgers.map((l) => l.name)
+
+  // Bank Ledger field: only show Bank Accounts / Cash-in-Hand group ledgers
+  const bankLedgerNames = (() => {
+    const filtered = ledgers
+      .filter((l) => {
+        const g = (l.group || '').toLowerCase()
+        return g.includes('bank account') || g.includes('cash-in-hand') || g.includes('cash in hand')
+      })
+      .map((l) => l.name)
+    return filtered.length > 0 ? filtered : ledgerNames
+  })()
 
   const handleSync = async () => {
     const selected = rows.filter((r) => r.selected && r.ledger.trim())
@@ -98,7 +109,7 @@ export function BankMappingForm({
               className="input-base text-sm w-64"
             />
             <datalist id="bank-ledger-list">
-              {ledgerNames.map((n) => <option key={n} value={n} />)}
+              {bankLedgerNames.map((n) => <option key={n} value={n} />)}
             </datalist>
           </div>
         </div>
@@ -169,7 +180,7 @@ export function BankMappingForm({
                     onChange={(e) => updateRow(row.id, { voucherType: e.target.value })}
                     className="input-base w-full text-xs py-1"
                   >
-                    {allVoucherTypes.map((v) => <option key={v} value={v}>{v}</option>)}
+                    {BANK_VOUCHER_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </td>
                 <td className="px-3 py-2 text-right text-teal-700 font-medium">
