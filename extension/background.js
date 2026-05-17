@@ -552,32 +552,50 @@ const GSTIN_STATE_MAP = {
   '97': 'Other Territory',   '99': 'Centre Jurisdiction',
 }
 
+function getFYStartYYYYMMDD() {
+  const now = new Date()
+  const year = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1
+  return `${year}0401`
+}
+
 function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tallyCompany }) {
   const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const parent = under || 'Sundry Creditors'
   const companyBlock = tallyCompany
     ? `\n        <STATICVARIABLES>\n          <SVCURRENTCOMPANY>${esc(tallyCompany)}</SVCURRENTCOMPANY>\n        </STATICVARIABLES>`
     : ''
-  const date = getTodayYYYYMMDD()
+  const today  = getTodayYYYYMMDD()
+  const fyStart = getFYStartYYYYMMDD()
 
-  // Derive state from GSTIN code if user didn't provide one
   const resolvedState = state?.trim() || (gstin ? (GSTIN_STATE_MAP[gstin.slice(0, 2)] || '') : '')
 
-  // LEDGSTREGDETAILS.LIST — structure matches actual TallyPrime XML export
+  // ADDRESS.LIST — split on newline for multi-line addresses
+  const addressLines = address?.trim() ? address.trim().split('\n').filter(Boolean) : []
+  const addressListBlock = addressLines.length > 0
+    ? `\n       <ADDRESS.LIST TYPE="String">\n${addressLines.map(l => `        <ADDRESS>${esc(l)}</ADDRESS>`).join('\n')}\n       </ADDRESS.LIST>` : ''
+
   const gstBlock = gstin ? `
-            <LEDGSTREGDETAILS.LIST>
-              <APPLICABLEFROM>${date}</APPLICABLEFROM>
-              <GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>
-              <TRANSPORTERID/>${pan ? `
-              <ITPAN>${esc(pan)}</ITPAN>` : ''}
-              <STATE>${esc(resolvedState)}</STATE>
-              <PLACEOFSUPPLY>${esc(resolvedState)}</PLACEOFSUPPLY>
-              <GSTIN>${esc(gstin)}</GSTIN>
-              <ISOTHTERRITORYASSESSEE/>
-              <CONSIDERPURCHASEFOREXPORT/>
-              <ISTRANSPORTER/>
-              <ISCOMMONPARTY/>
-            </LEDGSTREGDETAILS.LIST>` : ''
+      <LEDGSTREGDETAILS.LIST>
+       <APPLICABLEFROM>${fyStart}</APPLICABLEFROM>
+       <GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>${pan ? `
+       <ITPAN>${esc(pan)}</ITPAN>` : ''}
+       <STATE>${esc(resolvedState)}</STATE>
+       <PLACEOFSUPPLY>${esc(resolvedState)}</PLACEOFSUPPLY>
+       <GSTIN>${esc(gstin)}</GSTIN>
+       <ISOTHTERRITORYASSESSEE>No</ISOTHTERRITORYASSESSEE>
+       <CONSIDERPURCHASEFOREXPORT>No</CONSIDERPURCHASEFOREXPORT>
+       <ISTRANSPORTER>No</ISTRANSPORTER>
+       <ISCOMMONPARTY>No</ISCOMMONPARTY>
+      </LEDGSTREGDETAILS.LIST>` : ''
+
+  const mailingBlock = `
+      <LEDMAILINGDETAILS.LIST>${addressListBlock}
+       <APPLICABLEFROM>${fyStart}</APPLICABLEFROM>
+       <MAILINGNAME>${esc(name)}</MAILINGNAME>${pincode ? `
+       <PINCODE>${esc(pincode)}</PINCODE>` : ''}
+       <STATE>${esc(resolvedState)}</STATE>
+       <COUNTRY>India</COUNTRY>
+      </LEDMAILINGDETAILS.LIST>`
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <ENVELOPE>
@@ -591,25 +609,39 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tall
       </REQUESTDESC>
       <REQUESTDATA>
         <TALLYMESSAGE xmlns:UDF="TallyUDF">
-          <LEDGER NAME="${esc(name)}" RESERVEDNAME="" ACTION="Create">
-            <COUNTRYNAME>India</COUNTRYNAME>
+          <LEDGER NAME="${esc(name)}" RESERVEDNAME="" Action="Create">
+            <STARTINGFROM>${fyStart}</STARTINGFROM>
+            <CREATEDDATE>${today}</CREATEDDATE>
+            <CURRENCYNAME>₹</CURRENCYNAME>
+            <PRIORSTATENAME>${esc(resolvedState)}</PRIORSTATENAME>
             <GSTREGISTRATIONTYPE>${gstin ? 'Regular' : ''}</GSTREGISTRATIONTYPE>
-            <NAME>${esc(name)}</NAME>
+            <VATDEALERTYPE>Regular</VATDEALERTYPE>
             <PARENT>${esc(parent)}</PARENT>
-            <MAILINGNAME>${esc(name)}</MAILINGNAME>${address ? `
-            <LEDGERADDRESS>${esc(address)}</LEDGERADDRESS>` : ''}${pincode ? `
-            <PINCODE>${esc(pincode)}</PINCODE>` : ''}${gstin ? `
+            <TAXCLASSIFICATIONNAME>&#4; Not Applicable</TAXCLASSIFICATIONNAME>
+            <TAXTYPE>Others</TAXTYPE>
+            <COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>
+            <GSTTYPE>&#4; Not Applicable</GSTTYPE>
+            <APPROPRIATEFOR>&#4; Not Applicable</APPROPRIATEFOR>${gstin ? `
             <PARTYGSTIN>${esc(gstin)}</PARTYGSTIN>` : ''}
+            <GSTTYPEOFSUPPLY>Goods</GSTTYPEOFSUPPLY>
+            <GSTNATUREOFSUPPLY>&#4; Not Applicable</GSTNATUREOFSUPPLY>
+            <OLDLEDSTATENAME>${esc(resolvedState)}</OLDLEDSTATENAME>
+            <SERVICECATEGORY>&#4; Not Applicable</SERVICECATEGORY>
+            <EXCISELEDGERCLASSIFICATION>&#4; Not Applicable</EXCISELEDGERCLASSIFICATION>
+            <EXCISEDUTYTYPE>&#4; Not Applicable</EXCISEDUTYTYPE>
+            <EXCISENATUREOFPURCHASE>&#4; Not Applicable</EXCISENATUREOFPURCHASE>
+            <LEDGERFBTCATEGORY>&#4; Not Applicable</LEDGERFBTCATEGORY>
+            <OLDCOUNTRYNAME>India</OLDCOUNTRYNAME>
             <ISBILLWISEON>Yes</ISBILLWISEON>
-            <MAINTAINBILLBYBILL>Yes</MAINTAINBILLBYBILL>
-            <OPENINGBALANCE>0.00</OPENINGBALANCE>
-            <CREDITLIMIT/>
+            <ISCOSTCENTRESON>No</ISCOSTCENTRESON>
+            <ISINTERESTON>No</ISINTERESTON>
+            <ALLOWINMOBILE>No</ALLOWINMOBILE>
             <LANGUAGENAME.LIST>
               <NAME.LIST TYPE="String">
                 <NAME>${esc(name)}</NAME>
               </NAME.LIST>
               <LANGUAGEID> 1033</LANGUAGEID>
-            </LANGUAGENAME.LIST>${gstBlock}
+            </LANGUAGENAME.LIST>${gstBlock}${mailingBlock}
           </LEDGER>
         </TALLYMESSAGE>
       </REQUESTDATA>
