@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-import { FileText, Settings } from 'lucide-react'
+import { FileText, Settings, Landmark } from 'lucide-react'
 import { AppLayout, ProtectedRoute } from '@/components/shared'
 import type { NavItem } from '@/components/shared/AppLayout'
 import { useAuthStore } from '@/store/authStore'
@@ -9,6 +9,7 @@ import { useCompanyStore } from '@/store/companyStore'
 
 const NAV: NavItem[] = [
   { label: 'My Bills',  path: '/company',          icon: FileText  },
+  { label: 'My Bank',   path: '/company/bank',      icon: Landmark  },
   { label: 'Settings',  path: '/company/settings',  icon: Settings  },
 ]
 

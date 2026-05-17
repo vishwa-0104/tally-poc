@@ -118,6 +118,26 @@ export async function createTallyLedger(payload: CreateLedgerPayload, tallyUrl: 
   return result
 }
 
+export interface BankSyncRow {
+  date: string
+  description: string
+  ledger: string
+  voucherType: string
+  amount: number
+  isPayment: boolean
+}
+
+export async function syncBankToTally(
+  rows: BankSyncRow[],
+  bankLedger: string,
+  tallyUrl: string,
+  tallyCompany?: string,
+): Promise<TallySyncResult> {
+  const result = await sendToExtension<TallySyncResult>('SYNC_BANK_TO_TALLY', { rows, bankLedger, tallyUrl, tallyCompany })
+  console.log('[SyncBank] Tally response:', result)
+  return result
+}
+
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
   console.group('[Sync] Tally XML Payload')
   console.log('URL:', tallyUrl)

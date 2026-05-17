@@ -181,6 +181,29 @@ export interface StockItemAlias {
   tallyStockItemName: string // Tally stock item name
 }
 
+// ── Bank ──────────────────────────────────────────────────
+
+export interface BankTransaction {
+  id: string
+  date: string
+  description: string
+  /** Bank statement CREDIT column — money received into account */
+  debit: number | null
+  /** Bank statement DEBIT column — money paid out of account */
+  credit: number | null
+  balance?: number | null
+  /** Counterpart ledger in Tally (expense/income/party) */
+  ledger: string
+  voucherType: string
+  selected: boolean
+}
+
+export interface ParsedBankStatement {
+  bankName: string
+  accountNumber?: string
+  transactions: Array<Omit<BankTransaction, 'ledger' | 'voucherType' | 'selected'>>
+}
+
 // ── Leads ─────────────────────────────────────────────────
 export type LeadStatus = 'new_lead' | 'onboarded' | 'not_onboarded' | 'rejected'
 

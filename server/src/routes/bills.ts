@@ -337,6 +337,123 @@ billsRouter.post('/bills/parse', async (req, res) => {
   }
 })
 
+// POST /api/bank/parse — parse bank statement image/PDF via AI
+billsRouter.post('/bank/parse', async (req, res) => {
+  const { base64, mediaType } = req.body as { base64: string; mediaType: string }
+
+  const geminiKey    = process.env.GEMINI_API_KEY
+  const anthropicKey = process.env.ANTHROPIC_API_KEY
+  const useGemini    = !!geminiKey
+
+  if (!geminiKey && !anthropicKey) {
+    res.json(MOCK_BANK_STATEMENT())
+    return
+  }
+
+  const model   = useGemini ? 'gemini-flash-latest' : 'claude-haiku-4-5-20251001'
+  const apiKey  = useGemini ? geminiKey! : anthropicKey!
+  const prompt  = useGemini ? BANK_PARSE_PROMPT_GEMINI : BANK_PARSE_PROMPT_ANTHROPIC
+
+  let text: string
+  if (useGemini) {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: prompt }] },
+          contents: [{ role: 'user', parts: [{ inline_data: { mime_type: mediaType, data: base64 } }] }],
+          generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json' },
+        }),
+      },
+    )
+    if (!r.ok) { res.status(r.status).json({ error: 'Gemini API error' }); return }
+    const d = await r.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> }
+    text = d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  } else {
+    const contentBlock = mediaType === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
+      : { type: 'image',    source: { type: 'base64', media_type: mediaType,          data: base64 } }
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model, max_tokens: 4096, system: prompt, messages: [{ role: 'user', content: [contentBlock] }] }),
+    })
+    if (!r.ok) { res.status(r.status).json({ error: 'Anthropic API error' }); return }
+    const d = await r.json() as { content: Array<{ type: string; text: string }> }
+    text = d.content.find((b) => b.type === 'text')?.text ?? ''
+  }
+
+  try {
+    let parsed: Record<string, unknown>
+    try { parsed = JSON.parse(text.trim()) }
+    catch {
+      const fenced = text.match(/```json\s*([\s\S]*?)```/)
+      const jsonStr = fenced ? fenced[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
+      parsed = JSON.parse(jsonStr)
+    }
+    res.json(parsed)
+  } catch {
+    res.status(500).json({ error: 'Failed to parse AI response', raw: text })
+  }
+})
+
+const BANK_PARSE_PROMPT_GEMINI = `Extract all transactions from this bank statement and return ONLY a raw JSON object — no markdown, no code fences.
+
+Field conventions:
+- "debit": amount from the bank statement's CREDIT column (money received / deposited into account). null if not a deposit.
+- "credit": amount from the bank statement's DEBIT column (money withdrawn / paid from account). null if not a withdrawal.
+
+Return this exact JSON structure:
+{
+  "bankName": string,
+  "accountNumber": string | null,
+  "transactions": [
+    {
+      "date": "YYYY-MM-DD",
+      "description": string,
+      "debit": number | null,
+      "credit": number | null,
+      "balance": number | null
+    }
+  ]
+}
+
+Rules:
+- Dates must be in YYYY-MM-DD format.
+- Numbers must not include commas (e.g., 1450.50 not 1,450.50).
+- Preserve original transaction descriptions exactly as shown in the statement.
+- Skip header/footer rows that are not actual transactions.`
+
+const BANK_PARSE_PROMPT_ANTHROPIC = `Extract all transactions from this bank statement and return a single JSON object wrapped in \`\`\`json ... \`\`\`.
+
+Field conventions:
+- "debit": amount from the bank statement's CREDIT column (money received / deposited into account). null if not a deposit.
+- "credit": amount from the bank statement's DEBIT column (money withdrawn / paid from account). null if not a withdrawal.
+
+\`\`\`json
+{
+  "bankName": string,
+  "accountNumber": string | null,
+  "transactions": [{ "date": "YYYY-MM-DD", "description": string, "debit": number | null, "credit": number | null, "balance": number | null }]
+}
+\`\`\`
+
+Rules: Dates in YYYY-MM-DD. Numbers without commas. Preserve descriptions exactly. Skip header/footer rows.`
+
+function MOCK_BANK_STATEMENT() {
+  return {
+    bankName: 'State Bank of India',
+    accountNumber: '1234567890',
+    transactions: [
+      { id: 'mock_1', date: new Date().toISOString().split('T')[0], description: 'NEFT - SUPPLIER PAYMENT', debit: null, credit: 50000, balance: 150000 },
+      { id: 'mock_2', date: new Date().toISOString().split('T')[0], description: 'CASH DEPOSIT', debit: 25000, credit: null, balance: 175000 },
+      { id: 'mock_3', date: new Date().toISOString().split('T')[0], description: 'CHEQUE CLEARING 001234', debit: null, credit: 15000, balance: 160000 },
+    ],
+  }
+}
+
 // Lowercase status to match frontend enum
 function normalizeBill(bill: Record<string, unknown> & { status: string; lineItems?: unknown[] }) {
   return { ...bill, status: bill.status.toLowerCase() }

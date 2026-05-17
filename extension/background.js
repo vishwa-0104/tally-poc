@@ -83,6 +83,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
       return true
 
+    case 'SYNC_BANK_TO_TALLY':
+      handleSyncBankToTally(payload.rows, payload.bankLedger, payload.tallyUrl, payload.tallyCompany)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -531,6 +537,69 @@ async function handleCreateLedger(payload, tallyUrl) {
   console.log('[CreateLedger] Full XML:\n', xml)
   const responseText = await postToTally(xml, tallyUrl)
   console.log('[CreateLedger] Tally raw response:', responseText.slice(0, 3000))
+  return parseSyncResponse(responseText)
+}
+
+// ── Sync bank transactions to Tally ─────────────────────────────────────────
+
+async function handleSyncBankToTally(rows, bankLedger, tallyUrl, tallyCompany) {
+  const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const companyLine = tallyCompany ? `\n          <SVCURRENTCOMPANY>${esc(tallyCompany)}</SVCURRENTCOMPANY>` : ''
+
+  const tallymessages = rows.map((row) => {
+    const date = (row.date || '').replace(/-/g, '')
+    const vchType = row.voucherType || (row.isPayment ? 'Payment' : 'Receipt')
+    const amt = Math.abs(row.amount)
+
+    // Payment (money out): Bank Cr, Party Dr
+    // Receipt (money in):  Bank Dr, Party Cr
+    const bankPositive = row.isPayment ? 'No'  : 'Yes'
+    const bankAmt      = row.isPayment ? amt   : -amt
+    const partyPositive = row.isPayment ? 'Yes' : 'No'
+    const partyAmt      = row.isPayment ? -amt  : amt
+
+    return `        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="${esc(vchType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
+            <DATE>${date}</DATE>
+            <NARRATION>${esc(row.description)}</NARRATION>
+            <VOUCHERTYPENAME>${esc(vchType)}</VOUCHERTYPENAME>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(bankLedger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>${bankPositive}</ISDEEMEDPOSITIVE>
+              <AMOUNT>${bankAmt}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${esc(row.ledger)}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>${partyPositive}</ISDEEMEDPOSITIVE>
+              <AMOUNT>${partyAmt}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+          </VOUCHER>
+        </TALLYMESSAGE>`
+  }).join('\n')
+
+  const xml = `<?xml version="1.0" encoding="utf-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+        <STATICVARIABLES>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyLine}
+        </STATICVARIABLES>
+      </REQUESTDESC>
+      <REQUESTDATA>
+${tallymessages}
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`
+
+  console.log('[SyncBank] Posting XML to Tally, rows:', rows.length)
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log('[SyncBank] Tally response:', responseText.slice(0, 2000))
   return parseSyncResponse(responseText)
 }
 
