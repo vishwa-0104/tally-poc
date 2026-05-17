@@ -27,15 +27,16 @@ export function CreateLedgerModal({
 }: CreateLedgerModalProps) {
   const { getLedgers, saveLedgersToDb } = useCompanyStore()
 
-  const [name, setName]       = useState(vendorName)
-  const [under, setUnder]     = useState('Sundry Creditors')
-  const [gstin, setGstin]     = useState(vendorGstin)
-  const [pan, setPan]         = useState('')
-  const [address, setAddress] = useState('')
-  const [state, setState]     = useState('')
-  const [pincode, setPincode] = useState('')
-  const [saving, setSaving]   = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+  const [name, setName]                         = useState(vendorName)
+  const [under, setUnder]                       = useState('Sundry Creditors')
+  const [gstin, setGstin]                       = useState(vendorGstin)
+  const [gstRegistrationType, setGstRegType]    = useState(vendorGstin ? 'Regular' : 'Unregistered/Consumer')
+  const [pan, setPan]                           = useState('')
+  const [address, setAddress]                   = useState('')
+  const [state, setState]                       = useState('')
+  const [pincode, setPincode]                   = useState('')
+  const [saving, setSaving]                     = useState(false)
+  const [error, setError]                       = useState<string | null>(null)
 
   if (!open) return null
 
@@ -48,13 +49,14 @@ export function CreateLedgerModal({
     try {
       const result = await createTallyLedger(
         {
-          name:        trimmed,
-          under:       under.trim() || 'Sundry Creditors',
-          gstin:       gstin.trim() || undefined,
-          pan:         pan.trim() || undefined,
-          address:     address.trim() || undefined,
-          state:       state.trim() || undefined,
-          pincode:     pincode.trim() || undefined,
+          name:                trimmed,
+          under:               under.trim() || 'Sundry Creditors',
+          gstin:               gstin.trim() || undefined,
+          gstRegistrationType: gstRegistrationType,
+          pan:                 pan.trim() || undefined,
+          address:             address.trim() || undefined,
+          state:               state.trim() || undefined,
+          pincode:             pincode.trim() || undefined,
           tallyCompany,
         },
         tallyUrl,
@@ -112,6 +114,18 @@ export function CreateLedgerModal({
           <div className="pt-1 border-t border-gray-100">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Tax Registration</p>
             <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">GST Registration Type</label>
+                <select
+                  value={gstRegistrationType}
+                  onChange={(e) => setGstRegType(e.target.value)}
+                  className="input-base w-full"
+                >
+                  <option value="Regular">Regular</option>
+                  <option value="Unregistered/Consumer">Unregistered/Consumer</option>
+                  <option value="Composition">Composition</option>
+                </select>
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">GSTIN/UIN</label>
                 <input

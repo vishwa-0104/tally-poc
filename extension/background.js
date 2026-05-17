@@ -558,7 +558,7 @@ function getFYStartYYYYMMDD() {
   return `${year}0401`
 }
 
-function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tallyCompany }) {
+function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, gstRegistrationType, tallyCompany }) {
   const esc = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const parent = under || 'Sundry Creditors'
   const companyBlock = tallyCompany
@@ -574,10 +574,12 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tall
   const addressListBlock = addressLines.length > 0
     ? `\n       <ADDRESS.LIST TYPE="String">\n${addressLines.map(l => `        <ADDRESS>${esc(l)}</ADDRESS>`).join('\n')}\n       </ADDRESS.LIST>` : ''
 
+  const regType = gstRegistrationType || (gstin ? 'Regular' : 'Unregistered/Consumer')
+
   const gstBlock = gstin ? `
       <LEDGSTREGDETAILS.LIST>
        <APPLICABLEFROM>${fyStart}</APPLICABLEFROM>
-       <GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>${pan ? `
+       <GSTREGISTRATIONTYPE>${esc(regType)}</GSTREGISTRATIONTYPE>${pan ? `
        <INCOMETAXNUMBER>${esc(pan)}</INCOMETAXNUMBER>` : ''}
        <STATE>${esc(resolvedState)}</STATE>
        <PLACEOFSUPPLY>${esc(resolvedState)}</PLACEOFSUPPLY>
@@ -614,7 +616,7 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tall
             <CREATEDDATE>${today}</CREATEDDATE>
             
             <PRIORSTATENAME>${esc(resolvedState)}</PRIORSTATENAME>
-            <GSTREGISTRATIONTYPE>${gstin ? 'Regular' : ''}</GSTREGISTRATIONTYPE>
+            <GSTREGISTRATIONTYPE>${esc(regType)}</GSTREGISTRATIONTYPE>
             <VATDEALERTYPE>Regular</VATDEALERTYPE>
             <PARENT>${esc(parent)}</PARENT>
             <TAXTYPE>Others</TAXTYPE>

@@ -108,6 +108,7 @@ export interface CreateLedgerPayload {
   state?: string
   pincode?: string
   under?: string
+  gstRegistrationType?: string
   tallyCompany?: string
 }
 
