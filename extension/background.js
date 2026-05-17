@@ -578,7 +578,7 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tall
       <LEDGSTREGDETAILS.LIST>
        <APPLICABLEFROM>${fyStart}</APPLICABLEFROM>
        <GSTREGISTRATIONTYPE>Regular</GSTREGISTRATIONTYPE>${pan ? `
-       <ITPAN>${esc(pan)}</ITPAN>` : ''}
+       <INCOMETAXNUMBER>${esc(pan)}</INCOMETAXNUMBER>` : ''}
        <STATE>${esc(resolvedState)}</STATE>
        <PLACEOFSUPPLY>${esc(resolvedState)}</PLACEOFSUPPLY>
        <GSTIN>${esc(gstin)}</GSTIN>
@@ -617,20 +617,11 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tall
             <GSTREGISTRATIONTYPE>${gstin ? 'Regular' : ''}</GSTREGISTRATIONTYPE>
             <VATDEALERTYPE>Regular</VATDEALERTYPE>
             <PARENT>${esc(parent)}</PARENT>
-            <TAXCLASSIFICATIONNAME>&#4; Not Applicable</TAXCLASSIFICATIONNAME>
             <TAXTYPE>Others</TAXTYPE>
-            <COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>
-            <GSTTYPE>&#4; Not Applicable</GSTTYPE>
-            <APPROPRIATEFOR>&#4; Not Applicable</APPROPRIATEFOR>${gstin ? `
+            <COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>${gstin ? `
             <PARTYGSTIN>${esc(gstin)}</PARTYGSTIN>` : ''}
             <GSTTYPEOFSUPPLY>Goods</GSTTYPEOFSUPPLY>
-            <GSTNATUREOFSUPPLY>&#4; Not Applicable</GSTNATUREOFSUPPLY>
             <OLDLEDSTATENAME>${esc(resolvedState)}</OLDLEDSTATENAME>
-            <SERVICECATEGORY>&#4; Not Applicable</SERVICECATEGORY>
-            <EXCISELEDGERCLASSIFICATION>&#4; Not Applicable</EXCISELEDGERCLASSIFICATION>
-            <EXCISEDUTYTYPE>&#4; Not Applicable</EXCISEDUTYTYPE>
-            <EXCISENATUREOFPURCHASE>&#4; Not Applicable</EXCISENATUREOFPURCHASE>
-            <LEDGERFBTCATEGORY>&#4; Not Applicable</LEDGERFBTCATEGORY>
             <OLDCOUNTRYNAME>India</OLDCOUNTRYNAME>
             <ISBILLWISEON>Yes</ISBILLWISEON>
             <ISCOSTCENTRESON>No</ISCOSTCENTRESON>
