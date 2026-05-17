@@ -575,20 +575,24 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, gstR
     ? `\n       <ADDRESS.LIST TYPE="String">\n${addressLines.map(l => `        <ADDRESS>${esc(l)}</ADDRESS>`).join('\n')}\n       </ADDRESS.LIST>` : ''
 
   const regType = gstRegistrationType || (gstin ? 'Regular' : 'Unregistered/Consumer')
+  // VATDEALERTYPE mirrors regType but uses Tally's internal label for Unregistered
+  const vatDealerType = regType === 'Unregistered/Consumer' ? 'Unregistered' : regType
 
-  const gstBlock = gstin ? `
+  // Always render LEDGSTREGDETAILS.LIST — needed for state/type even without GSTIN
+  // Include <GSTIN> only when a GSTIN is actually provided
+  const gstBlock = `
       <LEDGSTREGDETAILS.LIST>
        <APPLICABLEFROM>${fyStart}</APPLICABLEFROM>
        <GSTREGISTRATIONTYPE>${esc(regType)}</GSTREGISTRATIONTYPE>${pan ? `
        <INCOMETAXNUMBER>${esc(pan)}</INCOMETAXNUMBER>` : ''}
        <STATE>${esc(resolvedState)}</STATE>
-       <PLACEOFSUPPLY>${esc(resolvedState)}</PLACEOFSUPPLY>
-       <GSTIN>${esc(gstin)}</GSTIN>
+       <PLACEOFSUPPLY>${esc(resolvedState)}</PLACEOFSUPPLY>${gstin ? `
+       <GSTIN>${esc(gstin)}</GSTIN>` : ''}
        <ISOTHTERRITORYASSESSEE>No</ISOTHTERRITORYASSESSEE>
        <CONSIDERPURCHASEFOREXPORT>No</CONSIDERPURCHASEFOREXPORT>
        <ISTRANSPORTER>No</ISTRANSPORTER>
        <ISCOMMONPARTY>No</ISCOMMONPARTY>
-      </LEDGSTREGDETAILS.LIST>` : ''
+      </LEDGSTREGDETAILS.LIST>`
 
   const mailingBlock = `
       <LEDMAILINGDETAILS.LIST>${addressListBlock}
@@ -617,7 +621,7 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, gstR
             
             <PRIORSTATENAME>${esc(resolvedState)}</PRIORSTATENAME>
             <GSTREGISTRATIONTYPE>${esc(regType)}</GSTREGISTRATIONTYPE>
-            <VATDEALERTYPE>Regular</VATDEALERTYPE>
+            <VATDEALERTYPE>${esc(vatDealerType)}</VATDEALERTYPE>
             <PARENT>${esc(parent)}</PARENT>
             <TAXTYPE>Others</TAXTYPE>
             <COUNTRYOFRESIDENCE>India</COUNTRYOFRESIDENCE>${gstin ? `
