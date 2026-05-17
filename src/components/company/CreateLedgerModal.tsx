@@ -25,7 +25,7 @@ export function CreateLedgerModal({
   onSuccess,
   onClose,
 }: CreateLedgerModalProps) {
-  const { fetchLedgersFromDb } = useCompanyStore()
+  const { getLedgers, saveLedgersToDb } = useCompanyStore()
 
   const [name, setName]       = useState(vendorName)
   const [under, setUnder]     = useState('Sundry Creditors')
@@ -65,7 +65,9 @@ export function CreateLedgerModal({
         return
       }
 
-      fetchLedgersFromDb(companyId).catch(() => {})
+      const group = under.trim() || 'Sundry Creditors'
+      const updated = [...getLedgers(companyId), { name: trimmed, group, gstin: gstin.trim() || undefined }]
+      saveLedgersToDb(companyId, updated).catch(() => {})
       onSuccess(trimmed)
       onClose()
     } catch (err) {
