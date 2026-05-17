@@ -612,7 +612,7 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, tall
           <LEDGER NAME="${esc(name)}" RESERVEDNAME="" Action="Create">
             <STARTINGFROM>${fyStart}</STARTINGFROM>
             <CREATEDDATE>${today}</CREATEDDATE>
-            <CURRENCYNAME>₹</CURRENCYNAME>
+            
             <PRIORSTATENAME>${esc(resolvedState)}</PRIORSTATENAME>
             <GSTREGISTRATIONTYPE>${gstin ? 'Regular' : ''}</GSTREGISTRATIONTYPE>
             <VATDEALERTYPE>Regular</VATDEALERTYPE>
