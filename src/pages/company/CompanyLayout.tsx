@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { Outlet } from 'react-router-dom'
-import { FileText, Settings, Landmark } from 'lucide-react'
+import { FileText, Settings, Landmark, Scale } from 'lucide-react'
 import { AppLayout, ProtectedRoute } from '@/components/shared'
 import type { NavItem } from '@/components/shared/AppLayout'
 import { useAuthStore } from '@/store/authStore'
@@ -19,11 +19,17 @@ export default function CompanyLayout() {
     [company?.features],
   )
 
+  const hasBankReconcile = useMemo(
+    () => (company?.features ?? []).some((f) => f.feature === COMPANY_FEATURES.BANK_RECONCILE && f.enabled),
+    [company?.features],
+  )
+
   const nav = useMemo<NavItem[]>(() => [
     { label: 'My Bills', path: '/company',         icon: FileText },
-    ...(hasBankVoucher ? [{ label: 'My Bank', path: '/company/bank', icon: Landmark }] : []),
+    ...(hasBankVoucher   ? [{ label: 'My Bank',   path: '/company/bank',      icon: Landmark }] : []),
+    ...(hasBankReconcile ? [{ label: 'Reconcile', path: '/company/reconcile', icon: Scale    }] : []),
     { label: 'Settings', path: '/company/settings', icon: Settings },
-  ], [hasBankVoucher])
+  ], [hasBankVoucher, hasBankReconcile])
 
   useEffect(() => {
     if (activeCompanyId) {

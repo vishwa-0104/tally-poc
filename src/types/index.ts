@@ -81,6 +81,7 @@ export const COMPANY_FEATURES = {
   DEBIT_VOUCHER:   'debit_voucher',
   CREDIT_VOUCHER:  'credit_voucher',
   BANK_VOUCHER:    'bank_voucher',
+  BANK_RECONCILE:  'bank_reconcile',
 } as const
 
 export interface Company {

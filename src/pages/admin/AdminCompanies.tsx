@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Warehouse, Percent, Receipt, Landmark, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
+import { Plus, Warehouse, Percent, Receipt, Landmark, Scale, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
@@ -130,6 +130,17 @@ const FEATURE_CATALOGUE = [
     iconBg:      'bg-cyan-500/10',
     iconColor:   'text-cyan-400',
     dotOn:       'bg-cyan-400',
+  },
+  {
+    key:         COMPANY_FEATURES.BANK_RECONCILE,
+    label:       'Bank Reconciliation',
+    description: 'Enable the Reconcile page — compare two bank statements side-by-side and identify missing transactions.',
+    Icon:        Scale,
+    gradient:    'from-indigo-500/10 to-violet-500/10',
+    ring:        'ring-indigo-500/30',
+    iconBg:      'bg-indigo-500/10',
+    iconColor:   'text-indigo-400',
+    dotOn:       'bg-indigo-400',
   },
 ] as const
 
