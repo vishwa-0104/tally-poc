@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { Upload, Loader2, FileText } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +10,7 @@ import { useAuthStore, useCompanyStore } from '@/store'
 import { useBankStore } from '@/store/bankStore'
 import { api } from '@/lib/api'
 import type { ParsedBankStatement } from '@/types'
+import { COMPANY_FEATURES } from '@/types'
 
 // ── CSV parser ────────────────────────────────────────────────────────────────
 
@@ -102,16 +103,22 @@ function parseCsvBankStatement(text: string, fileName: string): ParsedBankStatem
 export default function BankStatement() {
   const navigate          = useNavigate()
   const { activeCompanyId } = useAuthStore()
-  const { getCompany }    = useCompanyStore()
+  const { getCompany, companiesLoaded } = useCompanyStore()
   const { addStatement, getStatements } = useBankStore()
+
+  const fileRef      = useRef<HTMLInputElement>(null)
+  const [parsing,  setParsing]  = useState(false)
+  const [parseFile, setParseFile] = useState<string>('')
 
   const company    = getCompany(activeCompanyId ?? '') ?? null
   const companyId  = activeCompanyId ?? ''
   const statements = getStatements(companyId)
 
-  const fileRef      = useRef<HTMLInputElement>(null)
-  const [parsing,  setParsing]  = useState(false)
-  const [parseFile, setParseFile] = useState<string>('')
+  const hasBankVoucher = (company?.features ?? []).some(
+    (f) => f.feature === COMPANY_FEATURES.BANK_VOUCHER && f.enabled,
+  )
+  if (!companiesLoaded) return null
+  if (!hasBankVoucher) return <Navigate to="/company" replace />
 
   const handleFileSelect = async (file: File) => {
     setParsing(true)
@@ -136,6 +143,7 @@ export default function BankStatement() {
         const { data } = await api.post<ParsedBankStatement>('/bank/parse', {
           base64,
           mediaType: file.type || 'application/pdf',
+          companyId,
         })
         if (!data.transactions?.length) {
           toast.error('No transactions found in the document.')

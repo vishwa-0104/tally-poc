@@ -339,23 +339,61 @@ billsRouter.post('/bills/parse', async (req, res) => {
 
 // POST /api/bank/parse — parse bank statement image/PDF via AI
 billsRouter.post('/bank/parse', async (req, res) => {
-  const { base64, mediaType } = req.body as { base64: string; mediaType: string }
+  const { base64, mediaType, companyId: bodyCompanyId } = req.body as {
+    base64: string; mediaType: string; companyId?: string
+  }
+
+  // Resolve companyId: trust body if provided, otherwise look up from the auth'd user's linked company
+  let companyId: string | null = bodyCompanyId || null
+  if (!companyId && req.auth.role !== 'ADMIN') {
+    const link = await prisma.userCompany.findFirst({
+      where:  { userId: req.auth.userId },
+      select: { companyId: true },
+    })
+    companyId = link?.companyId ?? null
+  }
 
   const geminiKey    = process.env.GEMINI_API_KEY
   const anthropicKey = process.env.ANTHROPIC_API_KEY
-  const useGemini    = !!geminiKey
 
   if (!geminiKey && !anthropicKey) {
     res.json(MOCK_BANK_STATEMENT())
     return
   }
 
-  const model   = useGemini ? 'gemini-flash-latest' : 'claude-haiku-4-5-20251001'
-  const apiKey  = useGemini ? geminiKey! : anthropicKey!
-  const prompt  = useGemini ? BANK_PARSE_PROMPT_GEMINI : BANK_PARSE_PROMPT_ANTHROPIC
+  // Respect the model/service configured per company in admin panel
+  let parseService = geminiKey ? 'gemini' : 'anthropic'
+  let model        = parseService === 'gemini' ? 'gemini-flash-latest' : 'claude-haiku-4-5-20251001'
+  if (companyId) {
+    const company = await prisma.company.findUnique({
+      where:  { id: companyId },
+      select: { parseService: true, parseModel: true },
+    })
+    if (company) {
+      parseService = company.parseService ?? parseService
+      const dbModel = company.parseModel ?? ''
+      if (parseService === 'gemini' && GEMINI_MODELS.includes(dbModel))            model = dbModel
+      else if (parseService === 'anthropic' && ANTHROPIC_MODELS.includes(dbModel)) model = dbModel
+      else model = parseService === 'anthropic' ? 'claude-haiku-4-5-20251001' : 'gemini-flash-latest'
+    }
+  }
+
+  const apiKey = parseService === 'anthropic' ? anthropicKey! : geminiKey!
+  const prompt = parseService === 'anthropic' ? BANK_PARSE_PROMPT_ANTHROPIC : BANK_PARSE_PROMPT_GEMINI
+
+  interface ParsedUsage {
+    input_tokens: number; output_tokens: number
+    cache_read_input_tokens?: number; cache_creation_input_tokens?: number
+  }
 
   let text: string
-  if (useGemini) {
+  let usage: ParsedUsage
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rawUsage: any = null
+
+  console.log(`[BankParse] companyId=${companyId ?? 'none'} model=${model} mediaType=${mediaType}`)
+
+  if (parseService === 'gemini') {
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
@@ -368,9 +406,24 @@ billsRouter.post('/bank/parse', async (req, res) => {
         }),
       },
     )
-    if (!r.ok) { res.status(r.status).json({ error: 'Gemini API error' }); return }
-    const d = await r.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> }
-    text = d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    if (!r.ok) {
+      if (companyId) prisma.parseUsageLog.create({
+        data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
+      }).catch((e) => console.error('[BankParse] usage log error:', e))
+      res.status(r.status).json({ error: 'Gemini API error' }); return
+    }
+    const d = await r.json() as {
+      candidates: Array<{ content: { parts: Array<{ text: string }> } }>
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }
+    }
+    const thinkingTokens = d.usageMetadata?.thoughtsTokenCount ?? 0
+    rawUsage = d.usageMetadata ?? null
+    text  = d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    usage = {
+      input_tokens:  d.usageMetadata?.promptTokenCount ?? 0,
+      output_tokens: (d.usageMetadata?.candidatesTokenCount ?? 0) + thinkingTokens,
+    }
+    console.log(`[BankParse] Gemini | input=${usage.input_tokens} output=${usage.output_tokens} thinking=${thinkingTokens}`)
   } else {
     const contentBlock = mediaType === 'application/pdf'
       ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
@@ -380,9 +433,20 @@ billsRouter.post('/bank/parse', async (req, res) => {
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model, max_tokens: 4096, system: prompt, messages: [{ role: 'user', content: [contentBlock] }] }),
     })
-    if (!r.ok) { res.status(r.status).json({ error: 'Anthropic API error' }); return }
-    const d = await r.json() as { content: Array<{ type: string; text: string }> }
-    text = d.content.find((b) => b.type === 'text')?.text ?? ''
+    if (!r.ok) {
+      if (companyId) prisma.parseUsageLog.create({
+        data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
+      }).catch((e) => console.error('[BankParse] usage log error:', e))
+      res.status(r.status).json({ error: 'Anthropic API error' }); return
+    }
+    const d = await r.json() as {
+      content: Array<{ type: string; text: string }>
+      usage: ParsedUsage
+    }
+    rawUsage = d.usage ?? null
+    text  = d.content.find((b) => b.type === 'text')?.text ?? ''
+    usage = d.usage ?? { input_tokens: 0, output_tokens: 0 }
+    console.log(`[BankParse] Anthropic | input=${usage.input_tokens} output=${usage.output_tokens} cacheRead=${usage.cache_read_input_tokens ?? 0}`)
   }
 
   try {
@@ -392,6 +456,23 @@ billsRouter.post('/bank/parse', async (req, res) => {
       const fenced = text.match(/```json\s*([\s\S]*?)```/)
       const jsonStr = fenced ? fenced[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
       parsed = JSON.parse(jsonStr)
+    }
+    if (companyId) {
+      await prisma.parseUsageLog.create({
+        data: {
+          companyId,
+          model,
+          inputTokens:  usage.input_tokens ?? 0,
+          outputTokens: usage.output_tokens ?? 0,
+          cacheRead:    usage.cache_read_input_tokens ?? 0,
+          cacheWrite:   usage.cache_creation_input_tokens ?? 0,
+          success:      true,
+          rawUsage,
+        },
+      })
+      console.log(`[BankParse] usage logged — companyId=${companyId} success=true`)
+    } else {
+      console.warn('[BankParse] no companyId — usage not logged')
     }
     res.json(parsed)
   } catch {

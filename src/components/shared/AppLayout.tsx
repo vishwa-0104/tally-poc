@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { LogOut, Menu, X, type LucideIcon } from 'lucide-react'
+import { LogOut, Menu, X, ChevronRight, ChevronLeft, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store'
 import invoiceSyncSvg from '../../assets/sync-invoice-logo-white.svg'
@@ -23,7 +23,8 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
   const navigate  = useNavigate()
   const location  = useLocation()
   const isAdmin   = role === 'admin'
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerOpen,  setDrawerOpen]  = useState(false)
+  const [collapsed,   setCollapsed]   = useState(true)
 
   const activeCompany = companies.find((c) => c.id === activeCompanyId)
 
@@ -35,29 +36,33 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
   const handleNavClick = () => setDrawerOpen(false)
 
   const sidebarBg   = isAdmin ? 'bg-gray-900' : 'bg-[#021A12]'
-  // const iconBg      = isAdmin ? 'bg-brand-500' : 'bg-teal-500'
-  // const pillBg      = isAdmin ? 'bg-blue-900/50 text-blue-300' : 'bg-teal-900/40 text-teal-300'
   const activeClass = isAdmin ? 'bg-brand-500 text-white' : 'bg-teal-600 text-white'
   const avatarBg    = isAdmin ? 'bg-brand-500' : 'bg-teal-600'
 
-  const sidebarContent = (
+  const sidebarContent = (collapsed: boolean) => (
     <>
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-2 mb-2">
-        <div className={cn('w-32 h-8 rounded-lg flex items-center justify-center flex-shrink-0')}>
-           <img className='w-2xl h-4.5 stroke-white fill-none stroke-2' src={invoiceSyncSvg} alt="InvoiceSync" />
-          {/* <svg className="w-4 h-4 stroke-white fill-none stroke-2" viewBox="0 0 24 24">
-            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg> */}
-        </div>
-        {/* Label — hidden on tablet icon-rail, shown otherwise */}
-        {/* <span className="text-sm font-bold text-white md:hidden lg:block">Tally Sync</span> */}
+      {/* Logo + toggle */}
+      <div className={cn('flex items-center mb-4', collapsed ? 'justify-center px-1' : 'justify-between px-1')}>
+        {!collapsed && (
+          <div className="flex items-center justify-center flex-shrink-0 w-28 h-8">
+            <img className="w-full h-4.5 object-contain" src={invoiceSyncSvg} alt="InvoiceSync" />
+          </div>
+        )}
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+        >
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
       </div>
 
       {/* Role pill */}
-      <span className={cn('mx-2 mb-5 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase w-fit md:hidden lg:block')}>
-        {isAdmin ? 'Admin' : ''}
-      </span>
+      {!collapsed && isAdmin && (
+        <span className="mx-2 mb-4 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase w-fit text-gray-400">
+          Admin
+        </span>
+      )}
 
       {/* Nav items */}
       <div className="flex-1 space-y-0.5 overflow-y-auto">
@@ -70,56 +75,67 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
               onClick={handleNavClick}
               title={item.label}
               className={cn(
-                'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all',
-                'md:justify-center md:px-2 lg:justify-start lg:px-2.5',
+                'flex items-center gap-2.5 py-2 rounded-lg text-xs font-medium transition-all',
+                collapsed ? 'justify-center px-2' : 'justify-start px-2.5',
                 active ? activeClass : 'text-gray-400 hover:text-white hover:bg-white/8',
               )}
               aria-current={active ? 'page' : undefined}
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
-              <span className="md:hidden lg:block">{item.label}</span>
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           )
         })}
       </div>
 
-      {/* Company switcher — shown for company role */}
+      {/* Company switcher */}
       {companies.length > 0 && (
         <div className="mb-3 px-1">
-          <select
-            value={activeCompanyId ?? ''}
-            onChange={(e) => switchCompany(e.target.value)}
-            className="w-full text-xs bg-white/10 text-white rounded-lg px-2 py-1.5 border border-white/20 focus:outline-none cursor-pointer md:hidden lg:block"
-          >
-            {companies.map((c) => (
-              <option key={c.id} value={c.id} className="text-gray-900">{c.name}</option>
-            ))}
-          </select>
-          {/* Icon rail (tablet md): 2-letter abbreviation */}
-          <div className="hidden md:flex lg:hidden justify-center text-[10px] font-bold text-teal-300 py-1" title={activeCompany?.name}>
-            {activeCompany?.name?.slice(0, 2).toUpperCase()}
-          </div>
+          {!collapsed ? (
+            <select
+              value={activeCompanyId ?? ''}
+              onChange={(e) => switchCompany(e.target.value)}
+              className="w-full text-xs bg-white/10 text-white rounded-lg px-2 py-1.5 border border-white/20 focus:outline-none cursor-pointer"
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id} className="text-gray-900">{c.name}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="flex justify-center text-[10px] font-bold text-teal-300 py-1" title={activeCompany?.name}>
+              {activeCompany?.name?.slice(0, 2).toUpperCase()}
+            </div>
+          )}
         </div>
       )}
 
       {/* User tile */}
       <div className="mt-auto">
-        <div className={cn('flex items-center gap-2.5 p-2.5 rounded-lg md:justify-center lg:justify-start', isAdmin ? 'bg-white/6' : 'bg-teal-900/20')}>
+        <div className={cn(
+          'flex items-center gap-2.5 p-2.5 rounded-lg',
+          collapsed ? 'justify-center' : 'justify-start',
+          isAdmin ? 'bg-white/6' : 'bg-teal-900/20',
+        )}>
           <div className={cn('w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0', avatarBg)}>
             {user?.avatar}
           </div>
-          <div className="min-w-0 md:hidden lg:block">
-            <p className="text-xs font-semibold text-white truncate">{user?.name}</p>
-            <p className="text-[10px] text-gray-500 truncate">{user?.email}</p>
-          </div>
+          {!collapsed && (
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-white truncate">{user?.name}</p>
+              <p className="text-[10px] text-gray-500 truncate">{user?.email}</p>
+            </div>
+          )}
         </div>
         <button
           onClick={handleLogout}
           title="Sign out"
-          className="flex items-center gap-2.5 px-2.5 py-2 mt-1 w-full rounded-lg text-xs font-medium text-gray-500 hover:text-white hover:bg-white/8 transition-all md:justify-center md:px-2 lg:justify-start lg:px-2.5"
+          className={cn(
+            'flex items-center gap-2.5 py-2 mt-1 w-full rounded-lg text-xs font-medium text-gray-500 hover:text-white hover:bg-white/8 transition-all',
+            collapsed ? 'justify-center px-2' : 'justify-start px-2.5',
+          )}
         >
           <LogOut className="w-4 h-4" />
-          <span className="md:hidden lg:block text-teal-400">Sign out</span>
+          {!collapsed && <span className="text-teal-400">Sign out</span>}
         </button>
       </div>
     </>
@@ -128,16 +144,16 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
   return (
     <div className="flex h-screen overflow-hidden">
 
-      {/* ── Desktop / Tablet sidebar (hidden on mobile) ── */}
+      {/* ── Desktop sidebar (hidden on mobile) ── */}
       <nav
         className={cn(
-          'hidden md:flex flex-shrink-0 flex-col py-5 px-3.5 h-full overflow-hidden',
-          'md:w-14 lg:w-60',           // icon-rail on tablet, full on desktop
+          'hidden md:flex flex-shrink-0 flex-col py-5 px-2 h-full overflow-hidden transition-all duration-200',
+          collapsed ? 'w-14' : 'w-56',
           sidebarBg,
         )}
         aria-label="Main navigation"
       >
-        {sidebarContent}
+        {sidebarContent(collapsed)}
       </nav>
 
       {/* ── Mobile drawer backdrop ── */}
@@ -158,7 +174,6 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
         )}
         aria-label="Main navigation"
       >
-        {/* Close button inside drawer */}
         <button
           onClick={() => setDrawerOpen(false)}
           className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
@@ -166,7 +181,7 @@ export function AppLayout({ navItems, children, role }: AppLayoutProps) {
         >
           <X className="w-5 h-5" />
         </button>
-        {sidebarContent}
+        {sidebarContent(false)}
       </nav>
 
       {/* ── Main content ── */}

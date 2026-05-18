@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 interface CompanyStore {
   companies: Company[]
   loading: boolean
+  companiesLoaded: boolean
   ledgers: Record<string, TallyLedger[]>
   stockItems: Record<string, TallyStockItem[]>
   stockGroups: Record<string, TallyStockGroup[]>
@@ -57,6 +58,7 @@ interface CompanyStore {
 export const useCompanyStore = create<CompanyStore>((set, get) => ({
   companies: [],
   loading: false,
+  companiesLoaded: false,
   ledgers: {},
   stockItems: {},
   stockGroups: {},
@@ -69,7 +71,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
     set({ loading: true })
     try {
       const { data } = await api.get<Company[]>('/companies')
-      set({ companies: data })
+      set({ companies: data, companiesLoaded: true })
     } finally {
       set({ loading: false })
     }

@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Zap, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn, formatCurrency } from '@/lib/utils'
+import { makeFingerprint } from '@/store/bankStore'
 import type { BankTransaction, ParsedBankStatement, TallyLedger } from '@/types'
 import type { BankSyncRow } from '@/services/tallyService'
 
 const PAGE_SIZE = 15
 
-const BANK_VOUCHER_TYPES = ['Contra', 'Payment Voucher', 'Receipt Voucher'] as const
+const BANK_VOUCHER_TYPES = ['Contra', 'Payment', 'Receipt'] as const
 
 interface BankMappingFormProps {
   statement: ParsedBankStatement
@@ -16,6 +17,7 @@ interface BankMappingFormProps {
   ledgers: TallyLedger[]
   onSync: (rows: BankSyncRow[], bankLedger: string) => Promise<void>
   syncing: boolean
+  fingerprintSet: Set<string>
 }
 
 export function BankMappingForm({
@@ -25,21 +27,25 @@ export function BankMappingForm({
   ledgers,
   onSync,
   syncing,
+  fingerprintSet,
 }: BankMappingFormProps) {
   const [rows, setRows] = useState<BankTransaction[]>(() =>
-    statement.transactions.map((t) => ({
-      ...t,
-      ledger: '',
-      // Auto-select: money received (bank Credit) → Receipt Voucher
-      //              money paid   (bank Debit)   → Payment Voucher
-      //              both non-null               → Contra (inter-account transfer)
-      voucherType: (t.debit != null && t.credit != null)
-        ? 'Contra'
-        : t.debit != null
-        ? 'Receipt Voucher'
-        : 'Payment Voucher',
-      selected:    true,
-    })),
+    statement.transactions.map((t) => {
+      const alreadySynced = t.synced === true || fingerprintSet.has(
+        makeFingerprint(statement.bankName, t.date, Math.abs(t.debit ?? t.credit ?? 0), t.description),
+      )
+      return {
+        ...t,
+        ledger: '',
+        voucherType: (t.debit != null && t.credit != null)
+          ? 'Contra'
+          : t.debit != null
+          ? 'Receipt'
+          : 'Payment',
+        synced:   alreadySynced,
+        selected: !alreadySynced,
+      }
+    }),
   )
   const [page, setPage] = useState(1)
 
@@ -116,11 +122,21 @@ export function BankMappingForm({
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto">
-        <table className="w-full text-xs border-collapse">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2">
+        <table className="w-full text-xs border-collapse table-fixed">
+          <colgroup>
+            <col className="w-[3%]" />
+            <col className="w-[8%]" />
+            <col className="w-20" />
+            <col className="w-20" />
+            <col className="w-12" />
+            <col className="w-[9%]" />
+            <col className="w-[9%]" />
+            <col className="w-[9%]" />
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-3 py-2.5 text-left w-8">
+              <th className="px-3 py-2.5 text-left">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -130,11 +146,11 @@ export function BankMappingForm({
               </th>
               <th className="px-3 py-2.5 text-left font-semibold text-gray-600 whitespace-nowrap">Date</th>
               <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Description</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600 min-w-44">Ledger</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600 min-w-32">Voucher Type</th>
-              <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">Debit<br /><span className="font-normal text-gray-400">(Bank Credit)</span></th>
-              <th className="px-3 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">Credit<br /><span className="font-normal text-gray-400">(Bank Debit)</span></th>
-              <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Amount</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Ledger</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Voucher Type</th>
+              <th className="px-2 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">Debit<br /><span className="font-normal text-gray-400">(Bank Cr)</span></th>
+              <th className="px-2 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">Credit<br /><span className="font-normal text-gray-400">(Bank Dr)</span></th>
+              <th className="px-2 py-2.5 text-right font-semibold text-gray-600">Amount</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -142,54 +158,66 @@ export function BankMappingForm({
               <tr
                 key={row.id}
                 className={cn(
-                  'hover:bg-gray-50 transition-colors',
-                  !row.selected && 'opacity-40',
+                  'transition-colors',
+                  row.synced ? 'bg-emerald-50/50' : 'hover:bg-gray-50',
+                  !row.selected && !row.synced && 'opacity-40',
                 )}
               >
                 <td className="px-3 py-2">
                   <input
                     type="checkbox"
                     checked={row.selected}
+                    disabled={row.synced}
                     onChange={(e) => updateRow(row.id, { selected: e.target.checked })}
-                    className="rounded"
+                    className="rounded disabled:cursor-not-allowed"
                   />
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap text-gray-600">{row.date}</td>
-                <td className="px-3 py-2 max-w-xs">
-                  <span className="line-clamp-2 text-gray-800">{row.description}</span>
-                </td>
                 <td className="px-3 py-2">
-                  <input
-                    list={`ledger-list-${row.id}`}
-                    value={row.ledger}
-                    onChange={(e) => updateRow(row.id, { ledger: e.target.value })}
-                    placeholder="Select ledger…"
-                    autoComplete="off"
-                    className={cn(
-                      'input-base w-full text-xs py-1',
-                      row.selected && !row.ledger.trim() && 'border-amber-300 bg-amber-50',
-                    )}
-                  />
-                  <datalist id={`ledger-list-${row.id}`}>
-                    {ledgerNames.map((n) => <option key={n} value={n} />)}
-                  </datalist>
+                  <span className="block text-gray-800 break-words leading-snug line-clamp-3">{row.description}</span>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-1.5">
+                  {row.synced ? (
+                    <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                      Already Synced
+                    </span>
+                  ) : (
+                    <>
+                      <input
+                        list={`ledger-list-${row.id}`}
+                        value={row.ledger}
+                        onChange={(e) => updateRow(row.id, { ledger: e.target.value })}
+                        placeholder="Select ledger…"
+                        autoComplete="off"
+                        className={cn(
+                          'w-full text-xs px-2.5 py-1 border border-gray-200 rounded-lg bg-white text-gray-800 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10',
+                          row.selected && !row.ledger.trim() && 'border-amber-300 bg-amber-50',
+                        )}
+                      />
+                      <datalist id={`ledger-list-${row.id}`}>
+                        {ledgerNames.map((n) => <option key={n} value={n} />)}
+                      </datalist>
+                    </>
+                  )}
+                </td>
+                <td className="px-3 py-1.5">
                   <select
                     value={row.voucherType}
+                    disabled={row.synced}
                     onChange={(e) => updateRow(row.id, { voucherType: e.target.value })}
-                    className="input-base w-full text-xs py-1"
+                    className="w-full text-xs px-2.5 py-1 border border-gray-200 rounded-lg bg-white text-gray-800 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 disabled:bg-gray-50 disabled:text-gray-400"
                   >
                     {BANK_VOUCHER_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </td>
-                <td className="px-3 py-2 text-right text-teal-700 font-medium">
+                <td className="px-2 py-2 text-right text-teal-700 font-medium truncate" title={row.debit != null ? formatCurrency(row.debit) : '—'}>
                   {row.debit != null ? formatCurrency(row.debit) : '—'}
                 </td>
-                <td className="px-3 py-2 text-right text-red-600 font-medium">
+                <td className="px-2 py-2 text-right text-red-600 font-medium truncate" title={row.credit != null ? formatCurrency(row.credit) : '—'}>
                   {row.credit != null ? formatCurrency(row.credit) : '—'}
                 </td>
-                <td className="px-3 py-2 text-right font-semibold text-gray-800">
+                <td className="px-2 py-2 text-right font-semibold text-gray-800 truncate" title={formatCurrency(Math.abs(row.debit ?? row.credit ?? 0))}>
                   {formatCurrency(Math.abs(row.debit ?? row.credit ?? 0))}
                 </td>
               </tr>
@@ -236,7 +264,7 @@ export function BankMappingForm({
             disabled={!readyToSync || syncing}
           >
             <Zap className="w-3.5 h-3.5 mr-1.5" />
-            Sync {mappedCount > 0 ? `${mappedCount} Vouchers` : 'to Tally'}
+            Push {mappedCount > 0 ? `${mappedCount} Vouchers` : ''}
           </Button>
         </div>
       </div>

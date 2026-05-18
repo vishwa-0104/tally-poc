@@ -756,3 +756,36 @@ companiesRouter.put('/companies/:id/credit-voucher-type', async (req, res) => {
   const mapping = (updated.mapping as Record<string, string>) ?? {}
   res.json({ creditVoucherType: mapping.credit_voucher_type ?? '' })
 })
+
+// GET /api/companies/:id/bank-fingerprints — fetch all synced fingerprints for dedup
+companiesRouter.get('/companies/:id/bank-fingerprints', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const logs = await prisma.bankSyncLog.findMany({
+    where:  { companyId: req.params.id },
+    select: { fingerprint: true },
+  })
+  res.json(logs.map((l) => l.fingerprint))
+})
+
+// POST /api/companies/:id/bank-fingerprints — bulk upsert after a successful sync
+companiesRouter.post('/companies/:id/bank-fingerprints', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const result = z.object({ fingerprints: z.array(z.string()).min(1) }).safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const companyId = req.params.id
+  await prisma.$transaction(
+    result.data.fingerprints.map((fp) =>
+      prisma.bankSyncLog.upsert({
+        where:  { companyId_fingerprint: { companyId, fingerprint: fp } },
+        update: {},
+        create: { companyId, fingerprint: fp },
+      }),
+    ),
+  )
+  res.json({ saved: result.data.fingerprints.length })
+})

@@ -1,30 +1,40 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { ArrowLeft } from 'lucide-react'
 import { BankMappingForm } from '@/components/company/BankMappingForm'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { useBankStore } from '@/store/bankStore'
+import { useBankStore, makeFingerprint } from '@/store/bankStore'
 import { syncBankToTally } from '@/services/tallyService'
 import type { BankSyncRow } from '@/services/tallyService'
+import { COMPANY_FEATURES } from '@/types'
 import type { ParsedBankStatement } from '@/types'
 import { getTallyUrl } from './CompanySettings'
+import { api } from '@/lib/api'
 
 export default function BankMapping() {
-  const { bankId }        = useParams<{ bankId: string }>()
-  const navigate          = useNavigate()
+  const { bankId }          = useParams<{ bankId: string }>()
+  const navigate            = useNavigate()
   const { activeCompanyId } = useAuthStore()
-  const { getCompany, getLedgers, fetchLedgersFromDb } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, companiesLoaded } = useCompanyStore()
   const { getStatement, updateStatement } = useBankStore()
 
   const companyId    = activeCompanyId ?? ''
   const company      = getCompany(companyId) ?? null
   const ledgers      = getLedgers(companyId)
 
+  const hasBankVoucher = (company?.features ?? []).some(
+    (f) => f.feature === COMPANY_FEATURES.BANK_VOUCHER && f.enabled,
+  )
+
+  const [fingerprintSet, setFingerprintSet] = useState<Set<string>>(new Set())
+
   useEffect(() => {
-    if (companyId && ledgers.length === 0) {
-      fetchLedgersFromDb(companyId).catch(() => {})
-    }
+    if (!companyId) return
+    if (ledgers.length === 0) fetchLedgersFromDb(companyId).catch(() => {})
+    api.get<string[]>(`/companies/${companyId}/bank-fingerprints`)
+      .then(({ data }) => setFingerprintSet(new Set(data)))
+      .catch(() => {})
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const record       = getStatement(bankId ?? '')
@@ -33,6 +43,9 @@ export default function BankMapping() {
 
   const [bankLedger, setBankLedger] = useState('')
   const [syncing,    setSyncing]    = useState(false)
+
+  if (!companiesLoaded) return null
+  if (!hasBankVoucher) return <Navigate to="/company" replace />
 
   if (!record) {
     return (
@@ -56,11 +69,28 @@ export default function BankMapping() {
     try {
       const result = await syncBankToTally(rows, bl, tallyUrl, tallyCompany)
       if (result.success) {
+        const fps = rows.map((r) =>
+          makeFingerprint(record.bankName, r.date, r.amount, r.description),
+        )
+
+        // Persist fingerprints to DB
+        await api.post(`/companies/${companyId}/bank-fingerprints`, { fingerprints: fps })
+
+        // Update local fingerprintSet so re-opening immediately reflects synced state
+        setFingerprintSet((prev) => new Set([...prev, ...fps]))
+
+        // Mark synced transactions in the local record
+        const syncedKey = new Set(rows.map((r) => `${r.date}|${r.description}`))
+        const updatedTxns = record.transactions.map((t) =>
+          syncedKey.has(`${t.date}|${t.description}`) ? { ...t, synced: true } : t,
+        )
+
         updateStatement(record.id, {
-          status:      'synced',
-          syncedCount: rows.length,
-          syncedAt:    new Date().toISOString(),
-          syncError:   undefined,
+          status:       'synced',
+          syncedCount:  rows.length,
+          syncedAt:     new Date().toISOString(),
+          syncError:    undefined,
+          transactions: updatedTxns,
         })
         toast.success(`Synced ${result.created} voucher${result.created !== 1 ? 's' : ''} to Tally`)
         navigate('/company/bank')
@@ -116,6 +146,7 @@ export default function BankMapping() {
           ledgers={ledgers}
           onSync={handleSync}
           syncing={syncing}
+          fingerprintSet={fingerprintSet}
         />
       </div>
     </div>

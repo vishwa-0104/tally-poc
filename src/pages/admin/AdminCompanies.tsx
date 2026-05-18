@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Warehouse, Percent, Receipt, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
+import { Plus, Warehouse, Percent, Receipt, Landmark, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
@@ -119,6 +119,17 @@ const FEATURE_CATALOGUE = [
     iconBg:      'bg-purple-500/10',
     iconColor:   'text-purple-400',
     dotOn:       'bg-purple-400',
+  },
+  {
+    key:         COMPANY_FEATURES.BANK_VOUCHER,
+    label:       'Bank Voucher',
+    description: 'Enable the My Bank page — upload bank statements and sync Payment / Receipt / Contra vouchers directly to Tally.',
+    Icon:        Landmark,
+    gradient:    'from-cyan-500/10 to-teal-500/10',
+    ring:        'ring-cyan-500/30',
+    iconBg:      'bg-cyan-500/10',
+    iconColor:   'text-cyan-400',
+    dotOn:       'bg-cyan-400',
   },
 ] as const
 

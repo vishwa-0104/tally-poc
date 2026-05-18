@@ -70,6 +70,7 @@ model Company {
   godownCache      GodownCache[]
   voucherTypeCache VoucherTypeCache[]
   features         CompanyFeature[]
+  bankSyncLogs     BankSyncLog[]
   voucherType      String         @default("GST PURCHASE")
   syncTimestamps   Json?
   createdAt        DateTime       @default(now())
@@ -206,6 +207,17 @@ model StockUnitCache {
   symbol    String  @default("")
 
   @@unique([companyId, name])
+}
+
+model BankSyncLog {
+  id          String   @id @default(cuid())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+  fingerprint String
+  createdAt   DateTime @default(now())
+
+  @@unique([companyId, fingerprint])
+  @@index([companyId])
 }
 
 enum LeadStatus {

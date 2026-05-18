@@ -80,6 +80,7 @@ export const COMPANY_FEATURES = {
   DISCOUNT_COLUMN: 'discount_column',
   DEBIT_VOUCHER:   'debit_voucher',
   CREDIT_VOUCHER:  'credit_voucher',
+  BANK_VOUCHER:    'bank_voucher',
 } as const
 
 export interface Company {
@@ -192,6 +193,7 @@ export interface BankTransaction {
   /** Bank statement DEBIT column — money paid out of account */
   credit: number | null
   balance?: number | null
+  synced?: boolean
   /** Counterpart ledger in Tally (expense/income/party) */
   ledger: string
   voucherType: string

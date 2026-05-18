@@ -23,8 +23,13 @@ export interface BankStatementRecord {
   transactions: ParsedBankStatement['transactions']
 }
 
+/** Stable fingerprint: bankName|date|amount|description */
+export function makeFingerprint(bankName: string, date: string, amount: number, description: string): string {
+  return `${bankName}|${date}|${Math.abs(amount)}|${description.trim()}`
+}
+
 interface BankStore {
-  statements: BankStatementRecord[]
+  statements:      BankStatementRecord[]
   addStatement:    (record: BankStatementRecord) => void
   updateStatement: (id: string, patch: Partial<BankStatementRecord>) => void
   removeStatement: (id: string) => void
