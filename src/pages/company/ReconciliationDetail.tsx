@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, BarChart2, X, Loader2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, BarChart2, X } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { useReconciliationStore } from '@/store/reconciliationStore'
 import type { ReconciliationRow } from '@/store/reconciliationStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { COMPANY_FEATURES } from '@/types'
-import { api } from '@/lib/api'
 
 const PAGE_SIZE = 15
 
@@ -37,42 +36,17 @@ interface SummaryModalProps {
   bankName: string
   booksName: string
   createdAt: string
-  companyId: string
   missingRows: ReconciliationRow[]
   extraRows:   ReconciliationRow[]
   matchedRows: ReconciliationRow[]
 }
 
-function SummaryModal({ onClose, bankName, booksName, createdAt, companyId, missingRows, extraRows, matchedRows }: SummaryModalProps) {
-  const [aiText,    setAiText]    = useState<string | null>(null)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError,   setAiError]   = useState<string | null>(null)
-
+function SummaryModal({ onClose, bankName, booksName, createdAt, missingRows, extraRows, matchedRows }: SummaryModalProps) {
   const missingTotals = sumRows(missingRows)
   const extraTotals   = sumRows(extraRows)
   const matchedTotals = sumRows(matchedRows)
 
   const netDiff = (missingTotals.received - missingTotals.paid) - (extraTotals.received - extraTotals.paid)
-
-  const fetchAiAnalysis = async () => {
-    if (aiText !== null || aiLoading) return
-    setAiLoading(true)
-    setAiError(null)
-    try {
-      const { data } = await api.post('/reconcile/analyze', {
-        companyId,
-        bankName,
-        booksName,
-        missingFromBooks: missingRows,
-        extraInBooks:     extraRows,
-      })
-      setAiText(data.summary ?? '')
-    } catch {
-      setAiError('Failed to generate AI analysis. Please try again.')
-    } finally {
-      setAiLoading(false)
-    }
-  }
 
   const EntryTable = ({
     rows,
@@ -334,7 +308,6 @@ export default function ReconciliationDetail() {
           bankName={record.bankName}
           booksName={record.booksName}
           createdAt={record.createdAt}
-          companyId={companyId}
           missingRows={missingRows}
           extraRows={extraRows}
           matchedRows={matchedRows}
