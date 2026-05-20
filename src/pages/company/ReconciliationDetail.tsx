@@ -42,11 +42,29 @@ interface SummaryModalProps {
 }
 
 function SummaryModal({ onClose, bankName, booksName, createdAt, missingRows, extraRows, matchedRows }: SummaryModalProps) {
-  const missingTotals = sumRows(missingRows)
-  const extraTotals   = sumRows(extraRows)
   const matchedTotals = sumRows(matchedRows)
+  const extraTotals   = sumRows(extraRows)
 
-  const netDiff = (missingTotals.received - missingTotals.paid) - (extraTotals.received - extraTotals.paid)
+  // Books closing balance = everything currently recorded in books (matched + extra)
+  const booksClosing = (matchedTotals.received - matchedTotals.paid) + (extraTotals.received - extraTotals.paid)
+
+  // Split missing entries by direction
+  const missingReceipts = missingRows.filter((r) => r.debit  != null)   // credit side → Add to books
+  const missingPayments = missingRows.filter((r) => r.credit != null)   // debit side  → Less from books
+  const missingReceiptsTotal = missingReceipts.reduce((s, r) => s + (r.debit  ?? 0), 0)
+  const missingPaymentsTotal = missingPayments.reduce((s, r) => s + (r.credit ?? 0), 0)
+
+  // Split extra entries by direction
+  const extraReceipts = extraRows.filter((r) => r.debit  != null)       // receipts in books to reverse → Less
+  const extraPayments = extraRows.filter((r) => r.credit != null)       // payments in books to reverse → Add back
+  const extraReceiptsTotal = extraReceipts.reduce((s, r) => s + (r.debit  ?? 0), 0)
+  const extraPaymentsTotal = extraPayments.reduce((s, r) => s + (r.credit ?? 0), 0)
+
+  // Running totals
+  const afterAddReceipts  = booksClosing    + missingReceiptsTotal
+  const afterLessPayments = afterAddReceipts - missingPaymentsTotal
+  const afterLessExtra    = afterLessPayments - extraReceiptsTotal
+  const bankBalance       = afterLessExtra   + extraPaymentsTotal
 
   const EntryTable = ({
     rows,
@@ -184,130 +202,172 @@ function SummaryModal({ onClose, bankName, booksName, createdAt, missingRows, ex
               <span className="text-sm font-semibold text-gray-800 tracking-wide">Bank Reconciliation Statement</span>
             </div>
 
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full border-collapse table-fixed text-sm">
               <colgroup>
-                <col className="w-[50%]" />
-                <col className="w-[25%]" />
-                <col className="w-[25%]" />
+                <col />                       {/* description — takes all remaining space */}
+                <col style={{ width: 120 }} />{/* sub-amount */}
+                <col style={{ width: 140 }} />{/* running total */}
               </colgroup>
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="px-4 py-1.5 text-left text-xs font-normal text-gray-400"> </th>
-                  <th className="px-4 py-1.5 text-right text-xs font-semibold text-gray-500">₹</th>
+                  <th className="px-3 py-1.5 text-right text-xs font-semibold text-gray-500">₹</th>
                   <th className="px-4 py-1.5 text-right text-xs font-semibold text-gray-500">₹</th>
                 </tr>
               </thead>
               <tbody>
 
-                {/* Balance as per Books */}
-                <tr>
-                  <td className="px-4 pt-3 pb-2 text-sm text-gray-800">
-                    Balance as per Books <span className="text-xs text-gray-400">(matched entries)</span>
+                {/* ── Books Closing Balance ───────────────────────── */}
+                <tr className="border-b border-gray-100">
+                  <td className="px-4 py-2.5 text-sm text-gray-800">
+                    Balance as per Books <span className="text-xs text-gray-400">(closing balance)</span>
                   </td>
                   <td />
-                  <td className="px-4 pt-3 pb-2 text-right tabular-nums font-medium text-gray-900">
-                    {formatCurrency(matchedTotals.received - matchedTotals.paid)}
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-900 whitespace-nowrap">
+                    {formatCurrency(booksClosing)}
                   </td>
                 </tr>
 
-                {/* Add: Missing from Books */}
-                <tr>
-                  <td className="px-4 pt-2 pb-1 text-sm font-semibold text-gray-700" colSpan={3}>
-                    Add: Missing from Books
-                    <span className="ml-1.5 text-[11px] font-normal text-gray-400">
-                      (recorded in bank, absent in books)
-                    </span>
-                  </td>
-                </tr>
-                {missingRows.length === 0 ? (
+                {/* ── Add: Missing Receipts (credit side) ────────── */}
+                {missingReceipts.length > 0 && <>
                   <tr>
-                    <td className="pl-8 pr-4 py-1 text-xs text-gray-400 italic" colSpan={3}>None</td>
+                    <td className="px-4 pt-3 pb-1 text-sm font-semibold text-gray-700" colSpan={3}>
+                      Add: Missing Receipts
+                      <span className="ml-1.5 text-[11px] font-normal text-gray-400">(credit side — book will receive amount)</span>
+                    </td>
                   </tr>
-                ) : missingRows.map((r) => {
-                  const amt = r.debit ?? r.credit ?? 0
-                  const isReceipt = r.debit != null
-                  return (
+                  {missingReceipts.map((r) => (
                     <tr key={r.id}>
-                      <td className="pl-8 pr-4 py-1 text-xs text-gray-600">
-                        <span className="text-gray-400 mr-1.5">{r.date}</span>
-                        <span className="truncate">{r.description || '—'}</span>
+                      <td className="pl-8 pr-2 py-1 text-xs text-gray-600 max-w-0">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                          <span className="text-gray-400 whitespace-nowrap flex-shrink-0">{r.date}</span>
+                          <span className="truncate">{r.description || '—'}</span>
+                        </div>
                       </td>
-                      <td className={`px-4 py-1 text-right text-xs tabular-nums ${isReceipt ? 'text-emerald-700' : 'text-red-600'}`}>
-                        {formatCurrency(amt)}
+                      <td className="px-3 py-1 text-right text-xs tabular-nums whitespace-nowrap font-medium text-emerald-700">
+                        {formatCurrency(r.debit ?? 0)}
                       </td>
                       <td />
                     </tr>
-                  )
-                })}
-                {/* Missing sub-total line */}
-                <tr className="border-t border-gray-400">
-                  <td />
-                  <td />
-                  <td className="px-4 py-1.5 text-right tabular-nums font-medium text-gray-900">
-                    {formatCurrency(missingTotals.received - missingTotals.paid)}
-                  </td>
-                </tr>
-                {/* Running total after Add */}
-                <tr className="border-b border-gray-300">
-                  <td />
-                  <td />
-                  <td className="px-4 pb-2.5 text-right tabular-nums font-medium text-gray-900 border-t border-gray-400">
-                    {formatCurrency(
-                      (matchedTotals.received - matchedTotals.paid) +
-                      (missingTotals.received - missingTotals.paid)
-                    )}
-                  </td>
-                </tr>
-
-                {/* Less: Extra in Books */}
-                <tr>
-                  <td className="px-4 pt-3 pb-1 text-sm font-semibold text-gray-700" colSpan={3}>
-                    Less: Extra in Books
-                    <span className="ml-1.5 text-[11px] font-normal text-gray-400">
-                      (recorded in books, absent in bank)
-                    </span>
-                  </td>
-                </tr>
-                {extraRows.length === 0 ? (
-                  <tr>
-                    <td className="pl-8 pr-4 py-1 text-xs text-gray-400 italic" colSpan={3}>None</td>
+                  ))}
+                  <tr className="border-b border-gray-200">
+                    <td />
+                    <td className="px-3 py-1 text-right tabular-nums text-xs font-semibold text-gray-700 border-t border-gray-400 whitespace-nowrap">
+                      {formatCurrency(missingReceiptsTotal)}
+                    </td>
+                    <td className="px-4 py-1 text-right tabular-nums font-semibold text-gray-900 whitespace-nowrap border-t border-gray-400">
+                      {formatCurrency(afterAddReceipts)}
+                    </td>
                   </tr>
-                ) : extraRows.map((r) => {
-                  const amt = r.debit ?? r.credit ?? 0
-                  const isReceipt = r.debit != null
-                  return (
+                </>}
+
+                {/* ── Less: Missing Payments (debit side) ────────── */}
+                {missingPayments.length > 0 && <>
+                  <tr>
+                    <td className="px-4 pt-3 pb-1 text-sm font-semibold text-gray-700" colSpan={3}>
+                      Less: Missing Payments
+                      <span className="ml-1.5 text-[11px] font-normal text-gray-400">(debit side — reduces book balance)</span>
+                    </td>
+                  </tr>
+                  {missingPayments.map((r) => (
                     <tr key={r.id}>
-                      <td className="pl-8 pr-4 py-1 text-xs text-gray-600">
-                        <span className="text-gray-400 mr-1.5">{r.date}</span>
-                        <span className="truncate">{r.description || '—'}</span>
+                      <td className="pl-8 pr-2 py-1 text-xs text-gray-600 max-w-0">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                          <span className="text-gray-400 whitespace-nowrap flex-shrink-0">{r.date}</span>
+                          <span className="truncate">{r.description || '—'}</span>
+                        </div>
                       </td>
-                      <td className={`px-4 py-1 text-right text-xs tabular-nums ${isReceipt ? 'text-emerald-700' : 'text-red-600'}`}>
-                        {formatCurrency(amt)}
+                      <td className="px-3 py-1 text-right text-xs tabular-nums whitespace-nowrap font-medium text-red-600">
+                        {formatCurrency(r.credit ?? 0)}
                       </td>
                       <td />
                     </tr>
-                  )
-                })}
-                {/* Extra sub-total line */}
-                <tr className="border-t border-gray-400">
-                  <td />
-                  <td />
-                  <td className="px-4 py-1.5 text-right tabular-nums font-medium text-gray-900">
-                    {formatCurrency(extraTotals.received - extraTotals.paid)}
-                  </td>
-                </tr>
+                  ))}
+                  <tr className="border-b border-gray-200">
+                    <td />
+                    <td className="px-3 py-1 text-right tabular-nums text-xs font-semibold text-gray-700 border-t border-gray-400 whitespace-nowrap">
+                      {formatCurrency(missingPaymentsTotal)}
+                    </td>
+                    <td className="px-4 py-1 text-right tabular-nums font-semibold text-gray-900 whitespace-nowrap border-t border-gray-400">
+                      {formatCurrency(afterLessPayments)}
+                    </td>
+                  </tr>
+                </>}
 
-                {/* Balance as per Bank Statement */}
-                <tr className="border-t-2 border-gray-800">
-                  <td className="px-4 py-3 text-sm font-bold text-gray-900">
-                    {netDiff === 0 ? '✓ Balance as per Bank Statement' : 'Net Unreconciled Difference'}
+                {/* ── Less: Extra Receipts in Books (to reverse) ─── */}
+                {extraReceipts.length > 0 && <>
+                  <tr>
+                    <td className="px-4 pt-3 pb-1 text-sm font-semibold text-gray-700" colSpan={3}>
+                      Less: Extra Receipts in Books
+                      <span className="ml-1.5 text-[11px] font-normal text-gray-400">(credit side — to be reversed)</span>
+                    </td>
+                  </tr>
+                  {extraReceipts.map((r) => (
+                    <tr key={r.id}>
+                      <td className="pl-8 pr-2 py-1 text-xs text-gray-600 max-w-0">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                          <span className="text-gray-400 whitespace-nowrap flex-shrink-0">{r.date}</span>
+                          <span className="truncate">{r.description || '—'}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-1 text-right text-xs tabular-nums whitespace-nowrap font-medium text-red-600">
+                        {formatCurrency(r.debit ?? 0)}
+                      </td>
+                      <td />
+                    </tr>
+                  ))}
+                  <tr className="border-b border-gray-200">
+                    <td />
+                    <td className="px-3 py-1 text-right tabular-nums text-xs font-semibold text-gray-700 border-t border-gray-400 whitespace-nowrap">
+                      {formatCurrency(extraReceiptsTotal)}
+                    </td>
+                    <td className="px-4 py-1 text-right tabular-nums font-semibold text-gray-900 whitespace-nowrap border-t border-gray-400">
+                      {formatCurrency(afterLessExtra)}
+                    </td>
+                  </tr>
+                </>}
+
+                {/* ── Add: Extra Payments in Books (to reverse) ──── */}
+                {extraPayments.length > 0 && <>
+                  <tr>
+                    <td className="px-4 pt-3 pb-1 text-sm font-semibold text-gray-700" colSpan={3}>
+                      Add: Extra Payments in Books
+                      <span className="ml-1.5 text-[11px] font-normal text-gray-400">(debit side — to be reversed)</span>
+                    </td>
+                  </tr>
+                  {extraPayments.map((r) => (
+                    <tr key={r.id}>
+                      <td className="pl-8 pr-2 py-1 text-xs text-gray-600 max-w-0">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                          <span className="text-gray-400 whitespace-nowrap flex-shrink-0">{r.date}</span>
+                          <span className="truncate">{r.description || '—'}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-1 text-right text-xs tabular-nums whitespace-nowrap font-medium text-emerald-700">
+                        {formatCurrency(r.credit ?? 0)}
+                      </td>
+                      <td />
+                    </tr>
+                  ))}
+                  <tr className="border-b border-gray-200">
+                    <td />
+                    <td className="px-3 py-1 text-right tabular-nums text-xs font-semibold text-gray-700 border-t border-gray-400 whitespace-nowrap">
+                      {formatCurrency(extraPaymentsTotal)}
+                    </td>
+                    <td className="px-4 py-1 text-right tabular-nums font-semibold text-gray-900 whitespace-nowrap border-t border-gray-400">
+                      {formatCurrency(bankBalance)}
+                    </td>
+                  </tr>
+                </>}
+
+                {/* ── Final: Balance as per Bank Statement ────────── */}
+                <tr className="border-t-2 border-gray-800 bg-gray-900">
+                  <td className="px-4 py-3 text-sm font-bold text-white">
+                    Balance as per Bank Statement
                   </td>
                   <td />
-                  <td className={`px-4 py-3 text-right text-sm font-bold tabular-nums border-t border-b-2 border-gray-800 ${netDiff === 0 ? 'text-emerald-700' : 'text-amber-600'}`}>
-                    {netDiff === 0
-                      ? formatCurrency(matchedTotals.received - matchedTotals.paid + missingTotals.received - missingTotals.paid - (extraTotals.received - extraTotals.paid))
-                      : <>{formatCurrency(Math.abs(netDiff))}<span className="ml-1.5 text-xs font-normal">({netDiff > 0 ? 'Books short' : 'Books excess'})</span></>
-                    }
+                  <td className="px-4 py-3 text-right text-sm font-bold tabular-nums whitespace-nowrap text-emerald-400">
+                    {formatCurrency(bankBalance)}
                   </td>
                 </tr>
 
