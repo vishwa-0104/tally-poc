@@ -84,10 +84,12 @@ export default function BankMapping() {
         const updatedTxns = record.transactions.map((t) =>
           syncedKey.has(`${t.date}|${t.description}`) ? { ...t, synced: true } : t,
         )
+        const totalSyncedCount = updatedTxns.filter((t) => t.synced === true).length
+        const newStatus = totalSyncedCount >= record.totalCount ? 'synced' : 'partially_synced'
 
         updateStatement(record.id, {
-          status:       'synced',
-          syncedCount:  rows.length,
+          status:       newStatus,
+          syncedCount:  totalSyncedCount,
           syncedAt:     new Date().toISOString(),
           syncError:    undefined,
           transactions: updatedTxns,

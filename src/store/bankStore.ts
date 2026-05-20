@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ParsedBankStatement } from '@/types'
 
-export type BankStatementStatus = 'pending' | 'synced' | 'error'
+export type BankStatementStatus = 'pending' | 'synced' | 'partially_synced' | 'error'
 
 export interface BankStatementRecord {
   id: string

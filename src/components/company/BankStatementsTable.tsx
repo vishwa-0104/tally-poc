@@ -11,19 +11,21 @@ import type { BankStatementRecord, BankStatementStatus } from '@/store/bankStore
 
 const PAGE_SIZE = 10
 
-type StatusFilter = 'pending' | 'synced' | 'error'
+type StatusFilter = 'pending' | 'synced' | 'partially_synced' | 'error'
 
 const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
-  { label: 'Pending', value: 'pending' },
-  { label: 'Synced',  value: 'synced'  },
-  { label: 'Error',   value: 'error'   },
+  { label: 'Pending',  value: 'pending'          },
+  { label: 'Partial',  value: 'partially_synced' },
+  { label: 'Synced',   value: 'synced'           },
+  { label: 'Error',    value: 'error'            },
 ]
 
 function BankStatusBadge({ status }: { status: BankStatementStatus }) {
-  const map: Record<BankStatementStatus, { variant: 'amber' | 'green' | 'red'; label: string }> = {
-    pending: { variant: 'amber', label: 'Pending'    },
-    synced:  { variant: 'green', label: 'Synced'     },
-    error:   { variant: 'red',   label: 'Sync Error' },
+  const map: Record<BankStatementStatus, { variant: 'amber' | 'green' | 'red' | 'blue'; label: string }> = {
+    pending:          { variant: 'amber', label: 'Pending'       },
+    partially_synced: { variant: 'blue',  label: 'Partial Sync'  },
+    synced:           { variant: 'green', label: 'Synced'        },
+    error:            { variant: 'red',   label: 'Sync Error'    },
   }
   const { variant, label } = map[status]
   return <Badge variant={variant}>{label}</Badge>
@@ -39,7 +41,7 @@ export function BankStatementsTable({ statements, onUpload }: BankStatementsTabl
   const { removeStatement } = useBankStore()
 
   const [page, setPage]           = useState(1)
-  const [statusFilter, setStatusFilter] = useState<Set<StatusFilter>>(new Set(['pending', 'error']))
+  const [statusFilter, setStatusFilter] = useState<Set<StatusFilter>>(new Set(['pending', 'partially_synced', 'error']))
 
   const toggleStatus = (s: StatusFilter) => {
     setStatusFilter((prev) => {
@@ -95,6 +97,8 @@ export function BankStatementsTable({ statements, onUpload }: BankStatementsTabl
                     ? 'bg-emerald-100 border-emerald-300 text-emerald-700'
                     : opt.value === 'error'
                     ? 'bg-red-100 border-red-300 text-red-700'
+                    : opt.value === 'partially_synced'
+                    ? 'bg-blue-100 border-blue-300 text-blue-700'
                     : 'bg-amber-100 border-amber-300 text-amber-700'
                   : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'
               }`}
@@ -147,7 +151,7 @@ export function BankStatementsTable({ statements, onUpload }: BankStatementsTabl
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-700 text-center">
                       {row.totalCount}
-                      {row.status === 'synced' && row.syncedCount > 0 && (
+                      {(row.status === 'synced' || row.status === 'partially_synced') && row.syncedCount > 0 && (
                         <span className="ml-1 text-[10px] text-gray-400">({row.syncedCount} synced)</span>
                       )}
                     </td>
@@ -161,13 +165,19 @@ export function BankStatementsTable({ statements, onUpload }: BankStatementsTabl
                       <BankStatusBadge status={row.status} />
                     </td>
                     <td className="px-4 py-3">
-                      {(row.status === 'pending' || row.status === 'error') && (
-                        <Button
-                          variant={row.status === 'error' ? 'danger' : 'teal'}
-                          size="sm"
-                          onClick={() => navigate(`/company/bank/${row.id}`)}
-                        >
-                          {row.status === 'error' ? 'Retry' : 'Map & Sync'}
+                      {row.status === 'pending' && (
+                        <Button variant="teal" size="sm" onClick={() => navigate(`/company/bank/${row.id}`)}>
+                          Map & Sync
+                        </Button>
+                      )}
+                      {row.status === 'partially_synced' && (
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/company/bank/${row.id}`)}>
+                          Continue
+                        </Button>
+                      )}
+                      {row.status === 'error' && (
+                        <Button variant="danger" size="sm" onClick={() => navigate(`/company/bank/${row.id}`)}>
+                          Retry
                         </Button>
                       )}
                       {row.status === 'synced' && (

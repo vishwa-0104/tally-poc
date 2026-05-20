@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Zap, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -47,6 +47,16 @@ export function BankMappingForm({
       }
     }),
   )
+  useEffect(() => {
+    if (fingerprintSet.size === 0) return
+    setRows((prev) => prev.map((r) => {
+      if (r.synced) return r
+      const fp = makeFingerprint(statement.bankName, r.date, Math.abs(r.debit ?? r.credit ?? 0), r.description)
+      if (!fingerprintSet.has(fp)) return r
+      return { ...r, synced: true, selected: false }
+    }))
+  }, [fingerprintSet, statement.bankName]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [page, setPage] = useState(1)
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
