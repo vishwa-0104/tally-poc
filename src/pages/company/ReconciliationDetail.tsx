@@ -177,38 +177,140 @@ function SummaryModal({ onClose, bankName, booksName, createdAt, missingRows, ex
             </div>
           </div>
 
-          {/* Net difference card */}
-          <div className="mb-5 rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-4 py-3 bg-gray-900 text-white text-sm font-bold">
-              Net Difference Summary
+          {/* Bank Reconciliation Statement — traditional two-column format */}
+          <div className="mb-5 rounded-lg border border-gray-300 overflow-hidden bg-white">
+            {/* Title */}
+            <div className="text-center py-2.5 border-b border-gray-200">
+              <span className="text-sm font-semibold text-gray-800 tracking-wide">Bank Reconciliation Statement</span>
             </div>
-            <table className="w-full border-collapse">
+
+            <table className="w-full border-collapse text-sm">
+              <colgroup>
+                <col className="w-[50%]" />
+                <col className="w-[25%]" />
+                <col className="w-[25%]" />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="px-4 py-1.5 text-left text-xs font-normal text-gray-400"> </th>
+                  <th className="px-4 py-1.5 text-right text-xs font-semibold text-gray-500">₹</th>
+                  <th className="px-4 py-1.5 text-right text-xs font-semibold text-gray-500">₹</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr className="border-b border-gray-200 bg-white">
-                  <td className="px-4 py-3 text-sm text-gray-600">Total Received — Missing from Books</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-emerald-600 tabular-nums">{formatCurrency(missingTotals.received)}</td>
+
+                {/* Balance as per Books */}
+                <tr>
+                  <td className="px-4 pt-3 pb-2 text-sm text-gray-800">
+                    Balance as per Books <span className="text-xs text-gray-400">(matched entries)</span>
+                  </td>
+                  <td />
+                  <td className="px-4 pt-3 pb-2 text-right tabular-nums font-medium text-gray-900">
+                    {formatCurrency(matchedTotals.received - matchedTotals.paid)}
+                  </td>
                 </tr>
-                <tr className="border-b border-gray-200 bg-white">
-                  <td className="px-4 py-3 text-sm text-gray-600">Total Paid — Missing from Books</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600 tabular-nums">{formatCurrency(missingTotals.paid)}</td>
+
+                {/* Add: Missing from Books */}
+                <tr>
+                  <td className="px-4 pt-2 pb-1 text-sm font-semibold text-gray-700" colSpan={3}>
+                    Add: Missing from Books
+                    <span className="ml-1.5 text-[11px] font-normal text-gray-400">
+                      (recorded in bank, absent in books)
+                    </span>
+                  </td>
                 </tr>
-                <tr className="border-b border-gray-200 bg-white">
-                  <td className="px-4 py-3 text-sm text-gray-600">Total Received — Extra in Books</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-emerald-600 tabular-nums">{formatCurrency(extraTotals.received)}</td>
+                {missingRows.length === 0 ? (
+                  <tr>
+                    <td className="pl-8 pr-4 py-1 text-xs text-gray-400 italic" colSpan={3}>None</td>
+                  </tr>
+                ) : missingRows.map((r) => {
+                  const amt = r.debit ?? r.credit ?? 0
+                  const isReceipt = r.debit != null
+                  return (
+                    <tr key={r.id}>
+                      <td className="pl-8 pr-4 py-1 text-xs text-gray-600">
+                        <span className="text-gray-400 mr-1.5">{r.date}</span>
+                        <span className="truncate">{r.description || '—'}</span>
+                      </td>
+                      <td className={`px-4 py-1 text-right text-xs tabular-nums ${isReceipt ? 'text-emerald-700' : 'text-red-600'}`}>
+                        {formatCurrency(amt)}
+                      </td>
+                      <td />
+                    </tr>
+                  )
+                })}
+                {/* Missing sub-total line */}
+                <tr className="border-t border-gray-400">
+                  <td />
+                  <td />
+                  <td className="px-4 py-1.5 text-right tabular-nums font-medium text-gray-900">
+                    {formatCurrency(missingTotals.received - missingTotals.paid)}
+                  </td>
                 </tr>
-                <tr className="border-b border-gray-200 bg-white">
-                  <td className="px-4 py-3 text-sm text-gray-600">Total Paid — Extra in Books</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600 tabular-nums">{formatCurrency(extraTotals.paid)}</td>
+                {/* Running total after Add */}
+                <tr className="border-b border-gray-300">
+                  <td />
+                  <td />
+                  <td className="px-4 pb-2.5 text-right tabular-nums font-medium text-gray-900 border-t border-gray-400">
+                    {formatCurrency(
+                      (matchedTotals.received - matchedTotals.paid) +
+                      (missingTotals.received - missingTotals.paid)
+                    )}
+                  </td>
                 </tr>
-                <tr className="bg-gray-900 text-white">
-                  <td className="px-4 py-3.5 text-sm font-bold">Net Unreconciled Difference</td>
-                  <td className={`px-4 py-3.5 text-right text-sm font-bold tabular-nums ${netDiff === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+
+                {/* Less: Extra in Books */}
+                <tr>
+                  <td className="px-4 pt-3 pb-1 text-sm font-semibold text-gray-700" colSpan={3}>
+                    Less: Extra in Books
+                    <span className="ml-1.5 text-[11px] font-normal text-gray-400">
+                      (recorded in books, absent in bank)
+                    </span>
+                  </td>
+                </tr>
+                {extraRows.length === 0 ? (
+                  <tr>
+                    <td className="pl-8 pr-4 py-1 text-xs text-gray-400 italic" colSpan={3}>None</td>
+                  </tr>
+                ) : extraRows.map((r) => {
+                  const amt = r.debit ?? r.credit ?? 0
+                  const isReceipt = r.debit != null
+                  return (
+                    <tr key={r.id}>
+                      <td className="pl-8 pr-4 py-1 text-xs text-gray-600">
+                        <span className="text-gray-400 mr-1.5">{r.date}</span>
+                        <span className="truncate">{r.description || '—'}</span>
+                      </td>
+                      <td className={`px-4 py-1 text-right text-xs tabular-nums ${isReceipt ? 'text-emerald-700' : 'text-red-600'}`}>
+                        {formatCurrency(amt)}
+                      </td>
+                      <td />
+                    </tr>
+                  )
+                })}
+                {/* Extra sub-total line */}
+                <tr className="border-t border-gray-400">
+                  <td />
+                  <td />
+                  <td className="px-4 py-1.5 text-right tabular-nums font-medium text-gray-900">
+                    {formatCurrency(extraTotals.received - extraTotals.paid)}
+                  </td>
+                </tr>
+
+                {/* Balance as per Bank Statement */}
+                <tr className="border-t-2 border-gray-800">
+                  <td className="px-4 py-3 text-sm font-bold text-gray-900">
+                    {netDiff === 0 ? '✓ Balance as per Bank Statement' : 'Net Unreconciled Difference'}
+                  </td>
+                  <td />
+                  <td className={`px-4 py-3 text-right text-sm font-bold tabular-nums border-t border-b-2 border-gray-800 ${netDiff === 0 ? 'text-emerald-700' : 'text-amber-600'}`}>
                     {netDiff === 0
-                      ? '✓ Fully Reconciled'
-                      : <>{formatCurrency(Math.abs(netDiff))}<span className="ml-1.5 text-xs font-normal text-amber-300">({netDiff > 0 ? 'Books short' : 'Books excess'})</span></>
+                      ? formatCurrency(matchedTotals.received - matchedTotals.paid + missingTotals.received - missingTotals.paid - (extraTotals.received - extraTotals.paid))
+                      : <>{formatCurrency(Math.abs(netDiff))}<span className="ml-1.5 text-xs font-normal">({netDiff > 0 ? 'Books short' : 'Books excess'})</span></>
                     }
                   </td>
                 </tr>
+
               </tbody>
             </table>
           </div>
@@ -266,9 +368,13 @@ export default function ReconciliationDetail() {
 
   const missingRows = record.rows.filter((r) => r.source === 'bank'  && !r.matched)
   const extraRows   = record.rows.filter((r) => r.source === 'books' && !r.matched)
-  const matchedRows = record.rows.filter((r) => r.matched)
+  // Books-only for matched — use as canonical row; avoids double-counting in summary
+  const matchedRows = record.rows.filter((r) => r.source === 'books' && r.matched)
 
-  const filteredRows = record.rows.filter((r) => {
+  // Collapse matched pairs: hide the bank side, keep only the books row
+  const displayRows = record.rows.filter((r) => !(r.source === 'bank' && r.matched))
+
+  const filteredRows = displayRows.filter((r) => {
     if (filter === 'matched') return r.matched
     if (filter === 'missing') return r.source === 'bank'  && !r.matched
     if (filter === 'extra')   return r.source === 'books' && !r.matched
@@ -283,7 +389,7 @@ export default function ReconciliationDetail() {
   const setFilterAndReset = (f: FilterMode) => { setFilter(f); setPage(1) }
 
   const filterCount = (f: FilterMode) => {
-    if (f === 'all')     return record.rows.length
+    if (f === 'all')     return displayRows.length
     if (f === 'matched') return matchedRows.length
     if (f === 'missing') return missingRows.length
     return                      extraRows.length
