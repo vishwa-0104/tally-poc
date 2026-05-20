@@ -6,6 +6,7 @@ import { useReconciliationStore } from '@/store/reconciliationStore'
 import type { ReconciliationRow } from '@/store/reconciliationStore'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { COMPANY_FEATURES } from '@/types'
+import { MissingEntriesModal } from '@/components/company/MissingEntriesModal'
 
 const PAGE_SIZE = 15
 
@@ -32,16 +33,19 @@ function sumRows(rows: ReconciliationRow[]) {
 }
 
 interface SummaryModalProps {
-  onClose: () => void
-  bankName: string
-  booksName: string
-  createdAt: string
+  onClose:    () => void
+  recordId:   string
+  companyId:  string
+  bankName:   string
+  booksName:  string
+  createdAt:  string
   missingRows: ReconciliationRow[]
   extraRows:   ReconciliationRow[]
   matchedRows: ReconciliationRow[]
 }
 
-function SummaryModal({ onClose, bankName, booksName, createdAt, missingRows, extraRows, matchedRows }: SummaryModalProps) {
+function SummaryModal({ onClose, recordId, companyId, bankName, booksName, createdAt, missingRows, extraRows, matchedRows }: SummaryModalProps) {
+  const [missingEntriesOpen, setMissingEntriesOpen] = useState(false)
   const matchedTotals = sumRows(matchedRows)
   const extraTotals   = sumRows(extraRows)
 
@@ -379,7 +383,18 @@ function SummaryModal({ onClose, bankName, booksName, createdAt, missingRows, ex
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 flex-shrink-0 bg-gray-50/60">
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 flex-shrink-0 bg-gray-50/60">
+          {missingRows.length > 0 ? (
+            <button
+              onClick={() => setMissingEntriesOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors"
+            >
+              Add missing entries in Book
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-200 text-blue-700 text-[10px] font-bold">
+                {missingRows.length}
+              </span>
+            </button>
+          ) : <span />}
           <button
             onClick={onClose}
             className="px-4 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
@@ -388,6 +403,15 @@ function SummaryModal({ onClose, bankName, booksName, createdAt, missingRows, ex
           </button>
         </div>
       </div>
+
+      {missingEntriesOpen && (
+        <MissingEntriesModal
+          recordId={recordId}
+          companyId={companyId}
+          missingRows={missingRows}
+          onClose={() => setMissingEntriesOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -471,6 +495,8 @@ export default function ReconciliationDetail() {
       {summaryOpen && (
         <SummaryModal
           onClose={() => setSummaryOpen(false)}
+          recordId={record.id}
+          companyId={companyId}
           bankName={record.bankName}
           booksName={record.booksName}
           createdAt={record.createdAt}

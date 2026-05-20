@@ -33,14 +33,17 @@ export interface ReconciliationRecord {
   createdAt:     string
   stats:         ReconciliationStats
   rows:          ReconciliationRow[]
+  /** IDs of missing-from-books rows that have been pushed to Tally */
+  syncedMissingIds?: string[]
 }
 
 interface ReconciliationStore {
-  records:      ReconciliationRecord[]
-  addRecord:    (record: ReconciliationRecord) => void
-  removeRecord: (id: string) => void
-  getRecord:    (id: string) => ReconciliationRecord | undefined
-  getRecords:   (companyId: string) => ReconciliationRecord[]
+  records:                  ReconciliationRecord[]
+  addRecord:                (record: ReconciliationRecord) => void
+  removeRecord:             (id: string) => void
+  getRecord:                (id: string) => ReconciliationRecord | undefined
+  getRecords:               (companyId: string) => ReconciliationRecord[]
+  markMissingEntriesSynced: (recordId: string, ids: string[]) => void
 }
 
 export const useReconciliationStore = create<ReconciliationStore>()(
@@ -51,6 +54,15 @@ export const useReconciliationStore = create<ReconciliationStore>()(
       removeRecord: (id)     => set((s) => ({ records: s.records.filter((r) => r.id !== id) })),
       getRecord:    (id)     => get().records.find((r) => r.id === id),
       getRecords:   (companyId) => get().records.filter((r) => r.companyId === companyId),
+      markMissingEntriesSynced: (recordId, ids) =>
+        set((s) => ({
+          records: s.records.map((r) =>
+            r.id !== recordId ? r : {
+              ...r,
+              syncedMissingIds: [...new Set([...(r.syncedMissingIds ?? []), ...ids])],
+            }
+          ),
+        })),
     }),
     { name: 'tally-reconciliation' },
   ),
