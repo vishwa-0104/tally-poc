@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Zap, CheckCircle2, ChevronLeft, ChevronRight, BookOpen } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { Button } from '@/components/ui/Button'
@@ -33,11 +33,16 @@ interface Props {
 }
 
 export function MissingEntriesModal({ recordId, companyId, missingRows, onClose }: Props) {
-  const { getCompany, getLedgers } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb } = useCompanyStore()
   const { getRecord, markMissingEntriesSynced } = useReconciliationStore()
 
   const company      = getCompany(companyId) ?? null
   const ledgers      = getLedgers(companyId)
+
+  useEffect(() => {
+    if (!companyId) return
+    if (ledgers.length === 0) fetchLedgersFromDb(companyId).catch(() => {})
+  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
   const ledgerNames  = ledgers.map((l) => l.name)
   const tallyUrl     = getTallyUrl(companyId, company?.port)
   const tallyCompany = company?.name ?? ''
