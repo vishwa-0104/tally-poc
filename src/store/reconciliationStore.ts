@@ -9,6 +9,10 @@ export interface ReconciliationRow {
   credit: number | null
   source: 'bank' | 'books'
   matched: boolean
+  /** How the match was determined */
+  matchBasis?: 'ref' | 'desc' | 'amount'
+  /** Actual UTR / ref token that linked the two entries (only when matchBasis === 'ref') */
+  matchToken?: string
 }
 
 export interface ReconciliationStats {

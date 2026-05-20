@@ -205,79 +205,40 @@ function SummaryModal({ onClose, bankName, booksName, createdAt, companyId, miss
 
           {/* Net difference card */}
           <div className="mb-5 rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-3 py-2 bg-gray-800 text-white text-xs font-bold tracking-wide">
+            <div className="px-4 py-3 bg-gray-900 text-white text-sm font-bold">
               Net Difference Summary
             </div>
-            <table className="w-full text-xs border-collapse">
+            <table className="w-full border-collapse">
               <tbody>
-                <tr className="border-b border-gray-100">
-                  <td className="px-4 py-2.5 text-gray-600">Total Received — Missing from Books</td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-emerald-700 tabular-nums">{formatCurrency(missingTotals.received)}</td>
+                <tr className="border-b border-gray-200 bg-white">
+                  <td className="px-4 py-3 text-sm text-gray-600">Total Received — Missing from Books</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-emerald-600 tabular-nums">{formatCurrency(missingTotals.received)}</td>
                 </tr>
-                <tr className="border-b border-gray-100 bg-gray-50/40">
-                  <td className="px-4 py-2.5 text-gray-600">Total Paid — Missing from Books</td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-red-600 tabular-nums">{formatCurrency(missingTotals.paid)}</td>
+                <tr className="border-b border-gray-200 bg-white">
+                  <td className="px-4 py-3 text-sm text-gray-600">Total Paid — Missing from Books</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600 tabular-nums">{formatCurrency(missingTotals.paid)}</td>
                 </tr>
-                <tr className="border-b border-gray-100">
-                  <td className="px-4 py-2.5 text-gray-600">Total Received — Extra in Books</td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-emerald-700 tabular-nums">{formatCurrency(extraTotals.received)}</td>
+                <tr className="border-b border-gray-200 bg-white">
+                  <td className="px-4 py-3 text-sm text-gray-600">Total Received — Extra in Books</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-emerald-600 tabular-nums">{formatCurrency(extraTotals.received)}</td>
                 </tr>
-                <tr className="border-b border-gray-200 bg-gray-50/40">
-                  <td className="px-4 py-2.5 text-gray-600">Total Paid — Extra in Books</td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-red-600 tabular-nums">{formatCurrency(extraTotals.paid)}</td>
+                <tr className="border-b border-gray-200 bg-white">
+                  <td className="px-4 py-3 text-sm text-gray-600">Total Paid — Extra in Books</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600 tabular-nums">{formatCurrency(extraTotals.paid)}</td>
                 </tr>
-                <tr className="bg-gray-800 text-white font-bold">
-                  <td className="px-4 py-3 text-sm">Net Unreconciled Difference</td>
-                  <td className={`px-4 py-3 text-right text-sm tabular-nums ${netDiff === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {netDiff === 0 ? '✓ Fully Reconciled' : formatCurrency(Math.abs(netDiff))}
-                    {netDiff !== 0 && <span className="ml-1 text-xs font-normal opacity-70">{netDiff > 0 ? '(Books short)' : '(Books excess)'}</span>}
+                <tr className="bg-gray-900 text-white">
+                  <td className="px-4 py-3.5 text-sm font-bold">Net Unreconciled Difference</td>
+                  <td className={`px-4 py-3.5 text-right text-sm font-bold tabular-nums ${netDiff === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {netDiff === 0
+                      ? '✓ Fully Reconciled'
+                      : <>{formatCurrency(Math.abs(netDiff))}<span className="ml-1.5 text-xs font-normal text-amber-300">({netDiff > 0 ? 'Books short' : 'Books excess'})</span></>
+                    }
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-
-          {/* AI Analysis section */}
-          <div className="rounded-lg border border-blue-200 overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 bg-blue-50">
-              <span className="text-xs font-bold text-blue-800">AI Analysis &amp; Recommendations</span>
-              {aiText === null && !aiLoading && (
-                <button
-                  onClick={fetchAiAnalysis}
-                  className="text-[11px] font-medium px-3 py-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                >
-                  Generate Analysis
-                </button>
-              )}
-            </div>
-            <div className="px-4 py-3 bg-white min-h-[64px]">
-              {!aiLoading && aiText === null && aiError === null && (
-                <p className="text-xs text-gray-400 italic">
-                  Click "Generate Analysis" above to get AI-powered recommendations on how to correct the discrepancies.
-                </p>
-              )}
-              {aiLoading && (
-                <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                  Analyzing discrepancies…
-                </div>
-              )}
-              {aiError && !aiLoading && (
-                <div className="flex items-center gap-3 text-xs text-red-600 py-2">
-                  <span>{aiError}</span>
-                  <button
-                    onClick={() => { setAiText(null); fetchAiAnalysis() }}
-                    className="text-blue-600 hover:underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-              {aiText !== null && !aiLoading && (
-                <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{aiText}</p>
-              )}
-            </div>
-          </div>
+         
 
         </div>
 
@@ -482,11 +443,24 @@ export default function ReconciliationDetail() {
                         ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                         : <span className="w-3.5 flex-shrink-0 inline-block" />
                       }
-                      {row.source === 'bank' ? (
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-100 text-sky-700">From Bank</span>
-                      ) : (
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700">From Books</span>
-                      )}
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        {row.source === 'bank' ? (
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-100 text-sky-700 w-fit">From Bank</span>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-100 text-violet-700 w-fit">From Books</span>
+                        )}
+                        {row.matched && row.matchBasis === 'ref' && row.matchToken && (
+                          <span className="text-[9px] text-emerald-600 font-mono truncate max-w-[120px]" title={`Matched on UTR/Ref: ${row.matchToken}`}>
+                            UTR {row.matchToken.length > 10 ? `…${row.matchToken.slice(-8)}` : row.matchToken}
+                          </span>
+                        )}
+                        {row.matched && row.matchBasis === 'desc' && (
+                          <span className="text-[9px] text-blue-500">Desc match</span>
+                        )}
+                        {row.matched && row.matchBasis === 'amount' && (
+                          <span className="text-[9px] text-amber-500">Amt only ⚠</span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-2 py-2.5 text-right tabular-nums text-emerald-700"

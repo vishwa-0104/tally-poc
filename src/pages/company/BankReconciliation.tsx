@@ -19,28 +19,145 @@ import type { ReconciliationRow } from '@/store/reconciliationStore'
 
 // ── Reconcile logic ───────────────────────────────────────────────────────────
 
+type Tx = ParsedBankStatement['transactions'][number]
+
+/**
+ * Extract solid reference tokens from a transaction description.
+ * Looks for: UTR numbers, NEFT/RTGS/IMPS/UPI/cheque ref codes, and any
+ * standalone 8+ digit numeric sequence (typical for Indian bank identifiers).
+ */
+function extractRefs(desc: string): Set<string> {
+  const d = desc.toUpperCase()
+  const found = new Set<string>()
+
+  // Named-prefix references: UTR, REF, TXN, NEFT, RTGS, IMPS, UPI, CHQ, CHEQUE, TRANS
+  const prefixRe =
+    /(?:UTR(?:NO|N)?|REF(?:NO|#|\s)?|TXN(?:ID|NO|#|\s)?|NEFT|RTGS|IMPS|UPI(?:REF)?|CH(?:EQU?E?)?(?:NO|#|\s)?|TRANS(?:ACTION)?(?:ID|NO)?)[/\-#\s.:]*([A-Z0-9]{6,})/g
+  let m: RegExpExecArray | null
+  while ((m = prefixRe.exec(d)) !== null) found.add(m[1])
+
+  // Standalone 8+ digit numbers (UTR=16, IMPS=12, NEFT ref=16, etc.)
+  const longNumRe = /\b(\d{8,})\b/g
+  while ((m = longNumRe.exec(d)) !== null) found.add(m[1])
+
+  // Alphanumeric codes that start with 1–4 letters then 8+ digits (e.g. P23345678901)
+  const alphaRe = /\b([A-Z]{1,4}\d{8,})\b/g
+  while ((m = alphaRe.exec(d)) !== null) found.add(m[1])
+
+  return found
+}
+
+/**
+ * Return the first token that appears in both sets,
+ * also checking containment for truncated variants.
+ */
+function findCommonRef(a: Set<string>, b: Set<string>): string | null {
+  for (const av of a) {
+    if (b.has(av)) return av
+    for (const bv of b) {
+      if (av.length >= 6 && bv.length >= 6 && (av.includes(bv) || bv.includes(av))) {
+        return av.length <= bv.length ? av : bv
+      }
+    }
+  }
+  return null
+}
+
+/** Direction-aware amount key so ₹5000 received ≠ ₹5000 paid */
+function amtKey(t: Tx): string {
+  if (t.debit  != null && t.debit  > 0) return `D${t.debit.toFixed(2)}`
+  if (t.credit != null && t.credit > 0) return `C${t.credit.toFixed(2)}`
+  return 'Z0.00'
+}
+
+const STOP_WORDS = new Set([
+  'neft','rtgs','imps','upi','from','payment','transfer','bank','and','for',
+  'with','pvt','ltd','private','limited','the','account','acct','being','towards',
+])
+
+/** Meaningful word overlap ratio — ignores stop words and short tokens */
+function wordOverlap(a: string, b: string): number {
+  const words = (s: string) =>
+    new Set(
+      s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+        .filter(w => w.length > 3 && !STOP_WORDS.has(w))
+    )
+  const wa = words(a), wb = words(b)
+  if (wa.size === 0 || wb.size === 0) return 0
+  let common = 0
+  for (const w of wa) if (wb.has(w)) common++
+  return common / Math.min(wa.size, wb.size)
+}
+
 function reconcileAll(bank: ParsedBankStatement, books: ParsedBankStatement): ReconciliationRow[] {
-  const makeKey = (t: { date: string; debit: number | null; credit: number | null }) =>
-    `${t.date}|${Math.abs(t.debit ?? t.credit ?? 0).toFixed(2)}`
+  const usedBookIdx = new Set<number>()
 
-  const matchedBooksIdx = new Set<number>()
+  type BookEntry = { i: number; t: Tx; refs: Set<string>; amt: string }
+  const booksData: BookEntry[] = books.transactions.map((t, i) => ({
+    i, t, refs: extractRefs(t.description), amt: amtKey(t),
+  }))
 
-  const bankRows: ReconciliationRow[] = bank.transactions.map((bt) => {
-    const key = makeKey(bt)
-    const idx = books.transactions.findIndex((rt, i) => !matchedBooksIdx.has(i) && makeKey(rt) === key)
-    const matched = idx >= 0
-    if (matched) matchedBooksIdx.add(idx)
-    return { id: `bank_${bt.id}`, date: bt.date, description: bt.description, debit: bt.debit, credit: bt.credit, source: 'bank', matched }
+  type MatchResult = { matchIdx: number | null; matchBasis: ReconciliationRow['matchBasis']; matchToken?: string }
+  const bankMatches: MatchResult[] = bank.transactions.map(() => ({ matchIdx: null, matchBasis: undefined }))
+
+  // ── Pass 1: Reference token + amount (date-independent) ──────────────────
+  bank.transactions.forEach((bt, bi) => {
+    const bankRefs = extractRefs(bt.description)
+    if (bankRefs.size === 0) return
+    const bankAmt = amtKey(bt)
+    for (const bd of booksData) {
+      if (usedBookIdx.has(bd.i) || bd.amt !== bankAmt) continue
+      const ref = findCommonRef(bankRefs, bd.refs)
+      if (ref) {
+        bankMatches[bi] = { matchIdx: bd.i, matchBasis: 'ref', matchToken: ref }
+        usedBookIdx.add(bd.i)
+        break
+      }
+    }
+  })
+
+  // ── Pass 2: Description word overlap ≥ 40% + amount (date-independent) ──
+  bank.transactions.forEach((bt, bi) => {
+    if (bankMatches[bi].matchIdx !== null) return
+    const bankAmt = amtKey(bt)
+    let best: { idx: number; score: number } | null = null
+    for (const bd of booksData) {
+      if (usedBookIdx.has(bd.i) || bd.amt !== bankAmt) continue
+      const score = wordOverlap(bt.description, bd.t.description)
+      if (score >= 0.4 && (!best || score > best.score)) best = { idx: bd.i, score }
+    }
+    if (best) {
+      bankMatches[bi] = { matchIdx: best.idx, matchBasis: 'desc' }
+      usedBookIdx.add(best.idx)
+    }
+  })
+
+  // ── Pass 3: Amount-only, exactly ONE unmatched candidate (safe fallback) ──
+  bank.transactions.forEach((bt, bi) => {
+    if (bankMatches[bi].matchIdx !== null) return
+    const bankAmt = amtKey(bt)
+    const candidates = booksData.filter(bd => !usedBookIdx.has(bd.i) && bd.amt === bankAmt)
+    if (candidates.length === 1) {
+      bankMatches[bi] = { matchIdx: candidates[0].i, matchBasis: 'amount' }
+      usedBookIdx.add(candidates[0].i)
+    }
+  })
+
+  const bankRows: ReconciliationRow[] = bank.transactions.map((bt, bi) => {
+    const { matchIdx, matchBasis, matchToken } = bankMatches[bi]
+    return {
+      id: `bank_${bt.id}`, date: bt.date, description: bt.description,
+      debit: bt.debit, credit: bt.credit, source: 'bank',
+      matched: matchIdx !== null,
+      matchBasis: matchIdx !== null ? matchBasis : undefined,
+      matchToken,
+    }
   })
 
   const booksRows: ReconciliationRow[] = books.transactions.map((rt, i) => ({
-    id: `books_${rt.id}`,
-    date: rt.date,
-    description: rt.description,
-    debit: rt.debit,
-    credit: rt.credit,
-    source: 'books' as const,
-    matched: matchedBooksIdx.has(i),
+    id: `books_${rt.id}`, date: rt.date, description: rt.description,
+    debit: rt.debit, credit: rt.credit, source: 'books' as const,
+    matched: usedBookIdx.has(i),
   }))
 
   return [...bankRows, ...booksRows].sort((a, b) => {
