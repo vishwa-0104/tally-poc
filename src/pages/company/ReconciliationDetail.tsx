@@ -25,6 +25,276 @@ function rowStatus(row: ReconciliationRow): { label: string; cls: string } {
   return                                            { label: 'Extra in Books',     cls: 'bg-amber-100 text-amber-700'    }
 }
 
+function sumRows(rows: ReconciliationRow[]) {
+  return {
+    received: rows.reduce((s, r) => s + (r.debit  ?? 0), 0),
+    paid:     rows.reduce((s, r) => s + (r.credit ?? 0), 0),
+  }
+}
+
+interface SummaryModalProps {
+  onClose: () => void
+  bankName: string
+  booksName: string
+  createdAt: string
+  companyId: string
+  missingRows: ReconciliationRow[]
+  extraRows:   ReconciliationRow[]
+  matchedRows: ReconciliationRow[]
+}
+
+function SummaryModal({ onClose, bankName, booksName, createdAt, companyId, missingRows, extraRows, matchedRows }: SummaryModalProps) {
+  const [aiText,    setAiText]    = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError,   setAiError]   = useState<string | null>(null)
+
+  const missingTotals = sumRows(missingRows)
+  const extraTotals   = sumRows(extraRows)
+  const matchedTotals = sumRows(matchedRows)
+
+  const netDiff = (missingTotals.received - missingTotals.paid) - (extraTotals.received - extraTotals.paid)
+
+  const fetchAiAnalysis = async () => {
+    if (aiText !== null || aiLoading) return
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const { data } = await api.post('/reconcile/analyze', {
+        companyId,
+        bankName,
+        booksName,
+        missingFromBooks: missingRows,
+        extraInBooks:     extraRows,
+      })
+      setAiText(data.summary ?? '')
+    } catch {
+      setAiError('Failed to generate AI analysis. Please try again.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const EntryTable = ({
+    rows,
+    emptyMsg,
+    headerCls,
+    headerText,
+    badge,
+  }: {
+    rows: ReconciliationRow[]
+    emptyMsg: string
+    headerCls: string
+    headerText: string
+    badge: string
+  }) => {
+    const totals = sumRows(rows)
+    return (
+      <div className="mb-5">
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-t-lg ${headerCls}`}>
+          <span className="text-xs font-bold tracking-wide">{headerText}</span>
+          <span className={`ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full ${badge}`}>
+            {rows.length} {rows.length === 1 ? 'entry' : 'entries'}
+          </span>
+        </div>
+        <div className="border border-t-0 border-gray-200 rounded-b-lg overflow-hidden">
+          {rows.length === 0 ? (
+            <div className="py-4 text-center text-xs text-gray-400 bg-white">{emptyMsg}</div>
+          ) : (
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="px-3 py-2 text-left font-semibold text-gray-500 w-[90px]">Date</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-500">Description</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-500 w-[100px]">Received (₹)</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-500 w-[100px]">Paid (₹)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {rows.map((r, i) => (
+                  <tr key={r.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}>
+                    <td className="px-3 py-2 tabular-nums text-gray-500 whitespace-nowrap">{r.date}</td>
+                    <td className="px-3 py-2 text-gray-800 max-w-0">
+                      <span className="block truncate" title={r.description}>{r.description || '—'}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-emerald-700 font-medium">
+                      {r.debit  != null ? formatCurrency(r.debit)  : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-red-600 font-medium">
+                      {r.credit != null ? formatCurrency(r.credit) : <span className="text-gray-300">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-100 border-t border-gray-200 font-semibold">
+                  <td colSpan={2} className="px-3 py-2 text-xs text-gray-600">Total</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-emerald-700">
+                    {totals.received > 0 ? formatCurrency(totals.received) : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-red-600">
+                    {totals.paid > 0 ? formatCurrency(totals.paid) : '—'}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <BarChart2 className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-bold text-gray-900">Bank Reconciliation Statement</span>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              {bankName} <span className="mx-1 text-gray-300">vs</span> {booksName}
+              <span className="mx-2 text-gray-300">·</span>{formatDate(createdAt)}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+
+          {/* Missing from Books */}
+          <EntryTable
+            rows={missingRows}
+            emptyMsg="No missing entries — all bank transactions are recorded in books."
+            headerCls="bg-red-50 text-red-800"
+            headerText="Missing from Books — recorded in bank, absent in books"
+            badge="bg-red-100 text-red-700"
+          />
+
+          {/* Extra in Books */}
+          <EntryTable
+            rows={extraRows}
+            emptyMsg="No extra entries — books contain no unmatched transactions."
+            headerCls="bg-amber-50 text-amber-800"
+            headerText="Extra in Books — recorded in books, absent in bank"
+            badge="bg-amber-100 text-amber-700"
+          />
+
+          {/* Matched summary row */}
+          <div className="mb-5 border border-emerald-200 rounded-lg overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-800">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="text-xs font-bold tracking-wide">Matched Entries</span>
+              <span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                {matchedRows.length} {matchedRows.length === 1 ? 'entry' : 'entries'}
+              </span>
+            </div>
+            <div className="flex items-center gap-6 px-4 py-2.5 bg-white text-xs text-gray-600">
+              <span>Total Received: <span className="font-semibold text-emerald-700">{formatCurrency(matchedTotals.received)}</span></span>
+              <span>Total Paid: <span className="font-semibold text-red-600">{formatCurrency(matchedTotals.paid)}</span></span>
+            </div>
+          </div>
+
+          {/* Net difference card */}
+          <div className="mb-5 rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-3 py-2 bg-gray-800 text-white text-xs font-bold tracking-wide">
+              Net Difference Summary
+            </div>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="px-4 py-2.5 text-gray-600">Total Received — Missing from Books</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-emerald-700 tabular-nums">{formatCurrency(missingTotals.received)}</td>
+                </tr>
+                <tr className="border-b border-gray-100 bg-gray-50/40">
+                  <td className="px-4 py-2.5 text-gray-600">Total Paid — Missing from Books</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-red-600 tabular-nums">{formatCurrency(missingTotals.paid)}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="px-4 py-2.5 text-gray-600">Total Received — Extra in Books</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-emerald-700 tabular-nums">{formatCurrency(extraTotals.received)}</td>
+                </tr>
+                <tr className="border-b border-gray-200 bg-gray-50/40">
+                  <td className="px-4 py-2.5 text-gray-600">Total Paid — Extra in Books</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-red-600 tabular-nums">{formatCurrency(extraTotals.paid)}</td>
+                </tr>
+                <tr className="bg-gray-800 text-white font-bold">
+                  <td className="px-4 py-3 text-sm">Net Unreconciled Difference</td>
+                  <td className={`px-4 py-3 text-right text-sm tabular-nums ${netDiff === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {netDiff === 0 ? '✓ Fully Reconciled' : formatCurrency(Math.abs(netDiff))}
+                    {netDiff !== 0 && <span className="ml-1 text-xs font-normal opacity-70">{netDiff > 0 ? '(Books short)' : '(Books excess)'}</span>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* AI Analysis section */}
+          <div className="rounded-lg border border-blue-200 overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 bg-blue-50">
+              <span className="text-xs font-bold text-blue-800">AI Analysis &amp; Recommendations</span>
+              {aiText === null && !aiLoading && (
+                <button
+                  onClick={fetchAiAnalysis}
+                  className="text-[11px] font-medium px-3 py-1 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                >
+                  Generate Analysis
+                </button>
+              )}
+            </div>
+            <div className="px-4 py-3 bg-white min-h-[64px]">
+              {!aiLoading && aiText === null && aiError === null && (
+                <p className="text-xs text-gray-400 italic">
+                  Click "Generate Analysis" above to get AI-powered recommendations on how to correct the discrepancies.
+                </p>
+              )}
+              {aiLoading && (
+                <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  Analyzing discrepancies…
+                </div>
+              )}
+              {aiError && !aiLoading && (
+                <div className="flex items-center gap-3 text-xs text-red-600 py-2">
+                  <span>{aiError}</span>
+                  <button
+                    onClick={() => { setAiText(null); fetchAiAnalysis() }}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+              {aiText !== null && !aiLoading && (
+                <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{aiText}</p>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 flex-shrink-0 bg-gray-50/60">
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ReconciliationDetail() {
   const { reportId }           = useParams<{ reportId: string }>()
   const navigate               = useNavigate()
@@ -32,12 +302,9 @@ export default function ReconciliationDetail() {
   const { getCompany, companiesLoaded } = useCompanyStore()
   const { getRecord }          = useReconciliationStore()
 
-  const [filter,         setFilter]         = useState<FilterMode>('all')
-  const [page,           setPage]           = useState(1)
-  const [summaryOpen,    setSummaryOpen]    = useState(false)
-  const [summaryLoading, setSummaryLoading] = useState(false)
-  const [summaryText,    setSummaryText]    = useState<string | null>(null)
-  const [summaryError,   setSummaryError]   = useState<string | null>(null)
+  const [filter,      setFilter]      = useState<FilterMode>('all')
+  const [page,        setPage]        = useState(1)
+  const [summaryOpen, setSummaryOpen] = useState(false)
 
   const companyId = activeCompanyId ?? ''
   const company   = getCompany(companyId) ?? null
@@ -62,6 +329,10 @@ export default function ReconciliationDetail() {
     )
   }
 
+  const missingRows = record.rows.filter((r) => r.source === 'bank'  && !r.matched)
+  const extraRows   = record.rows.filter((r) => r.source === 'books' && !r.matched)
+  const matchedRows = record.rows.filter((r) => r.matched)
+
   const filteredRows = record.rows.filter((r) => {
     if (filter === 'matched') return r.matched
     if (filter === 'missing') return r.source === 'bank'  && !r.matched
@@ -78,37 +349,14 @@ export default function ReconciliationDetail() {
 
   const filterCount = (f: FilterMode) => {
     if (f === 'all')     return record.rows.length
-    if (f === 'matched') return record.rows.filter((r) => r.matched).length
-    if (f === 'missing') return record.rows.filter((r) => r.source === 'bank'  && !r.matched).length
-    return                      record.rows.filter((r) => r.source === 'books' && !r.matched).length
+    if (f === 'matched') return matchedRows.length
+    if (f === 'missing') return missingRows.length
+    return                      extraRows.length
   }
 
-  const handleSummary = async () => {
-    setSummaryOpen(true)
-    if (summaryText !== null) return
-    setSummaryLoading(true)
-    setSummaryError(null)
-    try {
-      const missingFromBooks = record.rows.filter((r) => r.source === 'bank'  && !r.matched)
-      const extraInBooks     = record.rows.filter((r) => r.source === 'books' && !r.matched)
-      const { data } = await api.post('/reconcile/analyze', {
-        companyId,
-        bankName:       record.bankName,
-        booksName:      record.booksName,
-        missingFromBooks,
-        extraInBooks,
-      })
-      setSummaryText(data.summary ?? '')
-    } catch {
-      setSummaryError('Failed to generate summary. Please try again.')
-    } finally {
-      setSummaryLoading(false)
-    }
-  }
-
-  const SummaryButton = () => (
+  const SummaryBtn = () => (
     <button
-      onClick={handleSummary}
+      onClick={() => setSummaryOpen(true)}
       className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
     >
       <BarChart2 className="w-3.5 h-3.5" />
@@ -119,62 +367,17 @@ export default function ReconciliationDetail() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
-      {/* AI Summary Modal */}
       {summaryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <BarChart2 className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-semibold text-gray-900">Reconciliation Summary</span>
-                <span className="text-xs text-gray-400 ml-1">{record.bankName} vs {record.booksName}</span>
-              </div>
-              <button
-                onClick={() => setSummaryOpen(false)}
-                className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              {summaryLoading && (
-                <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
-                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                  <p className="text-sm">Analyzing discrepancies…</p>
-                </div>
-              )}
-              {summaryError && !summaryLoading && (
-                <div className="flex flex-col items-center justify-center py-10 gap-3">
-                  <p className="text-sm text-red-600">{summaryError}</p>
-                  <button
-                    onClick={() => { setSummaryText(null); handleSummary() }}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Retry
-                  </button>
-                </div>
-              )}
-              {summaryText !== null && !summaryLoading && (
-                <div className="prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap text-sm leading-relaxed">
-                  {summaryText}
-                </div>
-              )}
-            </div>
-
-            {/* Modal footer */}
-            <div className="flex justify-end px-5 py-3 border-t border-gray-100 flex-shrink-0">
-              <button
-                onClick={() => setSummaryOpen(false)}
-                className="px-4 py-1.5 text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        <SummaryModal
+          onClose={() => setSummaryOpen(false)}
+          bankName={record.bankName}
+          booksName={record.booksName}
+          createdAt={record.createdAt}
+          companyId={companyId}
+          missingRows={missingRows}
+          extraRows={extraRows}
+          matchedRows={matchedRows}
+        />
       )}
 
       {/* Top bar */}
@@ -194,7 +397,6 @@ export default function ReconciliationDetail() {
           <span className="text-xs text-gray-400 hidden sm:inline flex-shrink-0">· {formatDate(record.createdAt)}</span>
         </div>
 
-        {/* Summary chips */}
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           <span className="flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
             <CheckCircle2 className="w-3 h-3" /> {record.stats.matched} matched
@@ -212,7 +414,7 @@ export default function ReconciliationDetail() {
         </div>
       </div>
 
-      {/* Filter tabs */}
+      {/* Filter tabs + top Summary button */}
       <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-100 bg-gray-50/60 flex-shrink-0">
         {FILTERS.map((f) => (
           <button
@@ -234,19 +436,19 @@ export default function ReconciliationDetail() {
         <span className="ml-auto text-xs text-gray-400 mr-2">
           {filteredRows.length} row{filteredRows.length !== 1 ? 's' : ''}
         </span>
-        <SummaryButton />
+        <SummaryBtn />
       </div>
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <table className="w-full text-xs border-collapse table-fixed">
           <colgroup>
-            <col className="w-[9%]"  /> {/* date */}
-            <col />                     {/* description */}
-            <col className="w-[18%]" /> {/* source + tick */}
-            <col className="w-[10%]" /> {/* received */}
-            <col className="w-[10%]" /> {/* paid */}
-            <col className="w-[16%]" /> {/* status */}
+            <col className="w-[9%]"  />
+            <col />
+            <col className="w-[18%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[16%]" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
             <tr>
@@ -265,7 +467,7 @@ export default function ReconciliationDetail() {
                 <tr
                   key={row.id}
                   className={
-                    row.matched          ? 'bg-emerald-50/30 hover:bg-emerald-50/60'
+                    row.matched             ? 'bg-emerald-50/30 hover:bg-emerald-50/60'
                     : row.source === 'bank' ? 'bg-red-50/30 hover:bg-red-50/60'
                     :                        'bg-amber-50/30 hover:bg-amber-50/60'
                   }
@@ -307,9 +509,9 @@ export default function ReconciliationDetail() {
         </table>
       </div>
 
-      {/* Between table and footer: Summary button row */}
+      {/* Bottom Summary button row */}
       <div className="flex items-center justify-end px-4 py-2 border-t border-gray-100 bg-gray-50/60 flex-shrink-0">
-        <SummaryButton />
+        <SummaryBtn />
       </div>
 
       {/* Footer: pagination */}
