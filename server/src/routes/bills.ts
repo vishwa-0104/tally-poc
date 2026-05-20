@@ -523,6 +523,163 @@ Field conventions:
 
 Rules: Dates in YYYY-MM-DD. Numbers without commas. Preserve descriptions exactly. Skip header/footer rows.`
 
+// POST /api/reconcile/analyze — AI-powered reconciliation summary (text-only)
+billsRouter.post('/reconcile/analyze', async (req, res) => {
+  const { companyId: bodyCompanyId, bankName, booksName, missingFromBooks, extraInBooks } = req.body as {
+    companyId?: string
+    bankName: string
+    booksName: string
+    missingFromBooks: Array<{ date: string; description: string; debit: number | null; credit: number | null }>
+    extraInBooks:     Array<{ date: string; description: string; debit: number | null; credit: number | null }>
+  }
+
+  let companyId: string | null = bodyCompanyId || null
+  if (!companyId && req.auth.role !== 'ADMIN') {
+    const link = await prisma.userCompany.findFirst({
+      where:  { userId: req.auth.userId },
+      select: { companyId: true },
+    })
+    companyId = link?.companyId ?? null
+  }
+
+  const geminiKey    = process.env.GEMINI_API_KEY
+  const anthropicKey = process.env.ANTHROPIC_API_KEY
+
+  if (!geminiKey && !anthropicKey) {
+    res.json({ summary: MOCK_RECONCILE_SUMMARY(bankName, booksName, missingFromBooks.length, extraInBooks.length) })
+    return
+  }
+
+  let parseService = geminiKey ? 'gemini' : 'anthropic'
+  let model        = parseService === 'gemini' ? 'gemini-flash-latest' : 'claude-haiku-4-5-20251001'
+  if (companyId) {
+    const company = await prisma.company.findUnique({
+      where:  { id: companyId },
+      select: { parseService: true, parseModel: true },
+    })
+    if (company) {
+      parseService = company.parseService ?? parseService
+      const dbModel = company.parseModel ?? ''
+      if (parseService === 'gemini' && GEMINI_MODELS.includes(dbModel))            model = dbModel
+      else if (parseService === 'anthropic' && ANTHROPIC_MODELS.includes(dbModel)) model = dbModel
+      else model = parseService === 'anthropic' ? 'claude-haiku-4-5-20251001' : 'gemini-flash-latest'
+    }
+  }
+
+  const apiKey = parseService === 'anthropic' ? anthropicKey! : geminiKey!
+
+  const fmtRows = (rows: typeof missingFromBooks) =>
+    rows.map((r, i) =>
+      `  ${i + 1}. ${r.date} | ${r.description} | Received: ${r.debit ?? 0} | Paid: ${r.credit ?? 0}`
+    ).join('\n')
+
+  const promptText = `You are an accounting assistant. A company has compared their bank statement ("${bankName}") against their books ("${booksName}"). Analyze the discrepancies and provide a clear, concise reconciliation summary.
+
+MISSING FROM BOOKS (${missingFromBooks.length} entries — present in bank but absent in books):
+${missingFromBooks.length > 0 ? fmtRows(missingFromBooks) : '  None'}
+
+EXTRA IN BOOKS (${extraInBooks.length} entries — present in books but absent in bank statement):
+${extraInBooks.length > 0 ? fmtRows(extraInBooks) : '  None'}
+
+Please provide:
+1. A brief overview of the discrepancy (1-2 sentences)
+2. The net amount missing from books (sum of received and paid for missing entries)
+3. The net amount extra in books (sum of received and paid for extra entries)
+4. What journal entries or corrections would be needed to reconcile the books with the bank
+5. Any patterns you notice (e.g., duplicate entries, missed transactions, timing differences)
+6. A final verdict: is this a minor or major discrepancy?
+
+Be concise and practical. Use plain language. Format with clear section headings.`
+
+  interface ParsedUsage { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+  let text: string
+  let usage: ParsedUsage
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rawUsage: any = null
+
+  console.log(`[ReconcileAnalyze] companyId=${companyId ?? 'none'} model=${model}`)
+
+  if (parseService === 'gemini') {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: 'You are a helpful accounting assistant.' }] },
+          contents: [{ role: 'user', parts: [{ text: promptText }] }],
+          generationConfig: { maxOutputTokens: 2048 },
+        }),
+      },
+    )
+    if (!r.ok) {
+      if (companyId) prisma.parseUsageLog.create({
+        data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
+      }).catch((e) => console.error('[ReconcileAnalyze] usage log error:', e))
+      res.status(r.status).json({ error: 'Gemini API error' }); return
+    }
+    const d = await r.json() as {
+      candidates: Array<{ content: { parts: Array<{ text: string }> } }>
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }
+    }
+    const thinkingTokens = d.usageMetadata?.thoughtsTokenCount ?? 0
+    rawUsage = d.usageMetadata ?? null
+    text  = d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    usage = { input_tokens: d.usageMetadata?.promptTokenCount ?? 0, output_tokens: (d.usageMetadata?.candidatesTokenCount ?? 0) + thinkingTokens }
+  } else {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: 'user', content: promptText }] }),
+    })
+    if (!r.ok) {
+      if (companyId) prisma.parseUsageLog.create({
+        data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
+      }).catch((e) => console.error('[ReconcileAnalyze] usage log error:', e))
+      res.status(r.status).json({ error: 'Anthropic API error' }); return
+    }
+    const d = await r.json() as { content: Array<{ type: string; text: string }>; usage: ParsedUsage }
+    rawUsage = d.usage ?? null
+    text  = d.content.find((b) => b.type === 'text')?.text ?? ''
+    usage = d.usage ?? { input_tokens: 0, output_tokens: 0 }
+  }
+
+  if (companyId) {
+    await prisma.parseUsageLog.create({
+      data: {
+        companyId,
+        model,
+        inputTokens:  usage.input_tokens ?? 0,
+        outputTokens: usage.output_tokens ?? 0,
+        cacheRead:    usage.cache_read_input_tokens ?? 0,
+        cacheWrite:   usage.cache_creation_input_tokens ?? 0,
+        success:      true,
+        rawUsage,
+      },
+    }).catch((e) => console.error('[ReconcileAnalyze] usage log error:', e))
+  }
+
+  res.json({ summary: text })
+})
+
+function MOCK_RECONCILE_SUMMARY(bankName: string, booksName: string, missing: number, extra: number) {
+  return `**Reconciliation Overview**
+Comparing "${bankName}" (bank) against "${booksName}" (books) reveals ${missing} entries missing from books and ${extra} extra entries in books.
+
+**Missing from Books (${missing} entries)**
+These transactions appear in the bank statement but have not been recorded in the books. Total net impact requires recording these entries to bring books in line with the bank.
+
+**Extra in Books (${extra} entries)**
+These entries exist in the books but are absent from the bank statement. They may represent timing differences (cheques not yet cleared) or erroneous entries that need to be reversed.
+
+**Recommended Corrections**
+- For missing entries: create the corresponding journal entries in the books matching the bank dates and amounts.
+- For extra entries: verify if these are outstanding cheques/transfers. If not, pass a reversal entry.
+
+**Verdict**
+${missing + extra === 0 ? 'Books are fully reconciled.' : missing + extra <= 5 ? 'Minor discrepancy — can be resolved quickly.' : 'Significant discrepancy — requires careful review before closing.'}`
+}
+
 function MOCK_BANK_STATEMENT() {
   return {
     bankName: 'State Bank of India',

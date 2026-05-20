@@ -23,7 +23,8 @@ import CompanySyncLog  from '@/pages/company/CompanySyncLog'
 import CompanySettings from '@/pages/company/CompanySettings'
 import BankStatement      from '@/pages/company/BankStatement'
 import BankMapping        from '@/pages/company/BankMapping'
-import BankReconciliation from '@/pages/company/BankReconciliation'
+import BankReconciliation  from '@/pages/company/BankReconciliation'
+import ReconciliationDetail from '@/pages/company/ReconciliationDetail'
 
 
 export default function App() {
@@ -54,7 +55,8 @@ export default function App() {
         <Route path="settings"        element={<CompanySettings />} />
         <Route path="bank"            element={<BankStatement />} />
         <Route path="bank/:bankId"    element={<BankMapping />} />
-        <Route path="reconcile"       element={<BankReconciliation />} />
+        <Route path="reconcile"            element={<BankReconciliation />} />
+        <Route path="reconcile/:reportId" element={<ReconciliationDetail />} />
       </Route>
 
       {/* ── Fallback ── */}
