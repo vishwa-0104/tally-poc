@@ -9,7 +9,7 @@ import {
 } from '@/services/tallyService'
 import { getTallyUrl } from '@/pages/company/CompanySettings'
 
-const STALE_MS = 1 * 60 * 60 * 1000 // 1 hour
+const STALE_MS = 1000 // 1 hour
 
 function isStale(iso: string | null | undefined): boolean {
   if (!iso) return true
@@ -29,11 +29,11 @@ function isStale(iso: string | null | undefined): boolean {
  */
 export function useAutoSyncTally(companyId: string) {
   const { connected }  = useExtensionStatus()
-  const { getCompany, saveLedgersToDb, saveStockItemsToDb, saveStockGroupsToDb, saveStockUnitsToDb } = useCompanyStore()
+  const { getCompany, companiesLoaded, saveLedgersToDb, saveStockItemsToDb, saveStockGroupsToDb, saveStockUnitsToDb } = useCompanyStore()
   const hasFiredRef = useRef(false)
 
   useEffect(() => {
-    if (!connected || !companyId) return
+    if (!connected || !companyId || !companiesLoaded) return
     if (hasFiredRef.current) return
     hasFiredRef.current = true
 
@@ -69,5 +69,5 @@ export function useAutoSyncTally(companyId: string) {
         .then((data) => saveStockUnitsToDb(companyId, data))
         .catch(() => {})
     }
-  }, [connected]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [connected, companiesLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 }
