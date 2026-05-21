@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useExtensionStatus } from './useExtension'
 import { useCompanyStore } from '@/store'
 import {
@@ -9,7 +10,7 @@ import {
 } from '@/services/tallyService'
 import { getTallyUrl } from '@/pages/company/CompanySettings'
 
-const STALE_MS = 1000 // 1 hour
+const STALE_MS = 1000 // ms — set to e.g. 43_200_000 (12 h) for production
 
 function isStale(iso: string | null | undefined): boolean {
   if (!iso) return true
@@ -18,24 +19,18 @@ function isStale(iso: string | null | undefined): boolean {
 
 /**
  * Silently auto-refreshes Tally master data (ledgers, stock items, groups, units)
- * when the Chrome extension is connected and the cached data is older than 12 hours.
+ * when the Chrome extension is connected and the cached data is stale.
  *
- * Rules:
- * - Only fires when the extension responds to PING (Tally is reachable).
- * - Each data type is fetched independently — one failure doesn't block others.
- * - The timestamp is only updated on successful save, so failures are retried
- *   on the next session without any extra bookkeeping.
- * - Fires at most once per CompanyLayout mount (guarded by hasFiredRef).
+ * Fires on every page navigation (location change) so new data is pulled
+ * whenever the user moves between pages — isStale guards against redundant calls.
  */
 export function useAutoSyncTally(companyId: string) {
-  const { connected }  = useExtensionStatus()
+  const { connected }    = useExtensionStatus()
+  const { pathname }     = useLocation()
   const { getCompany, companiesLoaded, saveLedgersToDb, saveStockItemsToDb, saveStockGroupsToDb, saveStockUnitsToDb } = useCompanyStore()
-  const hasFiredRef = useRef(false)
 
   useEffect(() => {
     if (!connected || !companyId || !companiesLoaded) return
-    if (hasFiredRef.current) return
-    hasFiredRef.current = true
 
     const company = getCompany(companyId)
     if (!company) return
@@ -43,8 +38,6 @@ export function useAutoSyncTally(companyId: string) {
     const tallyUrl     = getTallyUrl(companyId, company.port)
     const tallyCompany = company.name ?? undefined
     const ts           = (company.syncTimestamps ?? {}) as Record<string, string | null | undefined>
-
-    console.log("logging timestamps for company", companyId, ts, isStale(ts.ledgers))
 
     if (isStale(ts.ledgers)) {
       fetchTallyLedgers(tallyUrl, tallyCompany)
@@ -69,5 +62,5 @@ export function useAutoSyncTally(companyId: string) {
         .then((data) => saveStockUnitsToDb(companyId, data))
         .catch(() => {})
     }
-  }, [connected, companiesLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [connected, companiesLoaded, pathname]) // eslint-disable-line react-hooks/exhaustive-deps
 }
