@@ -9,7 +9,7 @@ import { parseBillWithAI, parsedDataToBill } from '@/services'
 import { useBillStore, useCompanyStore, useAuthStore } from '@/store'
 import { cn } from '@/lib/utils'
 
-type QuotaErrorType = 'limit' | 'expired' | 'blocked'
+type QuotaErrorType = 'limit' | 'expired' | 'blocked' | 'unavailable'
 interface QuotaError { type: QuotaErrorType; message: string }
 
 function extractQuotaError(err: unknown): QuotaError | null {
@@ -18,6 +18,7 @@ function extractQuotaError(err: unknown): QuotaError | null {
   if (code === 'PARSE_LIMIT_EXCEEDED') return { type: 'limit', message }
   if (code === 'SUBSCRIPTION_EXPIRED')  return { type: 'expired', message }
   if (code === 'PARSE_BLOCKED')         return { type: 'blocked', message }
+  if (code === 'SERVICE_UNAVAILABLE')   return { type: 'unavailable', message }
   return null
 }
 
@@ -166,15 +167,16 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
         <div className="py-6 flex flex-col items-center gap-4 text-center">
           <div className={cn(
             'w-14 h-14 rounded-full flex items-center justify-center',
-            quotaError.type === 'blocked' ? 'bg-red-100' : 'bg-amber-100',
+            quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'bg-red-100' : 'bg-amber-100',
           )}>
-            <AlertTriangle className={cn('w-7 h-7', quotaError.type === 'blocked' ? 'text-red-500' : 'text-amber-500')} />
+            <AlertTriangle className={cn('w-7 h-7', quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'text-red-500' : 'text-amber-500')} />
           </div>
           <div>
-            <p className={cn('text-sm font-bold mb-1', quotaError.type === 'blocked' ? 'text-red-700' : 'text-amber-700')}>
-              {quotaError.type === 'blocked'   ? 'Parsing Disabled' :
-               quotaError.type === 'expired'   ? 'Subscription Expired' :
-                                                 'Parse Limit Reached'}
+            <p className={cn('text-sm font-bold mb-1', quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'text-red-700' : 'text-amber-700')}>
+              {quotaError.type === 'blocked'     ? 'Parsing Disabled' :
+               quotaError.type === 'expired'     ? 'Subscription Expired' :
+               quotaError.type === 'unavailable' ? 'Service Unavailable' :
+                                                   'Parse Limit Reached'}
             </p>
             <p className="text-xs text-gray-600 leading-relaxed max-w-xs">{quotaError.message}</p>
           </div>

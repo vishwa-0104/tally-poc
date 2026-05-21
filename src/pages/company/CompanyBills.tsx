@@ -58,8 +58,12 @@ export default function CompanyBills() {
         succeeded++
       } catch (err) {
         const code = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        if (code === 'PARSE_LIMIT_EXCEEDED' || code === 'SUBSCRIPTION_EXPIRED' || code === 'PARSE_BLOCKED') {
-          toast.error(code === 'PARSE_BLOCKED' ? 'Parsing is disabled for your account' : 'Parse limit reached — stopping upload')
+        if (code === 'PARSE_LIMIT_EXCEEDED' || code === 'SUBSCRIPTION_EXPIRED' || code === 'PARSE_BLOCKED' || code === 'SERVICE_UNAVAILABLE') {
+          toast.error(
+            code === 'PARSE_BLOCKED'       ? 'Parsing is disabled for your account' :
+            code === 'SERVICE_UNAVAILABLE' ? 'Service unavailable — please try again later or contact support' :
+                                             'Parse limit reached — stopping upload',
+          )
           setBulkDone((d) => d + (files.length - succeeded - failed))
           break
         }

@@ -149,10 +149,11 @@ billsRouter.post('/bills/parse', async (req, res) => {
     ? process.env.ANTHROPIC_API_KEY
     : process.env.GEMINI_API_KEY
 
-  // Return mock data if no API key configured (dev mode — skip quota)
   if (!apiKey) {
-    await new Promise((r) => setTimeout(r, 2000))
-    res.json(MOCK_PARSED_BILL())
+    res.status(503).json({
+      error: 'SERVICE_UNAVAILABLE',
+      message: 'We\'re sorry for the inconvenience. The bill parsing service is currently unavailable. Please try again later or contact support.',
+    })
     return
   }
 
@@ -876,21 +877,4 @@ VERIFY: subtotal + cgstAmount + sgstAmount + igstAmount + (roundOffAmount ?? 0) 
 }
 \`\`\``
 
-function MOCK_PARSED_BILL() {
-  return {
-    vendorName: 'Agro Products Ltd',
-    vendorGstin: '07AAGCA1234B1Z5',
-    billNumber: 'APL/2025/' + Math.floor(Math.random() * 9000 + 1000),
-    billDate: new Date().toISOString().split('T')[0],
-    subtotal: 29600,
-    cgstAmount: 800,
-    sgstAmount: 800,
-    igstAmount: 0,
-    totalAmount: 31200,
-    lineItems: [
-      { description: 'Wheat Flour 50kg', hsnCode: '1101', quantity: 20, unit: 'BAG', unitPrice: 1400, gstRate: 0, amount: 28000 },
-      { description: 'Semolina 50kg',    hsnCode: '1103', quantity: 4,  unit: 'BAG', unitPrice: 800,  gstRate: 5, amount: 3360  },
-    ],
-  }
-}
 
