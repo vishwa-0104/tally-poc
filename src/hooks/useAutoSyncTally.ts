@@ -10,7 +10,7 @@ import {
 } from '@/services/tallyService'
 import { getTallyUrl } from '@/pages/company/CompanySettings'
 
-const STALE_MS = 1000 // ms — set to e.g. 43_200_000 (12 h) for production
+const STALE_MS = 1 * 60 * 60 * 1000 // ms — set to e.g. 43_200_000 (12 h) for production
 
 function isStale(iso: string | null | undefined): boolean {
   if (!iso) return true
