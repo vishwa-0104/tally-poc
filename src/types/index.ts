@@ -19,6 +19,11 @@ export interface AuthState {
 }
 
 // ── Company ───────────────────────────────────────────────
+export interface BankDefaultLedger {
+  keyword: string  // e.g. "HDFC", "ICICI" — matched case-insensitively against bank name
+  ledger:  string  // Tally ledger name
+}
+
 export interface LedgerMapping {
   // Purchase ledgers (1:1 static keys)
   purchase_interstate_18?: string
@@ -41,6 +46,9 @@ export interface LedgerMapping {
   igst_40?: string
   // Round off
   roundoff_ledger?: string
+  // Bank & Cash Book default ledgers
+  bank_default_ledgers?:      BankDefaultLedger[]
+  cash_book_default_ledgers?: string[]
 }
 
 /** Cast stored JSON to LedgerMapping (all fields optional, no migration needed) */
@@ -80,8 +88,11 @@ export const COMPANY_FEATURES = {
   DISCOUNT_COLUMN: 'discount_column',
   DEBIT_VOUCHER:   'debit_voucher',
   CREDIT_VOUCHER:  'credit_voucher',
-  BANK_VOUCHER:    'bank_voucher',
-  BANK_RECONCILE:  'bank_reconcile',
+  BANK_VOUCHER:     'bank_voucher',
+  BANK_RECONCILE:   'bank_reconcile',
+  CASH_BOOK:        'cash_book',
+  HIDE_SETTINGS:    'hide_settings',
+  VENDOR_RECONCILE: 'vendor_reconcile',
 } as const
 
 export interface Company {

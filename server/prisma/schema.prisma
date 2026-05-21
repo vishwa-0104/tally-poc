@@ -71,6 +71,7 @@ model Company {
   voucherTypeCache VoucherTypeCache[]
   features         CompanyFeature[]
   bankSyncLogs     BankSyncLog[]
+  cashBookSyncLogs CashBookSyncLog[]
   voucherType      String         @default("GST PURCHASE")
   syncTimestamps   Json?
   createdAt        DateTime       @default(now())
@@ -210,6 +211,17 @@ model StockUnitCache {
 }
 
 model BankSyncLog {
+  id          String   @id @default(cuid())
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String
+  fingerprint String
+  createdAt   DateTime @default(now())
+
+  @@unique([companyId, fingerprint])
+  @@index([companyId])
+}
+
+model CashBookSyncLog {
   id          String   @id @default(cuid())
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId   String

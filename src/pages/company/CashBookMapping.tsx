@@ -4,28 +4,27 @@ import { toast } from 'react-hot-toast'
 import { ArrowLeft } from 'lucide-react'
 import { BankMappingForm } from '@/components/company/BankMappingForm'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { useBankStore, makeFingerprint } from '@/store/bankStore'
-import { normalizeLedgerMapping } from '@/types'
+import { useCashBookStore, makeCashBookFingerprint } from '@/store/cashBookStore'
 import { syncBankToTally } from '@/services/tallyService'
 import type { BankSyncRow } from '@/services/tallyService'
-import { COMPANY_FEATURES } from '@/types'
+import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { ParsedBankStatement } from '@/types'
 import { getTallyUrl } from './CompanySettings'
 import { api } from '@/lib/api'
 
-export default function BankMapping() {
-  const { bankId }          = useParams<{ bankId: string }>()
-  const navigate            = useNavigate()
-  const { activeCompanyId } = useAuthStore()
+export default function CashBookMapping() {
+  const { cashId }           = useParams<{ cashId: string }>()
+  const navigate             = useNavigate()
+  const { activeCompanyId }  = useAuthStore()
   const { getCompany, getLedgers, fetchLedgersFromDb, companiesLoaded } = useCompanyStore()
-  const { getStatement, updateStatement } = useBankStore()
+  const { getRecord, updateRecord } = useCashBookStore()
 
-  const companyId    = activeCompanyId ?? ''
-  const company      = getCompany(companyId) ?? null
-  const ledgers      = getLedgers(companyId)
+  const companyId   = activeCompanyId ?? ''
+  const company     = getCompany(companyId) ?? null
+  const ledgers     = getLedgers(companyId)
 
-  const hasBankVoucher = (company?.features ?? []).some(
-    (f) => f.feature === COMPANY_FEATURES.BANK_VOUCHER && f.enabled,
+  const hasCashBook = (company?.features ?? []).some(
+    (f) => f.feature === COMPANY_FEATURES.CASH_BOOK && f.enabled,
   )
 
   const [fingerprintSet, setFingerprintSet] = useState<Set<string>>(new Set())
@@ -33,41 +32,37 @@ export default function BankMapping() {
   useEffect(() => {
     if (!companyId) return
     if (ledgers.length === 0) fetchLedgersFromDb(companyId).catch(() => {})
-    api.get<string[]>(`/companies/${companyId}/bank-fingerprints`)
+    api.get<string[]>(`/companies/${companyId}/cash-book-fingerprints`)
       .then(({ data }) => setFingerprintSet(new Set(data)))
       .catch(() => {})
   }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const record       = getStatement(bankId ?? '')
+  const record       = getRecord(cashId ?? '')
   const tallyUrl     = getTallyUrl(companyId, company?.port)
   const tallyCompany = company?.name ?? ''
 
-  const [bankLedger, setBankLedger] = useState(() => {
-    const rec = getStatement(bankId ?? '')
-    if (!rec) return ''
-    const defaults = normalizeLedgerMapping(company?.mapping).bank_default_ledgers ?? []
-    const bn = rec.bankName.toLowerCase()
-    const match = defaults.find((d) => bn.includes(d.keyword.toLowerCase()) || d.keyword.toLowerCase().includes(bn))
-    return match?.ledger ?? ''
+  const [cashLedger, setCashLedger] = useState(() => {
+    const defaults = normalizeLedgerMapping(company?.mapping).cash_book_default_ledgers ?? []
+    return defaults[0] ?? ''
   })
-  const [syncing, setSyncing] = useState(false)
+  const [syncing,    setSyncing]    = useState(false)
 
   if (!companiesLoaded) return null
-  if (!hasBankVoucher) return <Navigate to="/company" replace />
+  if (!hasCashBook) return <Navigate to="/company" replace />
 
   if (!record) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
-        <p className="text-sm">Bank statement not found.</p>
-        <button onClick={() => navigate('/company/bank')} className="text-xs text-teal-600 hover:underline">
-          ← Back to My Bank
+        <p className="text-sm">Cash book record not found.</p>
+        <button onClick={() => navigate('/company/cash-book')} className="text-xs text-teal-600 hover:underline">
+          ← Back to Cash Book
         </button>
       </div>
     )
   }
 
   const statement: ParsedBankStatement = {
-    bankName:      record.bankName,
+    bankName:      record.bookName,
     accountNumber: record.accountNumber,
     transactions:  record.transactions,
   }
@@ -78,16 +73,13 @@ export default function BankMapping() {
       const result = await syncBankToTally(rows, bl, tallyUrl, tallyCompany)
       if (result.success) {
         const fps = rows.map((r) =>
-          makeFingerprint(record.bankName, r.date, r.amount, r.description),
+          makeCashBookFingerprint(record.bookName, r.date, r.amount, r.description),
         )
 
-        // Persist fingerprints to DB
-        await api.post(`/companies/${companyId}/bank-fingerprints`, { fingerprints: fps })
+        await api.post(`/companies/${companyId}/cash-book-fingerprints`, { fingerprints: fps })
 
-        // Update local fingerprintSet so re-opening immediately reflects synced state
         setFingerprintSet((prev) => new Set([...prev, ...fps]))
 
-        // Mark synced transactions in the local record
         const syncedKey = new Set(rows.map((r) => `${r.date}|${r.description}`))
         const updatedTxns = record.transactions.map((t) =>
           syncedKey.has(`${t.date}|${t.description}`) ? { ...t, synced: true } : t,
@@ -95,7 +87,7 @@ export default function BankMapping() {
         const totalSyncedCount = updatedTxns.filter((t) => t.synced === true).length
         const newStatus = totalSyncedCount >= record.totalCount ? 'synced' : 'partially_synced'
 
-        updateStatement(record.id, {
+        updateRecord(record.id, {
           status:       newStatus,
           syncedCount:  totalSyncedCount,
           syncedAt:     new Date().toISOString(),
@@ -103,9 +95,9 @@ export default function BankMapping() {
           transactions: updatedTxns,
         })
         toast.success(`Synced ${result.created} voucher${result.created !== 1 ? 's' : ''} to Tally`)
-        navigate('/company/bank')
+        navigate('/company/cash-book')
       } else {
-        updateStatement(record.id, {
+        updateRecord(record.id, {
           status:    'error',
           syncError: result.message ?? 'Sync failed',
         })
@@ -113,7 +105,7 @@ export default function BankMapping() {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sync failed'
-      updateStatement(record.id, { status: 'error', syncError: msg })
+      updateRecord(record.id, { status: 'error', syncError: msg })
       toast.error(msg)
     } finally {
       setSyncing(false)
@@ -125,15 +117,15 @@ export default function BankMapping() {
       {/* Top bar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-100 bg-white flex-shrink-0">
         <button
-          onClick={() => navigate('/company/bank')}
+          onClick={() => navigate('/company/cash-book')}
           className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          My Bank
+          Cash Book
         </button>
         <span className="text-gray-300">|</span>
         <div className="flex items-center gap-2 min-w-0">
-          <h1 className="text-sm font-bold text-gray-900 truncate">{record.bankName}</h1>
+          <h1 className="text-sm font-bold text-gray-900 truncate">{record.bookName}</h1>
           {record.accountNumber && (
             <span className="text-xs text-gray-400 hidden sm:inline">· {record.accountNumber}</span>
           )}
@@ -151,8 +143,8 @@ export default function BankMapping() {
       <div className="flex-1 overflow-hidden">
         <BankMappingForm
           statement={statement}
-          bankLedger={bankLedger}
-          onBankLedgerChange={setBankLedger}
+          bankLedger={cashLedger}
+          onBankLedgerChange={setCashLedger}
           ledgers={ledgers}
           onSync={handleSync}
           syncing={syncing}

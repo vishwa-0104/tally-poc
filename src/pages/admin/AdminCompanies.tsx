@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Warehouse, Percent, Receipt, Landmark, Scale, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
+import { Plus, Warehouse, Percent, Receipt, Landmark, Scale, BookOpen, Settings, Users, X, ChevronRight, Zap, Pencil, CreditCard, Ban } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
@@ -141,6 +141,39 @@ const FEATURE_CATALOGUE = [
     iconBg:      'bg-indigo-500/10',
     iconColor:   'text-indigo-400',
     dotOn:       'bg-indigo-400',
+  },
+  {
+    key:         COMPANY_FEATURES.CASH_BOOK,
+    label:       'Cash Book',
+    description: 'Enable the Cash Book page — upload handwritten or CSV cash book records and sync vouchers directly to Tally.',
+    Icon:        BookOpen,
+    gradient:    'from-emerald-500/10 to-green-500/10',
+    ring:        'ring-emerald-500/30',
+    iconBg:      'bg-emerald-500/10',
+    iconColor:   'text-emerald-400',
+    dotOn:       'bg-emerald-400',
+  },
+  {
+    key:         COMPANY_FEATURES.HIDE_SETTINGS,
+    label:       'Hide Settings',
+    description: 'Hide the Settings tab from the company user. All saved data (ledger mappings, defaults) is preserved — toggle off to restore access.',
+    Icon:        Settings,
+    gradient:    'from-gray-500/10 to-slate-500/10',
+    ring:        'ring-gray-500/30',
+    iconBg:      'bg-gray-500/10',
+    iconColor:   'text-gray-400',
+    dotOn:       'bg-gray-400',
+  },
+  {
+    key:         COMPANY_FEATURES.VENDOR_RECONCILE,
+    label:       'Vendor Reconciliation',
+    description: 'Enable the Vendor Reconcile page — compare your Tally ledger against the vendor\'s ledger to find missing or extra entries.',
+    Icon:        Users,
+    gradient:    'from-violet-500/10 to-purple-500/10',
+    ring:        'ring-violet-500/30',
+    iconBg:      'bg-violet-500/10',
+    iconColor:   'text-violet-400',
+    dotOn:       'bg-violet-400',
   },
 ] as const
 

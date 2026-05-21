@@ -21,10 +21,14 @@ import CompanyBills    from '@/pages/company/CompanyBills'
 import BillMapping     from '@/pages/company/BillMapping'
 import CompanySyncLog  from '@/pages/company/CompanySyncLog'
 import CompanySettings from '@/pages/company/CompanySettings'
-import BankStatement      from '@/pages/company/BankStatement'
-import BankMapping        from '@/pages/company/BankMapping'
+import BankStatement       from '@/pages/company/BankStatement'
+import BankMapping         from '@/pages/company/BankMapping'
 import BankReconciliation  from '@/pages/company/BankReconciliation'
 import ReconciliationDetail from '@/pages/company/ReconciliationDetail'
+import CashBook            from '@/pages/company/CashBook'
+import CashBookMapping     from '@/pages/company/CashBookMapping'
+import VendorReconciliation       from '@/pages/company/VendorReconciliation'
+import VendorReconciliationDetail from '@/pages/company/VendorReconciliationDetail'
 
 
 export default function App() {
@@ -57,6 +61,10 @@ export default function App() {
         <Route path="bank/:bankId"    element={<BankMapping />} />
         <Route path="reconcile"            element={<BankReconciliation />} />
         <Route path="reconcile/:reportId" element={<ReconciliationDetail />} />
+        <Route path="cash-book"            element={<CashBook />} />
+        <Route path="cash-book/:cashId"    element={<CashBookMapping />} />
+        <Route path="vendor-reconcile"              element={<VendorReconciliation />} />
+        <Route path="vendor-reconcile/:reportId"    element={<VendorReconciliationDetail />} />
       </Route>
 
       {/* ── Fallback ── */}

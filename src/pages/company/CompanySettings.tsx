@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
-import { RefreshCw, CheckCircle, AlertTriangle, CreditCard } from 'lucide-react'
+import { RefreshCw, CheckCircle, AlertTriangle, CreditCard, Plus, Trash2, Landmark, BookOpen } from 'lucide-react'
 import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
+import { Navigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits, fetchTallyVoucherTypes } from '@/services/tallyService'
 import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
-import type { LedgerMapping } from '@/types'
+import type { LedgerMapping, BankDefaultLedger } from '@/types'
 
 export const TALLY_URL_KEY         = 'tally-server-url'
 export const DEFAULT_TALLY_URL     = 'http://localhost:9000'
@@ -98,17 +99,19 @@ function SyncRow({ label, count, loading, lastSync, onSync }: SyncRowProps) {
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-type Tab = 'connection' | 'ledgers' | 'subscription'
+type Tab = 'connection' | 'ledgers' | 'bank_cash' | 'subscription'
 
 interface TabBarProps {
   active: Tab
   onChange: (t: Tab) => void
+  showBankCash: boolean
 }
 
-function TabBar({ active, onChange }: TabBarProps) {
+function TabBar({ active, onChange, showBankCash }: TabBarProps) {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'connection',   label: 'Connection' },
     { id: 'ledgers',      label: 'Default Ledgers' },
+    ...(showBankCash ? [{ id: 'bank_cash' as Tab, label: 'Bank & Cash' }] : []),
     { id: 'subscription', label: 'Subscription' },
   ]
   return (
@@ -142,6 +145,12 @@ export default function CompanySettings() {
   const godownEnabled        = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN          && f.enabled) ?? false
   const debitVoucherEnabled  = company?.features?.some((f) => f.feature === COMPANY_FEATURES.DEBIT_VOUCHER   && f.enabled) ?? false
   const creditVoucherEnabled = company?.features?.some((f) => f.feature === COMPANY_FEATURES.CREDIT_VOUCHER  && f.enabled) ?? false
+  const bankVoucherEnabled   = company?.features?.some((f) => f.feature === COMPANY_FEATURES.BANK_VOUCHER    && f.enabled) ?? false
+  const cashBookEnabled      = company?.features?.some((f) => f.feature === COMPANY_FEATURES.CASH_BOOK       && f.enabled) ?? false
+  const settingsHidden       = company?.features?.some((f) => f.feature === COMPANY_FEATURES.HIDE_SETTINGS   && f.enabled) ?? false
+  const showBankCash         = bankVoucherEnabled || cashBookEnabled
+
+  if (settingsHidden) return <Navigate to="/company" replace />
 
   const [activeTab,          setActiveTab]          = useState<Tab>('connection')
   const [syncing,            setSyncing]            = useState(false)
@@ -168,8 +177,19 @@ export default function CompanySettings() {
 
   const [mapping, setMapping] = useState<LedgerMapping>(() => normalizeLedgerMapping(company?.mapping))
 
+  // Bank & Cash default ledger state
+  const [bankDefaults,     setBankDefaults]     = useState<BankDefaultLedger[]>(() => normalizeLedgerMapping(company?.mapping).bank_default_ledgers      ?? [])
+  const [cashDefaults,     setCashDefaults]     = useState<string[]>           (() => normalizeLedgerMapping(company?.mapping).cash_book_default_ledgers  ?? [])
+  const [bankKeywordInput, setBankKeywordInput] = useState('')
+  const [bankLedgerInput,  setBankLedgerInput]  = useState('')
+  const [cashLedgerInput,  setCashLedgerInput]  = useState('')
+  const [savingBankCash,   setSavingBankCash]   = useState(false)
+
   useEffect(() => {
-    setMapping(normalizeLedgerMapping(company?.mapping))
+    const m = normalizeLedgerMapping(company?.mapping)
+    setMapping(m)
+    setBankDefaults(m.bank_default_ledgers      ?? [])
+    setCashDefaults(m.cash_book_default_ledgers ?? [])
   }, [company?.mapping]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -309,6 +329,50 @@ export default function CompanySettings() {
   const set = (key: keyof LedgerMapping) => (v: string) =>
     setMapping((m) => ({ ...m, [key]: v || undefined }))
 
+  const addBankDefault = () => {
+    const kw = bankKeywordInput.trim()
+    const lg = bankLedgerInput.trim()
+    if (!kw || !lg) return
+    if (bankDefaults.some((e) => e.keyword.toLowerCase() === kw.toLowerCase())) {
+      toast.error('That bank keyword is already mapped')
+      return
+    }
+    setBankDefaults((prev) => [...prev, { keyword: kw, ledger: lg }])
+    setBankKeywordInput('')
+    setBankLedgerInput('')
+  }
+
+  const removeBankDefault = (idx: number) =>
+    setBankDefaults((prev) => prev.filter((_, i) => i !== idx))
+
+  const addCashDefault = () => {
+    const lg = cashLedgerInput.trim()
+    if (!lg) return
+    if (cashDefaults.includes(lg)) { toast.error('Ledger already added'); return }
+    setCashDefaults((prev) => [...prev, lg])
+    setCashLedgerInput('')
+  }
+
+  const removeCashDefault = (idx: number) =>
+    setCashDefaults((prev) => prev.filter((_, i) => i !== idx))
+
+  const handleSaveBankCash = async () => {
+    if (!companyId) return
+    setSavingBankCash(true)
+    try {
+      await updateMapping(companyId, {
+        ...normalizeLedgerMapping(company?.mapping),
+        bank_default_ledgers:      bankDefaults,
+        cash_book_default_ledgers: cashDefaults,
+      })
+      toast.success('Bank & Cash defaults saved')
+    } catch {
+      toast.error('Failed to save')
+    } finally {
+      setSavingBankCash(false)
+    }
+  }
+
   const handleSaveMapping = async () => {
     if (!companyId) return
     setSavingMap(true)
@@ -326,7 +390,7 @@ export default function CompanySettings() {
 
       <div className="p-4 md:p-7 max-w-3xl">
         <div className="card p-6">
-          <TabBar active={activeTab} onChange={setActiveTab} />
+          <TabBar active={activeTab} onChange={setActiveTab} showBankCash={showBankCash} />
 
           {/* ── Tab: Tally Connection ── */}
           {activeTab === 'connection' && (
@@ -522,6 +586,158 @@ export default function CompanySettings() {
 
               <Button variant="teal" loading={savingMap} onClick={handleSaveMapping}>
                 Save Default Mapping
+              </Button>
+            </div>
+          )}
+
+          {/* ── Tab: Bank & Cash Default Ledgers ── */}
+          {activeTab === 'bank_cash' && (
+            <div className="space-y-8">
+
+              {/* ── Bank Section ── */}
+              {bankVoucherEnabled && (
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Landmark className="w-3.5 h-3.5 text-cyan-600" />
+                    <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Bank Default Ledgers</p>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Map a bank keyword (e.g. <span className="font-mono">HDFC</span>, <span className="font-mono">ICICI</span>) to a Tally ledger.
+                    When you upload a bank statement, the bank ledger is auto-filled if the bank name contains the keyword.
+                  </p>
+
+                  {/* Add row */}
+                  <div className="flex gap-2 mb-3">
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Bank Keyword</label>
+                      <input
+                        value={bankKeywordInput}
+                        onChange={(e) => setBankKeywordInput(e.target.value)}
+                        placeholder="e.g. HDFC, ICICI, SBI…"
+                        className="input-base w-full text-sm"
+                        onKeyDown={(e) => e.key === 'Enter' && addBankDefault()}
+                      />
+                    </div>
+                    <div className="flex-[2]">
+                      <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Tally Ledger</label>
+                      <input
+                        list="bank-default-ledger-list"
+                        value={bankLedgerInput}
+                        onChange={(e) => setBankLedgerInput(e.target.value)}
+                        placeholder="Select ledger…"
+                        autoComplete="off"
+                        className="input-base w-full text-sm"
+                        onKeyDown={(e) => e.key === 'Enter' && addBankDefault()}
+                      />
+                      <datalist id="bank-default-ledger-list">
+                        {ledgerOptions.map((n) => <option key={n} value={n} />)}
+                      </datalist>
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={addBankDefault}
+                        disabled={!bankKeywordInput.trim() || !bankLedgerInput.trim()}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Saved entries */}
+                  {bankDefaults.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic py-2">No bank defaults configured yet.</p>
+                  ) : (
+                    <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+                      {bankDefaults.map((entry, idx) => (
+                        <div key={idx} className="flex items-center gap-3 px-3 py-2.5">
+                          <span className="text-xs font-semibold text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-2 py-0.5 whitespace-nowrap">
+                            {entry.keyword}
+                          </span>
+                          <span className="text-gray-400 text-xs">→</span>
+                          <span className="text-xs text-gray-700 flex-1 truncate">{entry.ledger}</span>
+                          <button
+                            onClick={() => removeBankDefault(idx)}
+                            className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Cash Book Section ── */}
+              {cashBookEnabled && (
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                    <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Cash Book Default Ledgers</p>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Add one or more cash/ledger accounts. The <span className="font-semibold">first entry</span> is automatically
+                    pre-filled as the cash ledger when you open any cash book record.
+                  </p>
+
+                  {/* Add row */}
+                  <div className="flex gap-2 mb-3">
+                    <div className="flex-1">
+                      <input
+                        list="cash-default-ledger-list"
+                        value={cashLedgerInput}
+                        onChange={(e) => setCashLedgerInput(e.target.value)}
+                        placeholder="Select ledger…"
+                        autoComplete="off"
+                        className="input-base w-full text-sm"
+                        onKeyDown={(e) => e.key === 'Enter' && addCashDefault()}
+                      />
+                      <datalist id="cash-default-ledger-list">
+                        {ledgerOptions.map((n) => <option key={n} value={n} />)}
+                      </datalist>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={addCashDefault}
+                      disabled={!cashLedgerInput.trim()}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add
+                    </Button>
+                  </div>
+
+                  {/* Saved entries */}
+                  {cashDefaults.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic py-2">No cash book defaults configured yet.</p>
+                  ) : (
+                    <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+                      {cashDefaults.map((ledger, idx) => (
+                        <div key={idx} className="flex items-center gap-3 px-3 py-2.5">
+                          {idx === 0 && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                              Default
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-700 flex-1 truncate">{ledger}</span>
+                          <button
+                            onClick={() => removeCashDefault(idx)}
+                            className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button variant="teal" loading={savingBankCash} onClick={handleSaveBankCash}>
+                Save Bank & Cash Defaults
               </Button>
             </div>
           )}
