@@ -125,6 +125,8 @@ export interface BankSyncRow {
   voucherType: string
   amount: number
   isPayment: boolean
+  narration?: string
+  originalDate?: string
 }
 
 export async function syncBankToTally(

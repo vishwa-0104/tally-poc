@@ -561,7 +561,7 @@ async function handleSyncBankToTally(rows, bankLedger, tallyUrl, tallyCompany) {
     return `        <TALLYMESSAGE xmlns:UDF="TallyUDF">
           <VOUCHER VCHTYPE="${esc(vchType)}" ACTION="Create" OBJVIEW="Accounting Voucher View">
             <DATE>${date}</DATE>
-            <NARRATION>${esc(row.description)}</NARRATION>
+            <NARRATION>${esc(row.narration || row.description)}</NARRATION>
             <VOUCHERTYPENAME>${esc(vchType)}</VOUCHERTYPENAME>
             <ALLLEDGERENTRIES.LIST>
               <LEDGERNAME>${esc(bankLedger)}</LEDGERNAME>

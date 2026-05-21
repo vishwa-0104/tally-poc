@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { ArrowLeft } from 'lucide-react'
-import { BankMappingForm } from '@/components/company/BankMappingForm'
+import { CashBookMappingForm } from '@/components/company/CashBookMappingForm'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { useCashBookStore, makeCashBookFingerprint } from '@/store/cashBookStore'
 import { syncBankToTally } from '@/services/tallyService'
@@ -28,6 +28,15 @@ export default function CashBookMapping() {
   )
 
   const [fingerprintSet, setFingerprintSet] = useState<Set<string>>(new Set())
+  const [cashLedger,     setCashLedger]     = useState('')
+  const [syncing,        setSyncing]        = useState(false)
+
+  // Set default cash ledger once company mapping loads
+  useEffect(() => {
+    if (cashLedger) return
+    const defaults = normalizeLedgerMapping(company?.mapping).cash_book_default_ledgers ?? []
+    if (defaults[0]) setCashLedger(defaults[0])
+  }, [company?.mapping]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!companyId) return
@@ -40,12 +49,6 @@ export default function CashBookMapping() {
   const record       = getRecord(cashId ?? '')
   const tallyUrl     = getTallyUrl(companyId, company?.port)
   const tallyCompany = company?.name ?? ''
-
-  const [cashLedger, setCashLedger] = useState(() => {
-    const defaults = normalizeLedgerMapping(company?.mapping).cash_book_default_ledgers ?? []
-    return defaults[0] ?? ''
-  })
-  const [syncing,    setSyncing]    = useState(false)
 
   if (!companiesLoaded) return null
   if (!hasCashBook) return <Navigate to="/company" replace />
@@ -72,15 +75,16 @@ export default function CashBookMapping() {
     try {
       const result = await syncBankToTally(rows, bl, tallyUrl, tallyCompany)
       if (result.success) {
+        // Use originalDate (from CSV) for fingerprinting, not the user-overridden entryDate
         const fps = rows.map((r) =>
-          makeCashBookFingerprint(record.bookName, r.date, r.amount, r.description),
+          makeCashBookFingerprint(record.bookName, r.originalDate ?? r.date, r.amount, r.description),
         )
 
         await api.post(`/companies/${companyId}/cash-book-fingerprints`, { fingerprints: fps })
 
         setFingerprintSet((prev) => new Set([...prev, ...fps]))
 
-        const syncedKey = new Set(rows.map((r) => `${r.date}|${r.description}`))
+        const syncedKey = new Set(rows.map((r) => `${r.originalDate ?? r.date}|${r.description}`))
         const updatedTxns = record.transactions.map((t) =>
           syncedKey.has(`${t.date}|${t.description}`) ? { ...t, synced: true } : t,
         )
@@ -141,10 +145,10 @@ export default function CashBookMapping() {
 
       {/* Mapping form fills remaining height */}
       <div className="flex-1 overflow-hidden">
-        <BankMappingForm
+        <CashBookMappingForm
           statement={statement}
-          bankLedger={cashLedger}
-          onBankLedgerChange={setCashLedger}
+          cashLedger={cashLedger}
+          onCashLedgerChange={setCashLedger}
           ledgers={ledgers}
           onSync={handleSync}
           syncing={syncing}
