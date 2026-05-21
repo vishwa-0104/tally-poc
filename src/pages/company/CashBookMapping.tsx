@@ -84,10 +84,12 @@ export default function CashBookMapping() {
 
         setFingerprintSet((prev) => new Set([...prev, ...fps]))
 
-        const syncedKey = new Set(rows.map((r) => `${r.originalDate ?? r.date}|${r.description}`))
-        const updatedTxns = record.transactions.map((t) =>
-          syncedKey.has(`${t.date}|${t.description}`) ? { ...t, synced: true } : t,
-        )
+        const syncedMap = new Map(rows.map((r) => [`${r.originalDate ?? r.date}|${r.description}`, r]))
+        const updatedTxns = record.transactions.map((t) => {
+          const matched = syncedMap.get(`${t.date}|${t.description}`)
+          if (!matched) return t
+          return { ...t, synced: true, narration: matched.narration, entryDate: matched.date }
+        })
         const totalSyncedCount = updatedTxns.filter((t) => t.synced === true).length
         const newStatus = totalSyncedCount >= record.totalCount ? 'synced' : 'partially_synced'
 

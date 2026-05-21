@@ -59,7 +59,7 @@ export function CashBookMappingForm({
       return {
         id:          t.id,
         date:        t.date,
-        entryDate:   t.date ? toIsoDate(t.date) : todayIso(),
+        entryDate:   t.entryDate ?? (t.date ? toIsoDate(t.date) : todayIso()),
         description: t.description,
         debit:       t.debit,
         credit:      t.credit,
@@ -71,7 +71,7 @@ export function CashBookMappingForm({
           : t.debit != null
           ? 'Receipt'
           : 'Payment',
-        narration: '',
+        narration: t.narration ?? '',
       }
     }),
   )
@@ -144,7 +144,7 @@ export function CashBookMappingForm({
           )}
         </div>
         <div className="flex items-center gap-2 ml-auto">
-          <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Cash Ledger * {cashLedger}</label>
+          <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Cash Ledger *</label>
           <div className="relative">
             <input
               list="cash-ledger-main-list"

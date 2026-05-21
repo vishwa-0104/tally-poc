@@ -210,6 +210,8 @@ export interface BankTransaction {
   ledger: string
   voucherType: string
   selected: boolean
+  narration?: string
+  entryDate?: string
 }
 
 export interface ParsedBankStatement {
