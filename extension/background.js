@@ -518,10 +518,9 @@ function parseVouchers(xml) {
   for (const match of blocks) {
     const block = match[0]
 
-    const rawDate  = decode(block.match(/<DATE[^>]*>([^<]+)<\/DATE>/i)?.[1] ?? '')
-    const type     = decode(block.match(/<VOUCHERTYPENAME[^>]*>([^<]+)<\/VOUCHERTYPENAME>/i)?.[1] ?? '')
-    const party    = decode(block.match(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/i)?.[1] ?? '')
-    const amtRaw   = decode(block.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+    const rawDate   = decode(block.match(/<DATE[^>]*>([^<]+)<\/DATE>/i)?.[1] ?? '')
+    const type      = decode(block.match(/<VOUCHERTYPENAME[^>]*>([^<]+)<\/VOUCHERTYPENAME>/i)?.[1] ?? '')
+    const party     = decode(block.match(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/i)?.[1] ?? '')
     const voucherNo = decode(block.match(/<VOUCHERNUMBER[^>]*>([^<]+)<\/VOUCHERNUMBER>/i)?.[1] ?? '')
 
     if (!rawDate) continue
@@ -531,7 +530,28 @@ function parseVouchers(xml) {
       ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
       : rawDate
 
-    const amount = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
+    // Amount strategy 1: find the party's ledger entry (grand total incl. tax)
+    // Day Book exports ledger entries as <LEDGERENTRIES.LIST> or <ALLLEDGERENTRIES.LIST>
+    let amount = 0
+    const partyLower = party.toLowerCase()
+    const ledgerListRe = /<(?:ALL)?LEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/(?:ALL)?LEDGERENTRIES\.LIST>/gi
+    for (const le of block.matchAll(ledgerListRe)) {
+      const leBlock   = le[0]
+      const leName    = decode(leBlock.match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
+      if (leName.toLowerCase() !== partyLower) continue
+      const leAmtRaw  = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
+      if (leAmtRaw) { amount = Math.abs(parseFloat(leAmtRaw.replace(/,/g, '')) || 0); break }
+    }
+
+    // Amount strategy 2: sum all ALLINVENTORYENTRIES amounts (taxable value, no GST)
+    if (amount === 0) {
+      for (const ie of block.matchAll(/<ALLINVENTORYENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLINVENTORYENTRIES\.LIST>/gi)) {
+        const ieAmt = decode(ie[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+        amount += Math.abs(parseFloat(ieAmt.replace(/,/g, '')) || 0)
+      }
+    }
+
+    if (amount === 0) continue
 
     vouchers.push({ date, type, party, amount, voucherNo })
   }
