@@ -503,10 +503,24 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[TBSVouchers DayBook] raw response (first 3000):', responseText.slice(0, 3000))
+  console.log('[TBSVouchers] response length:', responseText.length)
+
+  // Count raw VOUCHER blocks before any parsing
+  const rawBlocks = [...responseText.matchAll(/<VOUCHER\b/gi)]
+  console.log('[TBSVouchers] raw <VOUCHER> tags found:', rawBlocks.length)
+
   const all = parseVouchers(responseText)
+  console.log('[TBSVouchers] parsed vouchers:', all.length)
+
+  // Log unique voucher types found
+  const types = [...new Set(all.map(v => v.type))]
+  console.log('[TBSVouchers] voucher types found:', types)
+
+  // Log first 3 vouchers for inspection
+  console.log('[TBSVouchers] sample (first 3):', JSON.stringify(all.slice(0, 3), null, 2))
+
   const vouchers = all.filter((v) => v.type.toLowerCase() === voucherType.toLowerCase())
-  console.log(`[TBSVouchers DayBook] total parsed=${all.length} after type filter (${voucherType})=${vouchers.length}`)
+  console.log(`[TBSVouchers] after filter "${voucherType}": ${vouchers.length}`)
   return { vouchers }
 }
 
