@@ -486,40 +486,27 @@ function parseVoucherTypes(xml) {
 async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, voucherType) {
   const xml = `<ENVELOPE>
   <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>TBSVouchers</ID>
+    <TALLYREQUEST>Export Data</TALLYREQUEST>
   </HEADER>
   <BODY>
-    <DESC>
-      <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        <SVFROMDATE>${fromDate}</SVFROMDATE>
-        <SVTODATE>${toDate}</SVTODATE>${companyVar(tallyCompany)}
-      </STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="TBSVouchers">
-            <TYPE>Vouchers : Voucher</TYPE>
-            <NATIVEMETHOD>DATE</NATIVEMETHOD>
-            <NATIVEMETHOD>VOUCHERTYPENAME</NATIVEMETHOD>
-            <NATIVEMETHOD>PARTYLEDGERNAME</NATIVEMETHOD>
-            <NATIVEMETHOD>AMOUNT</NATIVEMETHOD>
-            <NATIVEMETHOD>VOUCHERNUMBER</NATIVEMETHOD>
-          </COLLECTION>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
+    <EXPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Day Book</REPORTNAME>
+        <STATICVARIABLES>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+          <SVFROMDATE>${fromDate}</SVFROMDATE>
+          <SVTODATE>${toDate}</SVTODATE>${companyVar(tallyCompany)}
+        </STATICVARIABLES>
+      </REQUESTDESC>
+    </EXPORTDATA>
   </BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[TBSVouchers] raw response (first 3000):', responseText.slice(0, 3000))
+  console.log('[TBSVouchers DayBook] raw response (first 3000):', responseText.slice(0, 3000))
   const all = parseVouchers(responseText)
-  // Filter by voucher type on the JS side (TDL filter may not work in all Tally versions)
   const vouchers = all.filter((v) => v.type.toLowerCase() === voucherType.toLowerCase())
-  console.log(`[TBSVouchers] total parsed=${all.length} after type filter (${voucherType})=${vouchers.length}`)
+  console.log(`[TBSVouchers DayBook] total parsed=${all.length} after type filter (${voucherType})=${vouchers.length}`)
   return { vouchers }
 }
 
