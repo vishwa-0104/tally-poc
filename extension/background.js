@@ -500,21 +500,14 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="TBSVouchers" ISMODIFY="No">
-            <TYPE>Voucher</TYPE>
+          <COLLECTION NAME="TBSVouchers">
+            <TYPE>Vouchers : Voucher</TYPE>
             <NATIVEMETHOD>DATE</NATIVEMETHOD>
             <NATIVEMETHOD>VOUCHERTYPENAME</NATIVEMETHOD>
             <NATIVEMETHOD>PARTYLEDGERNAME</NATIVEMETHOD>
             <NATIVEMETHOD>AMOUNT</NATIVEMETHOD>
             <NATIVEMETHOD>VOUCHERNUMBER</NATIVEMETHOD>
-            <FILTERS>TBSDateFilter, TBSTypeFilter</FILTERS>
           </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="TBSDateFilter">
-            $$InRange:$Date:##SVFromDate:##SVToDate
-          </SYSTEM>
-          <SYSTEM TYPE="Formulae" NAME="TBSTypeFilter">
-            $VoucherTypeName = "${voucherType}"
-          </SYSTEM>
         </TDLMESSAGE>
       </TDL>
     </DESC>
@@ -522,9 +515,11 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[TBSVouchers] raw response (first 2000):', responseText.slice(0, 2000))
-  const vouchers = parseVouchers(responseText)
-  console.log(`[TBSVouchers] type=${voucherType} from=${fromDate} to=${toDate} parsed count:`, vouchers.length)
+  console.log('[TBSVouchers] raw response (first 3000):', responseText.slice(0, 3000))
+  const all = parseVouchers(responseText)
+  // Filter by voucher type on the JS side (TDL filter may not work in all Tally versions)
+  const vouchers = all.filter((v) => v.type.toLowerCase() === voucherType.toLowerCase())
+  console.log(`[TBSVouchers] total parsed=${all.length} after type filter (${voucherType})=${vouchers.length}`)
   return { vouchers }
 }
 
