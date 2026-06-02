@@ -519,7 +519,8 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
   // Log first 3 vouchers for inspection
   console.log('[TBSVouchers] sample (first 3):', JSON.stringify(all.slice(0, 3), null, 2))
 
-  const vouchers = all.filter((v) => v.type.toLowerCase() === voucherType.toLowerCase())
+  // Partial match so "Sales" matches "GST Sales", "Purchase" matches "GST Purchase", etc.
+  const vouchers = all.filter((v) => v.type.toLowerCase().includes(voucherType.toLowerCase()))
   console.log(`[TBSVouchers] after filter "${voucherType}": ${vouchers.length}`)
   return { vouchers }
 }

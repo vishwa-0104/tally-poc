@@ -207,7 +207,7 @@ export default function Dashboard() {
                 onChange={(e) => setVoucherType(e.target.value)}
                 className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-brand-500"
               >
-                {['Sales', 'Purchase', 'Receipt', 'Payment', 'Contra', 'Journal'].map((t) => (
+                {['Sales', 'GST Sales', 'Purchase', 'GST Purchase', 'Receipt', 'Payment', 'Contra', 'Journal'].map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
