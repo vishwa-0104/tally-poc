@@ -502,10 +502,17 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
         <TDLMESSAGE>
           <COLLECTION NAME="TBSVouchers" ISMODIFY="No">
             <TYPE>Voucher</TYPE>
-            <NATIVEMETHOD>Date, VoucherTypeName, PartyLedgerName, Amount, VoucherNumber</NATIVEMETHOD>
-            <FILTERS>TBSVoucherTypeFilter</FILTERS>
+            <NATIVEMETHOD>DATE</NATIVEMETHOD>
+            <NATIVEMETHOD>VOUCHERTYPENAME</NATIVEMETHOD>
+            <NATIVEMETHOD>PARTYLEDGERNAME</NATIVEMETHOD>
+            <NATIVEMETHOD>AMOUNT</NATIVEMETHOD>
+            <NATIVEMETHOD>VOUCHERNUMBER</NATIVEMETHOD>
+            <FILTERS>TBSDateFilter, TBSTypeFilter</FILTERS>
           </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="TBSVoucherTypeFilter">
+          <SYSTEM TYPE="Formulae" NAME="TBSDateFilter">
+            $$InRange:$Date:##SVFromDate:##SVToDate
+          </SYSTEM>
+          <SYSTEM TYPE="Formulae" NAME="TBSTypeFilter">
             $VoucherTypeName = "${voucherType}"
           </SYSTEM>
         </TDLMESSAGE>
@@ -515,8 +522,9 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
+  console.log('[TBSVouchers] raw response (first 2000):', responseText.slice(0, 2000))
   const vouchers = parseVouchers(responseText)
-  console.log(`[Tally vouchers] type=${voucherType} from=${fromDate} to=${toDate} count:`, vouchers.length)
+  console.log(`[TBSVouchers] type=${voucherType} from=${fromDate} to=${toDate} parsed count:`, vouchers.length)
   return { vouchers }
 }
 
