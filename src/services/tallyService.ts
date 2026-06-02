@@ -118,6 +118,27 @@ export async function createTallyLedger(payload: CreateLedgerPayload, tallyUrl: 
   return result
 }
 
+export interface TallyVoucher {
+  date:      string
+  type:      string
+  party:     string
+  amount:    number
+  voucherNo: string
+}
+
+export async function fetchTallyVouchers(
+  fromDate: string,
+  toDate: string,
+  voucherType: string,
+  tallyUrl: string,
+  tallyCompany?: string,
+): Promise<TallyVoucher[]> {
+  const result = await sendToExtension<{ vouchers: TallyVoucher[] }>('FETCH_VOUCHERS', {
+    fromDate, toDate, voucherType, tallyUrl, tallyCompany,
+  })
+  return result.vouchers
+}
+
 export interface BankSyncRow {
   date: string
   description: string
