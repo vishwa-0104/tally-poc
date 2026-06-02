@@ -29,6 +29,7 @@ import CashBook            from '@/pages/company/CashBook'
 import CashBookMapping     from '@/pages/company/CashBookMapping'
 import VendorReconciliation       from '@/pages/company/VendorReconciliation'
 import VendorReconciliationDetail from '@/pages/company/VendorReconciliationDetail'
+import Dashboard                  from '@/pages/company/Dashboard'
 
 
 export default function App() {
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="cash-book/:cashId"    element={<CashBookMapping />} />
         <Route path="vendor-reconcile"              element={<VendorReconciliation />} />
         <Route path="vendor-reconcile/:reportId"    element={<VendorReconciliationDetail />} />
+        <Route path="dashboard"                     element={<Dashboard />} />
       </Route>
 
       {/* ── Fallback ── */}

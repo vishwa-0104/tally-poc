@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { Outlet } from 'react-router-dom'
-import { FileText, Settings, Landmark, Scale, BookOpen, Users } from 'lucide-react'
+import { FileText, Settings, Landmark, Scale, BookOpen, Users, TrendingUp } from 'lucide-react'
 import { AppLayout, ProtectedRoute } from '@/components/shared'
 import type { NavItem } from '@/components/shared/AppLayout'
 import { useAuthStore } from '@/store/authStore'
@@ -46,8 +46,9 @@ export default function CompanyLayout() {
     ...(hasBankVoucher      ? [{ label: 'My Bank',      path: '/company/bank',              icon: Landmark }] : []),
     ...(hasCashBook         ? [{ label: 'Cash Book',    path: '/company/cash-book',         icon: BookOpen }] : []),
     ...(hasBankReconcile    ? [{ label: 'Reconcile',    path: '/company/reconcile',         icon: Scale    }] : []),
-    ...(hasVendorReconcile  ? [{ label: 'Vendor Rec.',  path: '/company/vendor-reconcile',  icon: Users    }] : []),
-    ...(!settingsHidden     ? [{ label: 'Settings',     path: '/company/settings',          icon: Settings }] : []),
+    ...(hasVendorReconcile  ? [{ label: 'Vendor Rec.',  path: '/company/vendor-reconcile',  icon: Users       }] : []),
+    { label: 'Dashboard',   path: '/company/dashboard',                                     icon: TrendingUp },
+    ...(!settingsHidden     ? [{ label: 'Settings',     path: '/company/settings',          icon: Settings    }] : []),
   ], [hasBankVoucher, hasCashBook, hasBankReconcile, hasVendorReconcile, settingsHidden])
 
   useEffect(() => {

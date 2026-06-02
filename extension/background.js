@@ -89,6 +89,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ success: false, created: 0, altered: 0, errors: 1, message: err.message }))
       return true
 
+    case 'FETCH_VOUCHERS':
+      handleFetchVouchers(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate, payload.voucherType)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ vouchers: [], error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -473,6 +479,74 @@ function parseVoucherTypes(xml) {
     types.push(name)
   }
   return types
+}
+
+// ── Fetch vouchers (for dashboard) ──────────────────────────────────────────
+
+async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, voucherType) {
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSVouchers</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${fromDate}</SVFROMDATE>
+        <SVTODATE>${toDate}</SVTODATE>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSVouchers" ISMODIFY="No">
+            <TYPE>Voucher</TYPE>
+            <NATIVEMETHOD>Date, VoucherTypeName, PartyLedgerName, Amount, VoucherNumber</NATIVEMETHOD>
+            <FILTERS>TBSVoucherTypeFilter</FILTERS>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="TBSVoucherTypeFilter">
+            $VoucherTypeName = "${voucherType}"
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  const vouchers = parseVouchers(responseText)
+  console.log(`[Tally vouchers] type=${voucherType} from=${fromDate} to=${toDate} count:`, vouchers.length)
+  return { vouchers }
+}
+
+function parseVouchers(xml) {
+  const vouchers = []
+  const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
+
+  for (const match of blocks) {
+    const block = match[0]
+
+    const rawDate  = decode(block.match(/<DATE[^>]*>([^<]+)<\/DATE>/i)?.[1] ?? '')
+    const type     = decode(block.match(/<VOUCHERTYPENAME[^>]*>([^<]+)<\/VOUCHERTYPENAME>/i)?.[1] ?? '')
+    const party    = decode(block.match(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/i)?.[1] ?? '')
+    const amtRaw   = decode(block.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+    const voucherNo = decode(block.match(/<VOUCHERNUMBER[^>]*>([^<]+)<\/VOUCHERNUMBER>/i)?.[1] ?? '')
+
+    if (!rawDate) continue
+
+    // Tally date format: YYYYMMDD → YYYY-MM-DD
+    const date = rawDate.length === 8
+      ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+      : rawDate
+
+    const amount = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
+
+    vouchers.push({ date, type, party, amount, voucherNo })
+  }
+
+  return vouchers
 }
 
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────
