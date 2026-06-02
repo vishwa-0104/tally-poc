@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-size: 133.33%; /* scales .75rem → 16px, .875rem → ~18.7px */
+  }
+
   * {
     box-sizing: border-box;
     margin: 0;
@@ -10,7 +14,7 @@
   }
 
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
     background-color: #F9FAFB;
     color: #1F2937;
     line-height: 1.5;

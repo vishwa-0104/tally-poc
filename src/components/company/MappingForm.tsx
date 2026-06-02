@@ -101,8 +101,8 @@ function TallyItemCell({ stockItems, value, onChange, onCreateClick }: TallyItem
           option:         (b, s) => ({
             ...b,
             padding: '4px 10px',
-            backgroundColor: s.isSelected ? '#0d9488' : s.isFocused ? '#f0fdfa' : 'white',
-            color: s.isSelected ? 'white' : '#111827',
+            backgroundColor: s.isSelected ? '#1A56B0' : s.isFocused ? '#1A56B0' : 'white',
+            color: s.isSelected || s.isFocused ? 'white' : '#111827',
             cursor: 'default',
           }),
         }}
@@ -904,16 +904,16 @@ export function MappingForm({
               <tbody>
                 {bill.lineItems.map((_item, i) => (
                   <tr key={i} className="border-b border-gray-100 last:border-0">
-                    <td className="px-2 py-5" title={watchedLineItems?.[i]?.description ?? ''}>
-                      <input {...register(`lineItems.${i}.description`)} className="w-full min-w-[120px] px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-1 py-5" title={watchedLineItems?.[i]?.description ?? ''}>
+                      <input {...register(`lineItems.${i}.description`)} className="w-full min-w-[120px] px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5" title={watchedLineItems?.[i]?.hsnCode ?? ''}>
-                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-16 px-2 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-1 py-5" title={watchedLineItems?.[i]?.hsnCode ?? ''}>
+                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-16 px-1 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.quantity ?? '')}>
-                      <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.quantity ?? '')}>
+                      <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-16 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5" title={watchedLineItems?.[i]?.unit ?? ''}>
+                    <td className="px-1 py-5" title={watchedLineItems?.[i]?.unit ?? ''}>
                       {(() => {
                         const selectedItemName = watch(`lineItems.${i}.tallyStockItem`);
                         const selectedItem = selectedItemName ? stockItems.find((si) => si.name === selectedItemName) : null;
@@ -924,7 +924,7 @@ export function MappingForm({
                           <div className="relative">
                             <select
                               {...register(`lineItems.${i}.unit`)}
-                              className={`w-20 px-2 py-1 text-xs border rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 bg-white ${
+                              className={`w-20 px-1 py-1 text-xs border rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 bg-white ${
                                 showFromBill ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'
                               }`}
                             >
@@ -944,14 +944,14 @@ export function MappingForm({
                         );
                       })()}
                     </td>
-                    <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.unitPrice ?? '')}>
+                    <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.unitPrice ?? '')}>
                       {(() => {
                         const originalItem = bill.lineItems[i]
                         const hasItemDiscount = (originalItem?.discountAmount != null && originalItem.discountAmount !== 0)
                           || (originalItem?.discountPercent != null && originalItem.discountPercent !== 0)
                         return (
                           <div className="relative">
-                            <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             {hasItemDiscount && originalItem.unitPrice !== watch(`lineItems.${i}.unitPrice`) && (
                               <p className="absolute top-full left-0 text-xs text-amber-600 mt-0.5 whitespace-nowrap">
                                 Bill: <span className="font-semibold">{originalItem.unitPrice.toFixed(2)}</span>
@@ -962,10 +962,10 @@ export function MappingForm({
                       })()}
                     </td>
                     {showDiscPctCol && (
-                      <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountPercent ?? '')}>
+                      <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.discountPercent ?? '')}>
                         {discountColumnEnabled ? (
                           <div className="relative">
-                            <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-10 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             {(() => {
                               const orig = bill.lineItems[i]
                               if (orig?.discountAmount != null && orig.discountAmount !== 0) {
@@ -979,22 +979,22 @@ export function MappingForm({
                             })()}
                           </div>
                         ) : (
-                          <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-20 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                         )}
                       </td>
                     )}
                     {showDiscFlatCol && (
-                      <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.discountAmount ?? '')}>
-                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.discountAmount ?? '')}>
+                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-20 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     )}
-                    <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.gstRate ?? '')}>
-                      <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-12 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.gstRate ?? '')}>
+                      <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-12 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5" title={String(watchedLineItems?.[i]?.amount ?? '')}>
-                      <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.amount ?? '')}>
+                      <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
-                    <td className="px-2 py-5" title={watchedLineItems?.[i]?.tallyStockItem ?? ''}>
+                    <td className="px-1 py-5" title={watchedLineItems?.[i]?.tallyStockItem ?? ''}>
                       <TallyItemCell
                         index={i}
                         stockItems={stockItems}
@@ -1018,13 +1018,13 @@ export function MappingForm({
                     <>
                       {bill.extraCharges?.map((charge, i) => (
                         <tr key={i} className="border-t border-gray-100">
-                          <td className="px-2 py-1.5 text-right" colSpan={discountColumnEnabled ? 4 : 3}>
+                          <td className="px-1 py-1.5 text-right" colSpan={discountColumnEnabled ? 4 : 3}>
                             <input
                               {...register(`extraCharges.${i}.ledger`)}
                               list="extra-charges-ledger-list"
                               autoComplete="off"
                               placeholder="Select ledger… *"
-                              className="w-56 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                              className="w-56 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                             />
                             {!extraChargesOk && (
                               <p className="text-xs text-amber-600 mt-2">Select a ledger for every extra charge to enable sync.</p>
@@ -1036,7 +1036,7 @@ export function MappingForm({
                               {...register(`extraCharges.${i}.amount`)}
                               type="number"
                               step="0.01"
-                              className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                              className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                             />
                           </td>
                         </tr>
@@ -1045,7 +1045,7 @@ export function MappingForm({
                       <tr className="border-t border-gray-100">
                         <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Taxable Amount</td>
                         <td className="px-3 py-2">
-                          <input {...register('subtotal')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register('subtotal')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                         </td>
                         <td></td>
                       </tr>
@@ -1055,13 +1055,13 @@ export function MappingForm({
                           <tr className="border-t border-gray-100">
                             <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
                             <td className="px-3 py-2" colSpan={3}>
-                              <input {...register('cgstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                              <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             </td>
                           </tr>
                           <tr className="border-t border-gray-100">
                             <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
                             <td className="px-3 py-2" colSpan={3}>
-                              <input {...register('sgstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                              <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                             </td>
                           </tr>
                         </>
@@ -1071,7 +1071,7 @@ export function MappingForm({
                         <tr className="border-t border-gray-100">
                           <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
                           <td className="px-3 py-2" colSpan={3}>
-                            <input {...register('igstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register('igstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                           </td>
                         </tr>
                       )}
@@ -1079,14 +1079,14 @@ export function MappingForm({
                       <tr className="border-t border-gray-100">
                         <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
                         <td className="px-3 py-2" colSpan={3}>
-                          <input {...register('roundOffAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                         </td>
                       </tr>
 
                       <tr className="border-t-2 border-gray-300">
                         <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                         <td className="px-3 py-2" colSpan={3}>
-                          <input {...register('totalAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register('totalAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                         </td>
                       </tr>
                     </>
@@ -1118,13 +1118,13 @@ export function MappingForm({
                 {bill.lineItems.map((_item, i) => (
                   <tr key={i} className="border-b border-gray-100 last:border-0">
                     <td className="px-3 py-2 text-sm text-gray-700">{bill.lineItems[i].description}</td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1 py-1.5">
                       <input
                         {...register(`lineItems.${i}.tallyLedger`)}
                         list="all-ledgers-list"
                         autoComplete="off"
                         placeholder="Select ledger…"
-                        className="w-56 px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                        className="w-56 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
                       />
                     </td>
                     <td className="px-3 py-2 text-sm font-semibold text-gray-800">{formatCurrency(bill.lineItems[i].amount)}</td>
@@ -1139,7 +1139,7 @@ export function MappingForm({
                   <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Subtotal</td>
                   <td></td>
                   <td className="px-3 py-2">
-                    <input {...register('subtotal')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <input {...register('subtotal')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                   </td>
                 </tr>
                 {!isInterstate && (
@@ -1148,14 +1148,14 @@ export function MappingForm({
                       <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
                       <td></td>
                       <td className="px-3 py-2">
-                        <input {...register('cgstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     </tr>
                     <tr className="border-t border-gray-100">
                       <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
                       <td></td>
                       <td className="px-3 py-2">
-                        <input {...register('sgstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                       </td>
                     </tr>
                   </>
@@ -1165,7 +1165,7 @@ export function MappingForm({
                     <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
                     <td></td>
                     <td className="px-3 py-2">
-                      <input {...register('igstAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register('igstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     </td>
                   </tr>
                 )}
@@ -1173,7 +1173,7 @@ export function MappingForm({
                   <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
                   <td></td>
                   <td className="px-3 py-2">
-                    <input {...register('roundOffAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                     {roundOffSuggestion !== null && (
                       <p className="text-xs text-amber-600 mt-1">Value seems incorrect, try ₹{roundOffSuggestion}</p>
                     )}
@@ -1183,7 +1183,7 @@ export function MappingForm({
                   <td className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
                   <td></td>
                   <td className="px-3 py-2">
-                    <input {...register('totalAmount')} type="number" step="any" className="w-36 px-2 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <input {...register('totalAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
                   </td>
                 </tr>
               </tfoot>
