@@ -491,7 +491,7 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
   <BODY>
     <EXPORTDATA>
       <REQUESTDESC>
-        <REPORTNAME>Voucher Register</REPORTNAME>
+        <REPORTNAME>Day Book</REPORTNAME>
         <STATICVARIABLES>
           <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
           <SVFROMDATE>${fromDate}</SVFROMDATE>
@@ -519,9 +519,10 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
   // Log all vouchers (date + type + amount only to keep it readable)
   console.log('[TBSVouchers] all vouchers:', JSON.stringify(all.map(v => ({ date: v.date, type: v.type, amount: v.amount, party: v.party })), null, 2))
 
-  // Partial match so "Sales" matches "GST Sales", "Purchase" matches "GST Purchase", etc.
-  const vouchers = all.filter((v) => v.type.toLowerCase().includes(voucherType.toLowerCase()))
-  console.log(`[TBSVouchers] after filter "${voucherType}": ${vouchers.length}`)
+  // Filter: partial match on type — "sales" matches "Sales GST", "GST Sales", "Sales", etc.
+  const needle = voucherType.toLowerCase()
+  const vouchers = all.filter((v) => v.type.toLowerCase().includes(needle))
+  console.log(`[TBSVouchers] all=${all.length} | types: ${[...new Set(all.map(v=>v.type))].join(', ')} | matched "${voucherType}": ${vouchers.length}`)
   return { vouchers }
 }
 
