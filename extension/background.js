@@ -516,8 +516,8 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
   const types = [...new Set(all.map(v => v.type))]
   console.log('[TBSVouchers] voucher types found:', types)
 
-  // Log first 3 vouchers for inspection
-  console.log('[TBSVouchers] sample (first 3):', JSON.stringify(all.slice(0, 3), null, 2))
+  // Log all vouchers (date + type + amount only to keep it readable)
+  console.log('[TBSVouchers] all vouchers:', JSON.stringify(all.map(v => ({ date: v.date, type: v.type, amount: v.amount, party: v.party })), null, 2))
 
   // Partial match so "Sales" matches "GST Sales", "Purchase" matches "GST Purchase", etc.
   const vouchers = all.filter((v) => v.type.toLowerCase().includes(voucherType.toLowerCase()))

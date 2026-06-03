@@ -181,9 +181,12 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const vouchers = await fetchTallyVouchers(
+      const all = await fetchTallyVouchers(
         toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany,
       )
+      // Tally Day Book ignores SVFROMDATE/SVTODATE — filter in JS
+      const vouchers = all.filter((v) => v.date >= fromDate && v.date <= toDate)
+      console.log(`[Dashboard] Tally returned ${all.length} vouchers, ${vouchers.length} within ${fromDate}→${toDate}`)
       const grouped = groupVouchers(vouchers, granularity, fromDate, toDate)
       setChartData(grouped)
       setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
