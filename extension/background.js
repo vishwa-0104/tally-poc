@@ -483,7 +483,16 @@ function parseVoucherTypes(xml) {
 
 // ── Fetch vouchers (for dashboard) ──────────────────────────────────────────
 
-async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, voucherType) {
+// Convert YYYYMMDD → DD-MMM-YYYY (Tally's native date format for report requests)
+function toTallyDisplayDate(yyyymmdd) {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const y = yyyymmdd.slice(0, 4)
+  const m = parseInt(yyyymmdd.slice(4, 6), 10) - 1
+  const d = yyyymmdd.slice(6, 8)
+  return `${d}-${months[m]}-${y}`
+}
+
+async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, _voucherType) {
   const xml = `<ENVELOPE>
   <HEADER>
     <TALLYREQUEST>Export Data</TALLYREQUEST>
@@ -491,11 +500,11 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
   <BODY>
     <EXPORTDATA>
       <REQUESTDESC>
-        <REPORTNAME>Day Book</REPORTNAME>
+        <REPORTNAME>Sales Register</REPORTNAME>
         <STATICVARIABLES>
           <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-          <SVFROMDATE>${fromDate}</SVFROMDATE>
-          <SVTODATE>${toDate}</SVTODATE>${companyVar(tallyCompany)}
+          <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
+          <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>${companyVar(tallyCompany)}
         </STATICVARIABLES>
       </REQUESTDESC>
     </EXPORTDATA>
@@ -503,27 +512,43 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[TBSVouchers] response length:', responseText.length)
+  console.log('[SalesRegister] response length:', responseText.length)
+  console.log('[SalesRegister] raw (first 1000):', responseText.slice(0, 1000))
 
-  // Count raw VOUCHER blocks before any parsing
-  const rawBlocks = [...responseText.matchAll(/<VOUCHER\b/gi)]
-  console.log('[TBSVouchers] raw <VOUCHER> tags found:', rawBlocks.length)
-
-  const all = parseVouchers(responseText)
-  console.log('[TBSVouchers] parsed vouchers:', all.length)
-
-  // Log unique voucher types found
-  const types = [...new Set(all.map(v => v.type))]
-  console.log('[TBSVouchers] voucher types found:', types)
-
-  // Log all vouchers (date + type + amount only to keep it readable)
-  console.log('[TBSVouchers] all vouchers:', JSON.stringify(all.map(v => ({ date: v.date, type: v.type, amount: v.amount, party: v.party })), null, 2))
-
-  // Filter: partial match on type — "sales" matches "Sales GST", "GST Sales", "Sales", etc.
-  const needle = voucherType.toLowerCase()
-  const vouchers = all.filter((v) => v.type.toLowerCase().includes(needle))
-  console.log(`[TBSVouchers] all=${all.length} | types: ${[...new Set(all.map(v=>v.type))].join(', ')} | matched "${voucherType}": ${vouchers.length}`)
+  // Sales Register returns monthly summary (DSPPERIOD + DSPCRAMTA), not individual vouchers
+  const vouchers = parseSalesRegisterSummary(responseText, fromDate)
+  console.log('[SalesRegister] parsed monthly totals:', JSON.stringify(vouchers))
   return { vouchers }
+}
+
+// Parse Sales Register summary response:
+// <DSPPERIOD>April</DSPPERIOD>
+// <DSPACCINFO><DSPCRAMT><DSPCRAMTA>3225626.00</DSPCRAMTA></DSPCRAMT></DSPACCINFO>
+function parseSalesRegisterSummary(xml, fromDate) {
+  const MONTHS = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 }
+  const year   = parseInt(fromDate.slice(0, 4), 10)
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').trim()
+
+  // Extract all DSPPERIOD and DSPCRAMTA values in order
+  const periods = [...xml.matchAll(/<DSPPERIOD[^>]*>([^<]+)<\/DSPPERIOD>/gi)].map(m => decode(m[1]))
+  const amounts = [...xml.matchAll(/<DSPCRAMTA[^>]*>([^<]+)<\/DSPCRAMTA>/gi)].map(m => parseFloat(decode(m[1]).replace(/,/g, '')) || 0)
+
+  console.log('[SalesRegister] periods:', periods, '| amounts:', amounts)
+
+  const vouchers = []
+  for (let i = 0; i < periods.length; i++) {
+    const monthName = periods[i].trim().toLowerCase().slice(0, 3)
+    const monthIdx  = MONTHS[monthName]
+    if (monthIdx === undefined) continue
+    const amount = amounts[i] ?? 0
+    if (amount === 0) continue
+
+    // Use financial year logic: Apr-Mar. If month < Apr, it's next year
+    const vYear = monthIdx >= 3 ? year : year + 1
+    const date  = `${vYear}-${String(monthIdx + 1).padStart(2, '0')}-01`
+    vouchers.push({ date, type: 'Sales GST', party: '', amount, voucherNo: '' })
+  }
+  return vouchers
 }
 
 function parseVouchers(xml) {
@@ -546,20 +571,17 @@ function parseVouchers(xml) {
       ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
       : rawDate
 
-    // Amount strategy 1: find the party's ledger entry (grand total incl. tax)
-    // Day Book exports ledger entries as <LEDGERENTRIES.LIST> or <ALLLEDGERENTRIES.LIST>
+    // Amount: find LEDGERENTRIES.LIST where ISPARTYLEDGER=Yes — this is the grand total
     let amount = 0
-    const partyLower = party.toLowerCase()
-    const ledgerListRe = /<(?:ALL)?LEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/(?:ALL)?LEDGERENTRIES\.LIST>/gi
+    const ledgerListRe = /<LEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/LEDGERENTRIES\.LIST>/gi
     for (const le of block.matchAll(ledgerListRe)) {
-      const leBlock   = le[0]
-      const leName    = decode(leBlock.match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
-      if (leName.toLowerCase() !== partyLower) continue
-      const leAmtRaw  = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
+      const leBlock = le[0]
+      if (!/ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)) continue
+      const leAmtRaw = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
       if (leAmtRaw) { amount = Math.abs(parseFloat(leAmtRaw.replace(/,/g, '')) || 0); break }
     }
 
-    // Amount strategy 2: sum all ALLINVENTORYENTRIES amounts (taxable value, no GST)
+    // Fallback: sum ALLINVENTORYENTRIES amounts (taxable value without GST)
     if (amount === 0) {
       for (const ie of block.matchAll(/<ALLINVENTORYENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLINVENTORYENTRIES\.LIST>/gi)) {
         const ieAmt = decode(ie[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
