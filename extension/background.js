@@ -491,7 +491,7 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, vou
   <BODY>
     <EXPORTDATA>
       <REQUESTDESC>
-        <REPORTNAME>Day Book</REPORTNAME>
+        <REPORTNAME>Voucher Register</REPORTNAME>
         <STATICVARIABLES>
           <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
           <SVFROMDATE>${fromDate}</SVFROMDATE>
