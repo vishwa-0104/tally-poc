@@ -161,7 +161,7 @@ export default function Dashboard() {
   const [fromDate,    setFromDate]    = useState(initDates.from)
   const [toDate,      setToDate]      = useState(initDates.to)
   const [granularity, setGranularity] = useState<Granularity>('daily')
-  const [voucherType, setVoucherType] = useState('Sales')
+  const voucherType = 'Sales'
 
   const [chartData,  setChartData]  = useState<ChartPoint[]>([])
   const [total,      setTotal]      = useState(0)
@@ -220,21 +220,8 @@ export default function Dashboard() {
         {/* Filters card */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
 
-          {/* Voucher type + granularity */}
+          {/* Granularity toggle */}
           <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Voucher Type</label>
-              <select
-                value={voucherType}
-                onChange={(e) => setVoucherType(e.target.value)}
-                className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-brand-500"
-              >
-                {['Sales', 'GST Sales', 'Purchase', 'GST Purchase', 'Receipt', 'Payment', 'Contra', 'Journal'].map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-
             <div className="flex items-center gap-1 ml-auto bg-gray-100 rounded-lg p-0.5">
               {(['daily', 'weekly', 'monthly'] as Granularity[]).map((g) => (
                 <button
@@ -306,7 +293,7 @@ export default function Dashboard() {
         {fetched && !error && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-              <p className="text-xs text-gray-500 mb-1">Total {voucherType}</p>
+              <p className="text-xs text-gray-500 mb-1">Total Sales</p>
               <p className="text-lg font-bold text-gray-900">{formatCurrency(total)}</p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
@@ -339,11 +326,11 @@ export default function Dashboard() {
             </div>
           ) : chartData.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 gap-2">
-              <p className="text-sm text-gray-400">No {voucherType} vouchers found for this period</p>
+              <p className="text-sm text-gray-400">No sales vouchers found for this period</p>
             </div>
           ) : (
             <>
-              <p className="text-xs font-semibold text-gray-600 mb-4">{voucherType} — {granularity} view</p>
+              <p className="text-xs font-semibold text-gray-600 mb-4">Sales — {granularity} view</p>
               <ResponsiveContainer width="100%" height={300}>
                 <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <defs>
