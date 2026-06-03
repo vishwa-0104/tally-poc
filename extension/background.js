@@ -493,6 +493,9 @@ function toTallyDisplayDate(yyyymmdd) {
 }
 
 async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, _voucherType) {
+  const from = toTallyDisplayDate(fromDate)  // DD-MMM-YYYY
+  const to   = toTallyDisplayDate(toDate)
+
   const xml = `<ENVELOPE>
   <HEADER>
     <TALLYREQUEST>Export Data</TALLYREQUEST>
@@ -500,24 +503,33 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, _vo
   <BODY>
     <EXPORTDATA>
       <REQUESTDESC>
-        <REPORTNAME>Sales Register</REPORTNAME>
+        <COLLECTIONNAME>TBSSalesVouchers</COLLECTIONNAME>
         <STATICVARIABLES>
-          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-          <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
-          <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>${companyVar(tallyCompany)}
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
         </STATICVARIABLES>
       </REQUESTDESC>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSSalesVouchers" ISMODIFY="No" ISFIXED="No">
+            <TYPE>Voucher</TYPE>
+            <FETCH>DATE, VOUCHERTYPENAME, PARTYLEDGERNAME, AMOUNT, VOUCHERNUMBER</FETCH>
+            <FILTER>TBSSalesDateFilter</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="TBSSalesDateFilter">
+            $$VoucherDate &gt;= $$StringAsDate:"${from}" AND $$VoucherDate &lt;= $$StringAsDate:"${to}"
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
     </EXPORTDATA>
   </BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[SalesRegister] response length:', responseText.length)
-  console.log('[SalesRegister] raw (first 1000):', responseText.slice(0, 1000))
+  console.log('[TBSVouchers] response length:', responseText.length)
+  console.log('[TBSVouchers] raw (first 500):', responseText.slice(0, 500))
 
-  // Sales Register returns monthly summary (DSPPERIOD + DSPCRAMTA), not individual vouchers
-  const vouchers = parseSalesRegisterSummary(responseText, fromDate)
-  console.log('[SalesRegister] parsed monthly totals:', JSON.stringify(vouchers))
+  const vouchers = parseVouchers(responseText)
+  console.log('[TBSVouchers] parsed:', vouchers.length, '| sample:', JSON.stringify(vouchers.slice(0,3)))
   return { vouchers }
 }
 
