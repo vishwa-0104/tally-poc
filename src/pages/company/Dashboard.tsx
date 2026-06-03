@@ -47,15 +47,34 @@ interface ChartPoint { label: string; amount: number }
 function groupVouchers(
   vouchers: { date: string; amount: number }[],
   granularity: Granularity,
+  fromDate: string,
+  toDate: string,
 ): ChartPoint[] {
   const map = new Map<string, number>()
 
+  // Pre-fill every slot in the range with 0 so empty days/weeks/months show up
+  const start = new Date(fromDate)
+  const end   = new Date(toDate)
+  if (granularity === 'daily') {
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      map.set(d.toISOString().slice(0, 10), 0)
+    }
+  } else if (granularity === 'weekly') {
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 7)) {
+      map.set(getWeekStart(d), 0)
+    }
+  } else {
+    for (const d = new Date(start); d <= end; d.setMonth(d.getMonth() + 1)) {
+      map.set(d.toISOString().slice(0, 7), 0)
+    }
+  }
+
   for (const v of vouchers) {
-    const d    = new Date(v.date)
-    let   key  = ''
+    const d   = new Date(v.date)
+    let   key = ''
     if (granularity === 'daily')        key = v.date
     else if (granularity === 'weekly')  key = getWeekStart(d)
-    else                                key = v.date.slice(0, 7)   // YYYY-MM
+    else                                key = v.date.slice(0, 7)
     map.set(key, (map.get(key) ?? 0) + v.amount)
   }
 
@@ -162,10 +181,13 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const vouchers = await fetchTallyVouchers(
+      const all = await fetchTallyVouchers(
         toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany,
       )
-      const grouped = groupVouchers(vouchers, granularity)
+      // Tally Day Book ignores SVFROMDATE/SVTODATE — filter in JS
+      const vouchers = all.filter((v) => v.date >= fromDate && v.date <= toDate)
+      console.log(`[Dashboard] Tally returned ${all.length} vouchers, ${vouchers.length} within ${fromDate}→${toDate}`)
+      const grouped = groupVouchers(vouchers, granularity, fromDate, toDate)
       setChartData(grouped)
       setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
       setFetched(true)
@@ -342,7 +364,7 @@ export default function Dashboard() {
                     tick={{ fontSize: 11, fill: '#6B7280' }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
                     width={52}
                   />
                   <Tooltip content={<CustomTooltip />} />
