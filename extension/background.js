@@ -494,21 +494,18 @@ function toTallyDisplayDate(yyyymmdd) {
 
 async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, _voucherType) {
   const xml = `<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Export Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
-    <EXPORTDATA>
-      <REQUESTDESC>
-        <REPORTNAME>Sales Register</REPORTNAME>
-        <STATICVARIABLES>
-          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-          <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
-          <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>${companyVar(tallyCompany)}
-        </STATICVARIABLES>
-      </REQUESTDESC>
-    </EXPORTDATA>
-  </BODY>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA>
+    <REQUESTDESC>
+      <REPORTNAME>Sales Register</REPORTNAME>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
+        <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>
+        ${tallyCompany ? `<SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>` : ''}
+      </STATICVARIABLES>
+    </REQUESTDESC>
+  </EXPORTDATA></BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
