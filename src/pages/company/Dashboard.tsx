@@ -163,11 +163,12 @@ export default function Dashboard() {
   const [granularity, setGranularity] = useState<Granularity>('daily')
   const voucherType = 'Sales'
 
-  const [chartData,  setChartData]  = useState<ChartPoint[]>([])
-  const [total,      setTotal]      = useState(0)
-  const [loading,    setLoading]    = useState(false)
-  const [fetched,    setFetched]    = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
+  const [chartData,   setChartData]   = useState<ChartPoint[]>([])
+  const [topParties,  setTopParties]  = useState<{ party: string; amount: number }[]>([])
+  const [total,       setTotal]       = useState(0)
+  const [loading,     setLoading]     = useState(false)
+  const [fetched,     setFetched]     = useState(false)
+  const [error,       setError]       = useState<string | null>(null)
 
   const handlePreset = (key: string) => {
     setPreset(key)
@@ -184,12 +185,23 @@ export default function Dashboard() {
       const all = await fetchTallyVouchers(
         toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany,
       )
-      // Tally Day Book ignores SVFROMDATE/SVTODATE — filter in JS
       const vouchers = all.filter((v) => v.date >= fromDate && v.date <= toDate)
-      console.log(`[Dashboard] Tally returned ${all.length} vouchers, ${vouchers.length} within ${fromDate}→${toDate}`)
-      const grouped = groupVouchers(vouchers, granularity, fromDate, toDate)
+      const grouped  = groupVouchers(vouchers, granularity, fromDate, toDate)
       setChartData(grouped)
       setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
+
+      // Top parties by amount
+      const partyMap = new Map<string, number>()
+      for (const v of vouchers) {
+        if (!v.party) continue
+        partyMap.set(v.party, (partyMap.get(v.party) ?? 0) + v.amount)
+      }
+      setTopParties(
+        [...partyMap.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([party, amount]) => ({ party, amount })),
+      )
       setFetched(true)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch data'
@@ -371,6 +383,35 @@ export default function Dashboard() {
             </>
           )}
         </div>
+
+        {/* Top customers table */}
+        {fetched && topParties.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <p className="text-xs font-semibold text-gray-600 mb-3">Top Customers by Sales</p>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-2 px-2 font-semibold text-gray-500">#</th>
+                  <th className="text-left py-2 px-2 font-semibold text-gray-500">Customer</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-500">Amount</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-500">Share</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {topParties.map((p, i) => (
+                  <tr key={p.party} className="hover:bg-gray-50">
+                    <td className="py-2 px-2 text-gray-400">{i + 1}</td>
+                    <td className="py-2 px-2 text-gray-800 font-medium">{p.party}</td>
+                    <td className="py-2 px-2 text-right text-gray-800">{formatCurrency(p.amount)}</td>
+                    <td className="py-2 px-2 text-right text-gray-500">
+                      {total > 0 ? `${((p.amount / total) * 100).toFixed(1)}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
       </div>
     </div>
