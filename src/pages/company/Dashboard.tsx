@@ -4,10 +4,10 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts'
-import { TrendingUp, RefreshCw, AlertCircle, Users } from 'lucide-react'
+import { TrendingUp, RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchTallyVouchers, fetchSalesPartyData, SalesPartyRow } from '@/services/tallyService'
+import { fetchTallyVouchers } from '@/services/tallyService'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
