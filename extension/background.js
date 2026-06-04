@@ -493,35 +493,19 @@ function toTallyDisplayDate(yyyymmdd) {
 }
 
 async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, _voucherType) {
-  const from = toTallyDisplayDate(fromDate)  // DD-MMM-YYYY
-  const to   = toTallyDisplayDate(toDate)
-
   const xml = `<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Export Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
-    <EXPORTDATA>
-      <REQUESTDESC>
-        <COLLECTIONNAME>TBSSalesVouchers</COLLECTIONNAME>
-        <STATICVARIABLES>
-          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
-        </STATICVARIABLES>
-      </REQUESTDESC>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="TBSSalesVouchers" ISMODIFY="No" ISFIXED="No">
-            <TYPE>Voucher</TYPE>
-            <FETCH>DATE, VOUCHERTYPENAME, PARTYLEDGERNAME, AMOUNT, VOUCHERNUMBER</FETCH>
-            <FILTER>TBSSalesDateFilter</FILTER>
-          </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="TBSSalesDateFilter">
-            $$VoucherDate &gt;= $$StringAsDate:"${from}" AND $$VoucherDate &lt;= $$StringAsDate:"${to}"
-          </SYSTEM>
-        </TDLMESSAGE>
-      </TDL>
-    </EXPORTDATA>
-  </BODY>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA>
+    <REQUESTDESC>
+      <REPORTNAME>Sales Register</REPORTNAME>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
+        <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>
+        ${tallyCompany ? `<SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>` : ''}
+      </STATICVARIABLES>
+    </REQUESTDESC>
+  </EXPORTDATA></BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
