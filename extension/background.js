@@ -95,6 +95,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ vouchers: [], error: err.message }))
       return true
 
+    case 'FETCH_SALES_PARTY':
+      handleFetchSalesParty(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ parties: [], error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -509,11 +515,12 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, _vo
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[TBSVouchers] response length:', responseText.length)
-  console.log('[TBSVouchers] raw (first 500):', responseText.slice(0, 500))
+  console.log('[SalesRegister] response length:', responseText.length)
+  console.log('[SalesRegister] raw (first 1000):', responseText.slice(0, 1000))
 
-  const vouchers = parseVouchers(responseText)
-  console.log('[TBSVouchers] parsed:', vouchers.length, '| sample:', JSON.stringify(vouchers.slice(0,3)))
+  // Sales Register returns monthly summary (DSPPERIOD + DSPCRAMTA), not individual vouchers
+  const vouchers = parseSalesRegisterSummary(responseText, fromDate)
+  console.log('[SalesRegister] parsed monthly totals:', JSON.stringify(vouchers))
   return { vouchers }
 }
 
@@ -545,6 +552,47 @@ function parseSalesRegisterSummary(xml, fromDate) {
     vouchers.push({ date, type: 'Sales GST', party: '', amount, voucherNo: '' })
   }
   return vouchers
+}
+
+// ── Fetch party-wise sales totals (Sales Register Collection) ───────────────
+
+async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
+  // Voucher Register accepts SVFROMDATE + SVTODATE and returns individual vouchers
+  // across the full date range (unlike Day Book which is single-date only)
+  const xml = `<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA>
+    <REQUESTDESC>
+      <REPORTNAME>Voucher Register</REPORTNAME>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
+        <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+    </REQUESTDESC>
+  </EXPORTDATA></BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log('[SalesParty] response length:', responseText.length)
+  console.log('[SalesParty] raw (first 1000):', responseText.slice(0, 1000))
+
+  const allVouchers  = parseVouchers(responseText)
+  const salesVouchers = allVouchers.filter((v) => v.type.toLowerCase().includes('sales'))
+  console.log(`[SalesParty] total=${allVouchers.length} | sales=${salesVouchers.length} | types: ${[...new Set(allVouchers.map(v => v.type))].join(', ')}`)
+
+  const map = new Map()
+  for (const v of salesVouchers) {
+    if (!v.party || v.amount === 0) continue
+    map.set(v.party, (map.get(v.party) ?? 0) + v.amount)
+  }
+
+  const parties = [...map.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .map(([name, amount]) => ({ name, amount }))
+
+  console.log(`[SalesParty] unique parties: ${parties.length} | top3: ${JSON.stringify(parties.slice(0, 3))}`)
+  return { parties }
 }
 
 function parseVouchers(xml) {
