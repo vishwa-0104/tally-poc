@@ -557,41 +557,61 @@ function parseSalesRegisterSummary(xml, fromDate) {
 // ── Fetch party-wise sales totals (Sales Register Collection) ───────────────
 
 async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
-  // Voucher Register accepts SVFROMDATE + SVTODATE and returns individual vouchers
-  // across the full date range (unlike Day Book which is single-date only)
+  // TDL Collection with hardcoded date values in the formula so Tally actually filters.
+  // $$SVFromDate/$$SVToDate do not resolve inside FILTER formulae — pass dates directly.
   const xml = `<ENVELOPE>
-  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
-  <BODY><EXPORTDATA>
-    <REQUESTDESC>
-      <REPORTNAME>Voucher Register</REPORTNAME>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSSalesParty</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
-        <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>${companyVar(tallyCompany)}
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
       </STATICVARIABLES>
-    </REQUESTDESC>
-  </EXPORTDATA></BODY>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSSalesParty" ISMODIFY="No">
+            <TYPE>Voucher</TYPE>
+            <NATIVEMETHOD>Date, VoucherTypeName, PartyLedgerName, Amount</NATIVEMETHOD>
+            <FILTER>IsSalesAndInRange</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="IsSalesAndInRange">
+            $$Contains:VoucherTypeName:"Sales" AND $$IsInRange:Date:$$StrToDate:"${fromDate}":$$StrToDate:"${toDate}"
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
   console.log('[SalesParty] response length:', responseText.length)
   console.log('[SalesParty] raw (first 1000):', responseText.slice(0, 1000))
 
-  const allVouchers  = parseVouchers(responseText)
-  const salesVouchers = allVouchers.filter((v) => v.type.toLowerCase().includes('sales'))
-  console.log(`[SalesParty] total=${allVouchers.length} | sales=${salesVouchers.length} | types: ${[...new Set(allVouchers.map(v => v.type))].join(', ')}`)
+  console.log('[SalesParty] response length:', responseText.length)
+  console.log('[SalesParty] raw (first 500):', responseText.slice(0, 500))
 
-  const map = new Map()
-  for (const v of salesVouchers) {
-    if (!v.party || v.amount === 0) continue
-    map.set(v.party, (map.get(v.party) ?? 0) + v.amount)
+  const decode  = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
+  const blocks  = [...responseText.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
+  const map     = new Map()
+
+  for (const match of blocks) {
+    const block  = match[0]
+    const party  = decode(block.match(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/i)?.[1] ?? '')
+    const amtRaw = decode(block.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+    const amount = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
+    if (!party || amount === 0) continue
+    map.set(party, (map.get(party) ?? 0) + amount)
   }
 
   const parties = [...map.entries()]
     .sort(([, a], [, b]) => b - a)
     .map(([name, amount]) => ({ name, amount }))
 
-  console.log(`[SalesParty] unique parties: ${parties.length} | top3: ${JSON.stringify(parties.slice(0, 3))}`)
+  console.log(`[SalesParty] voucher blocks=${blocks.length} | unique parties=${parties.length} | top3: ${JSON.stringify(parties.slice(0, 3))}`)
   return { parties }
 }
 
