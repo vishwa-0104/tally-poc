@@ -182,25 +182,16 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const [voucherResult, partyResult] = await Promise.allSettled([
-        fetchTallyVouchers(toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany),
-        fetchSalesPartyData(toTallyDate(fromDate), toTallyDate(toDate), tallyUrl, tallyCompany),
-      ])
+      const all      = await fetchTallyVouchers(toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany)
+      const vouchers = all.filter((v) => v.date >= fromDate && v.date <= toDate)
+      setChartData(groupVouchers(vouchers, granularity, fromDate, toDate))
+      setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
 
-      if (voucherResult.status === 'fulfilled') {
-        const vouchers = voucherResult.value.filter((v) => v.date >= fromDate && v.date <= toDate)
-        setChartData(groupVouchers(vouchers, granularity, fromDate, toDate))
-        setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
-      } else {
-        throw voucherResult.reason
-      }
-
-      if (partyResult.status === 'fulfilled') {
-        setTopParties(
-          partyResult.value.slice(0, 10).map((r) => ({ party: r.name, amount: r.amount })),
-        )
-      } else {
-        console.warn('[Dashboard] Voucher Register fetch failed:', partyResult.reason)
+      try {
+        const parties = await fetchSalesPartyData(toTallyDate(fromDate), toTallyDate(toDate), tallyUrl, tallyCompany)
+        setTopParties(parties.slice(0, 10).map((r) => ({ party: r.name, amount: r.amount })))
+      } catch (partyErr) {
+        console.warn('[Dashboard] Party fetch failed:', partyErr)
       }
 
       setFetched(true)
