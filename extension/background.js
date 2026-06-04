@@ -557,59 +557,42 @@ function parseSalesRegisterSummary(xml, fromDate) {
 // ── Fetch party-wise sales totals (Sales Register Collection) ───────────────
 
 async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
+  // Voucher Register accepts SVFROMDATE + SVTODATE and returns individual vouchers
+  // across the full date range (unlike Day Book which is single-date only)
   const xml = `<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>TBSSalesParty</ID>
-  </HEADER>
-  <BODY>
-    <DESC>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA>
+    <REQUESTDESC>
+      <REPORTNAME>Voucher Register</REPORTNAME>
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
         <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>${companyVar(tallyCompany)}
       </STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="TBSSalesParty" ISMODIFY="No">
-            <TYPE>Voucher</TYPE>
-            <NATIVEMETHOD>Date, VoucherTypeName, VoucherNumber, PartyLedgerName, Amount</NATIVEMETHOD>
-            <FILTER>IsSalesVoucher</FILTER>
-          </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="IsSalesVoucher">
-            $$IsVchTypeSales:VoucherTypeName
-          </SYSTEM>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
-  </BODY>
+    </REQUESTDESC>
+  </EXPORTDATA></BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
   console.log('[SalesParty] response length:', responseText.length)
-  console.log('[SalesParty] raw (first 500):', responseText.slice(0, 500))
-  return { parties: parseSalesParty(responseText) }
-}
+  console.log('[SalesParty] raw (first 1000):', responseText.slice(0, 1000))
 
-function parseSalesParty(xml) {
-  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
-  const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
+  const allVouchers  = parseVouchers(responseText)
+  const salesVouchers = allVouchers.filter((v) => v.type.toLowerCase().includes('sales'))
+  console.log(`[SalesParty] total=${allVouchers.length} | sales=${salesVouchers.length} | types: ${[...new Set(allVouchers.map(v => v.type))].join(', ')}`)
+
   const map = new Map()
-
-  for (const match of blocks) {
-    const block  = match[0]
-    const party  = decode(block.match(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/i)?.[1] ?? '')
-    const amtRaw = decode(block.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
-    const amount = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
-    if (!party || amount === 0) continue
-    map.set(party, (map.get(party) ?? 0) + amount)
+  for (const v of salesVouchers) {
+    if (!v.party || v.amount === 0) continue
+    map.set(v.party, (map.get(v.party) ?? 0) + v.amount)
   }
 
-  return [...map.entries()]
+  const parties = [...map.entries()]
     .sort(([, a], [, b]) => b - a)
     .map(([name, amount]) => ({ name, amount }))
+
+  console.log(`[SalesParty] unique parties: ${parties.length} | top3: ${JSON.stringify(parties.slice(0, 3))}`)
+  return { parties }
 }
 
 function parseVouchers(xml) {
