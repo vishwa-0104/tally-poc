@@ -139,6 +139,23 @@ export async function fetchTallyVouchers(
   return result.vouchers
 }
 
+export interface SalesPartyRow {
+  name:   string
+  amount: number
+}
+
+export async function fetchSalesPartyData(
+  fromDate: string,
+  toDate: string,
+  tallyUrl: string,
+  tallyCompany?: string,
+): Promise<SalesPartyRow[]> {
+  const result = await sendToExtension<{ parties: SalesPartyRow[] }>('FETCH_SALES_PARTY', {
+    fromDate, toDate, tallyUrl, tallyCompany,
+  })
+  return result.parties
+}
+
 export interface BankSyncRow {
   date: string
   description: string

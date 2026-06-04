@@ -95,6 +95,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ vouchers: [], error: err.message }))
       return true
 
+    case 'FETCH_SALES_PARTY':
+      handleFetchSalesParty(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ parties: [], error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -546,6 +552,64 @@ function parseSalesRegisterSummary(xml, fromDate) {
     vouchers.push({ date, type: 'Sales GST', party: '', amount, voucherNo: '' })
   }
   return vouchers
+}
+
+// ── Fetch party-wise sales totals (Sales Register Collection) ───────────────
+
+async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSSalesParty</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${toTallyDisplayDate(fromDate)}</SVFROMDATE>
+        <SVTODATE>${toTallyDisplayDate(toDate)}</SVTODATE>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSSalesParty" ISMODIFY="No">
+            <TYPE>Voucher</TYPE>
+            <NATIVEMETHOD>Date, VoucherTypeName, VoucherNumber, PartyLedgerName, Amount</NATIVEMETHOD>
+            <FILTER>IsSalesVoucher</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="IsSalesVoucher">
+            $$IsVchTypeSales:VoucherTypeName
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log('[SalesParty] response length:', responseText.length)
+  console.log('[SalesParty] raw (first 500):', responseText.slice(0, 500))
+  return { parties: parseSalesParty(responseText) }
+}
+
+function parseSalesParty(xml) {
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
+  const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
+  const map = new Map()
+
+  for (const match of blocks) {
+    const block  = match[0]
+    const party  = decode(block.match(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/i)?.[1] ?? '')
+    const amtRaw = decode(block.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+    const amount = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
+    if (!party || amount === 0) continue
+    map.set(party, (map.get(party) ?? 0) + amount)
+  }
+
+  return [...map.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .map(([name, amount]) => ({ name, amount }))
 }
 
 function parseVouchers(xml) {

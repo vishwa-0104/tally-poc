@@ -4,10 +4,10 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts'
-import { TrendingUp, RefreshCw, AlertCircle } from 'lucide-react'
+import { TrendingUp, RefreshCw, AlertCircle, Users } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchTallyVouchers } from '@/services/tallyService'
+import { fetchTallyVouchers, fetchSalesPartyData, SalesPartyRow } from '@/services/tallyService'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
@@ -168,6 +168,7 @@ export default function Dashboard() {
   const [loading,    setLoading]    = useState(false)
   const [fetched,    setFetched]    = useState(false)
   const [error,      setError]      = useState<string | null>(null)
+  const [top5,       setTop5]       = useState<SalesPartyRow[]>([])
 
   const handlePreset = (key: string) => {
     setPreset(key)
@@ -181,15 +182,28 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const all = await fetchTallyVouchers(
-        toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany,
-      )
-      // Tally Day Book ignores SVFROMDATE/SVTODATE — filter in JS
-      const vouchers = all.filter((v) => v.date >= fromDate && v.date <= toDate)
-      console.log(`[Dashboard] Tally returned ${all.length} vouchers, ${vouchers.length} within ${fromDate}→${toDate}`)
-      const grouped = groupVouchers(vouchers, granularity, fromDate, toDate)
-      setChartData(grouped)
-      setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
+      const [voucherResult, partyResult] = await Promise.allSettled([
+        fetchTallyVouchers(toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany),
+        fetchSalesPartyData(toTallyDate(fromDate), toTallyDate(toDate), tallyUrl, tallyCompany),
+      ])
+
+      if (voucherResult.status === 'fulfilled') {
+        const all      = voucherResult.value
+        const vouchers = all.filter((v) => v.date >= fromDate && v.date <= toDate)
+        console.log(`[Dashboard] Tally returned ${all.length} vouchers, ${vouchers.length} within ${fromDate}→${toDate}`)
+        setChartData(groupVouchers(vouchers, granularity, fromDate, toDate))
+        setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
+      } else {
+        throw voucherResult.reason
+      }
+
+      if (partyResult.status === 'fulfilled') {
+        console.log(`[Dashboard] Top parties: ${partyResult.value.length}`)
+        setTop5(partyResult.value.slice(0, 5))
+      } else {
+        console.warn('[Dashboard] Sales party fetch failed:', partyResult.reason)
+      }
+
       setFetched(true)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch data'
@@ -371,6 +385,38 @@ export default function Dashboard() {
             </>
           )}
         </div>
+
+        {/* Top 5 Buyers */}
+        {fetched && top5.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-4 h-4 text-brand-600" />
+              <p className="text-xs font-semibold text-gray-600">Top 5 Buyers</p>
+            </div>
+            <div className="space-y-3">
+              {top5.map((row, i) => {
+                const pct = Math.round((row.amount / top5[0].amount) * 100)
+                return (
+                  <div key={row.name} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-gray-400 w-4">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold text-gray-700 truncate">{row.name}</span>
+                        <span className="text-xs font-bold text-gray-900 ml-2 shrink-0">{formatCurrency(row.amount)}</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full">
+                        <div
+                          className="h-1.5 bg-brand-500 rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
