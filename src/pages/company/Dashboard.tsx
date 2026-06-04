@@ -7,7 +7,7 @@ import {
 import { TrendingUp, RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchTallyVouchers } from '@/services/tallyService'
+import { fetchTallyVouchers, fetchSalesPartyData } from '@/services/tallyService'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
@@ -182,26 +182,27 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const all = await fetchTallyVouchers(
-        toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany,
-      )
-      const vouchers = all.filter((v) => v.date >= fromDate && v.date <= toDate)
-      const grouped  = groupVouchers(vouchers, granularity, fromDate, toDate)
-      setChartData(grouped)
-      setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
+      const [voucherResult, partyResult] = await Promise.allSettled([
+        fetchTallyVouchers(toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany),
+        fetchSalesPartyData(toTallyDate(fromDate), toTallyDate(toDate), tallyUrl, tallyCompany),
+      ])
 
-      // Top parties by amount
-      const partyMap = new Map<string, number>()
-      for (const v of vouchers) {
-        if (!v.party) continue
-        partyMap.set(v.party, (partyMap.get(v.party) ?? 0) + v.amount)
+      if (voucherResult.status === 'fulfilled') {
+        const vouchers = voucherResult.value.filter((v) => v.date >= fromDate && v.date <= toDate)
+        setChartData(groupVouchers(vouchers, granularity, fromDate, toDate))
+        setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
+      } else {
+        throw voucherResult.reason
       }
-      setTopParties(
-        [...partyMap.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .map(([party, amount]) => ({ party, amount })),
-      )
+
+      if (partyResult.status === 'fulfilled') {
+        setTopParties(
+          partyResult.value.slice(0, 10).map((r) => ({ party: r.name, amount: r.amount })),
+        )
+      } else {
+        console.warn('[Dashboard] Voucher Register fetch failed:', partyResult.reason)
+      }
+
       setFetched(true)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch data'
