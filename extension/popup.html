@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Invoice Sync</title>
+  <title>Tally Bill Sync</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -33,7 +33,6 @@
     }
     .row:last-child { border-bottom: none; }
     .label { color: #6b7280; }
-    .value { font-weight: 600; }
 
     .badge {
       display: inline-flex;
@@ -44,11 +43,15 @@
       font-size: 11px;
       font-weight: 600;
     }
-    .badge.active   { background: #d1fae5; color: #065f46; }
-    .badge.inactive { background: #fef3c7; color: #92400e; }
+    .badge.ok      { background: #d1fae5; color: #065f46; }
+    .badge.err     { background: #fee2e2; color: #991b1b; }
+    .badge.warning { background: #fef3c7; color: #92400e; }
+    .badge.checking{ background: #f3f4f6; color: #6b7280; }
     .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
     .dot.green  { background: #10b981; }
+    .dot.red    { background: #ef4444; }
     .dot.yellow { background: #f59e0b; }
+    .dot.gray   { background: #9ca3af; }
 
     #test-btn {
       display: block;
@@ -88,14 +91,20 @@
 <body>
   <div class="header">
     <h1>Tally Bill Sync</h1>
-    <p>Browser extension v<span id="version">–</span></p>
+    <p>Extension v<span id="version">–</span></p>
   </div>
 
   <div class="body">
     <div class="row">
       <span class="label">Extension</span>
-      <span class="badge active"><span class="dot green"></span>Active</span>
+      <span class="badge ok"><span class="dot green"></span>Active</span>
     </div>
+
+    <div class="row">
+      <span class="label">TallySyncAgent</span>
+      <span id="agent-badge" class="badge checking"><span class="dot gray"></span>Checking…</span>
+    </div>
+
     <div class="row">
       <span class="label">Tally port</span>
       <input id="port-input" type="number" value="9000"
@@ -107,7 +116,7 @@
   </div>
 
   <div class="footer">
-    Keep Tally ERP open on the configured port while syncing.
+    Keep Tally ERP open and TallySyncAgent running while using the dashboard.
   </div>
 
   <script src="popup.js"></script>

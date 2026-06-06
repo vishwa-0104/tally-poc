@@ -1,12 +1,33 @@
-document.getElementById('version').textContent =
-  chrome.runtime.getManifest().version
+document.getElementById('version').textContent = chrome.runtime.getManifest().version
 
-const btn = document.getElementById('test-btn')
-const msg = document.getElementById('status-msg')
-const portInput = document.getElementById('port-input')
+const btn        = document.getElementById('test-btn')
+const msg        = document.getElementById('status-msg')
+const portInput  = document.getElementById('port-input')
+const agentBadge = document.getElementById('agent-badge')
+
+// ── Agent health check (runs on popup open) ──────────────────────────────────
+
+async function checkAgent() {
+  try {
+    const res = await fetch('http://localhost:9001/health', { signal: AbortSignal.timeout(3000) })
+    const json = await res.json()
+    if (json.ok) {
+      agentBadge.className = 'badge ok'
+      agentBadge.innerHTML = '<span class="dot green"></span>Running'
+    } else {
+      throw new Error('not ok')
+    }
+  } catch {
+    agentBadge.className = 'badge err'
+    agentBadge.innerHTML = '<span class="dot red"></span>Not running'
+  }
+}
+
+checkAgent()
+
+// ── Tally connection test ────────────────────────────────────────────────────
 
 btn.addEventListener('click', async () => {
-  alert(">>>>>>>")
   const port = parseInt(portInput.value, 10) || 9000
   btn.disabled = true
   btn.textContent = 'Connecting…'
@@ -37,29 +58,25 @@ btn.addEventListener('click', async () => {
   </BODY>
 </ENVELOPE>`
 
-  // try {
-    const response = await fetch(`http://localhost:9000`, {
+  try {
+    const response = await fetch(`http://localhost:${port}`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/xml;charset=UTF-8' },
       body: testXml,
     })
 
-    alert(">>> sendinding connectionnnn ", response)
-
     if (response.ok) {
       msg.className = 'ok'
-      msg.textContent = `Connected to Invoice on port ${port}`
+      msg.textContent = `Connected to Tally on port ${port}`
     } else {
       msg.className = 'err'
-      msg.textContent = `Invoice responded with HTTP ${response.status}`
-      console.log(">>>>>>>>>>>>>> ", response.status)
+      msg.textContent = `Tally responded with HTTP ${response.status}`
     }
-  } 
-  // catch {
-  //   msg.className = 'err'
-  //   msg.textContent = `Could not reach Invoice on port ${port}. Is Invoice running?`
-  // }
+  } catch {
+    msg.className = 'err'
+    msg.textContent = `Could not reach Tally on port ${port}. Is Tally running?`
+  }
 
-  // btn.disabled = false
-  // btn.textContent = 'Test Invoice Connection'
-)
+  btn.disabled = false
+  btn.textContent = 'Test Tally Connection'
+})

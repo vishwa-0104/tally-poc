@@ -169,6 +169,22 @@ export async function fetchTopDebtors(limit = 10): Promise<AgentDebtorRow[]> {
   return result.data ?? []
 }
 
+export interface AgentHealth {
+  ok:             boolean
+  version?:       string
+  tallyConnected?: boolean
+  error?:         string
+}
+
+export async function checkAgentHealth(): Promise<AgentHealth> {
+  try {
+    const result = await sendToExtension<AgentHealth>('FETCH_AGENT', { endpoint: 'health', params: {} })
+    return result
+  } catch {
+    return { ok: false }
+  }
+}
+
 export interface BankSyncRow {
   date: string
   description: string
