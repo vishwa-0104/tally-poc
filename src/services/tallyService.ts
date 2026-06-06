@@ -156,6 +156,19 @@ export async function fetchSalesPartyData(
   return result.parties
 }
 
+export interface AgentDebtorRow {
+  name:    string
+  balance: number
+}
+
+export async function fetchTopDebtors(limit = 10): Promise<AgentDebtorRow[]> {
+  const result = await sendToExtension<{ ok: boolean; data: AgentDebtorRow[] }>('FETCH_AGENT', {
+    endpoint: 'top-debtors',
+    params: { limit: String(limit) },
+  })
+  return result.data ?? []
+}
+
 export interface BankSyncRow {
   date: string
   description: string

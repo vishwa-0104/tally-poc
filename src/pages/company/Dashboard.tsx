@@ -7,7 +7,7 @@ import {
 import { TrendingUp, RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchTallyVouchers, fetchSalesPartyData } from '@/services/tallyService'
+import { fetchTallyVouchers, fetchTopDebtors } from '@/services/tallyService'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
@@ -188,10 +188,10 @@ export default function Dashboard() {
       setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
 
       try {
-        const parties = await fetchSalesPartyData(toTallyDate(fromDate), toTallyDate(toDate), tallyUrl, tallyCompany)
-        setTopParties(parties.slice(0, 10).map((r) => ({ party: r.name, amount: r.amount })))
+        const debtors = await fetchTopDebtors(10)
+        setTopParties(debtors.map((r) => ({ party: r.name, amount: r.balance })))
       } catch (partyErr) {
-        console.warn('[Dashboard] Party fetch failed:', partyErr)
+        console.warn('[Dashboard] Agent fetch failed — is TallySyncAgent running?', partyErr)
       }
 
       setFetched(true)
@@ -379,7 +379,7 @@ export default function Dashboard() {
         {/* Top customers table */}
         {fetched && topParties.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs font-semibold text-gray-600 mb-3">Top Customers by Sales</p>
+            <p className="text-xs font-semibold text-gray-600 mb-3">Top Debtors by Outstanding Balance</p>
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="border-b border-gray-100">

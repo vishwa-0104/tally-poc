@@ -101,6 +101,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ parties: [], error: err.message }))
       return true
 
+    case 'FETCH_AGENT':
+      handleFetchAgent(payload.endpoint, payload.params)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ ok: false, error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -613,6 +619,17 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 
   console.log(`[SalesParty] voucher blocks=${blocks.length} | unique parties=${parties.length} | top3: ${JSON.stringify(parties.slice(0, 3))}`)
   return { parties }
+}
+
+// ── Fetch data from local TallySyncAgent (ODBC bridge on :9001) ─────────────
+
+async function handleFetchAgent(endpoint, params) {
+  const query = params && Object.keys(params).length > 0
+    ? '?' + new URLSearchParams(params).toString()
+    : ''
+  const response = await fetch(`http://localhost:9001/${endpoint}${query}`)
+  if (!response.ok) throw new Error(`TallySyncAgent error: ${response.status}`)
+  return response.json()
 }
 
 function parseVouchers(xml) {
