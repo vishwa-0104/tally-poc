@@ -12,7 +12,7 @@ import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { LedgerMapping, BankDefaultLedger } from '@/types'
 
 const AGENT_DOWNLOAD_URL = import.meta.env.VITE_AGENT_DOWNLOAD_URL ||
-  'https://github.com/vishwnath-yadav/tally-sync-db-agent/releases/download/v1.0.0/TallySyncAgent.Setup.1.0.0.exe'
+  'https://drive.google.com/file/d/1SqAsdjYS4Fpszl0f1wbmhRIbQshnK0Es/view?usp=sharing'
 
 // ── TallySyncAgent setup card ─────────────────────────────────────────────────
 
