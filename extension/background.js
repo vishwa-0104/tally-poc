@@ -108,7 +108,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true
 
     case 'FETCH_DAYBOOK':
-      handleFetchDaybook(payload.tallyUrl, payload.tallyCompany, payload.date)
+      handleFetchDaybook(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate)
         .then(sendResponse)
         .catch((err) => sendResponse({ vouchers: [], rawXml: '', error: err.message }))
       return true
@@ -639,34 +639,55 @@ async function handleFetchAgent(endpoint, params) {
 }
 
 // ── Fetch Day Book for a single date ────────────────────────────────────────
-// Day Book is a single-day report. It uses SVDATE (not SVFROMDATE/SVTODATE).
-// Passing SVFROMDATE/SVTODATE is ignored — Tally always returns its current date.
-// Loop day-by-day from the frontend and call this once per date.
+// TDL Collection approach for date-range voucher fetch.
+// Embeds dates directly in the filter formula using $$StrToDate with display format ("DD-Mon-YYYY")
+// because $$SVFromDate/$$SVToDate do not resolve inside FILTER formulae.
+// JS-side date filter is applied after parsing as a safety net.
 
-async function handleFetchDaybook(tallyUrl, tallyCompany, date) {
-  // date must be YYYYMMDD (e.g. "20260615") — Tally's internal numeric date format
+async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
+  const from = toTallyDisplayDate(fromDate)  // e.g. "01-Apr-2026"
+  const to   = toTallyDisplayDate(toDate)    // e.g. "17-Jun-2026"
 
   const xml = `<ENVELOPE>
-  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
-  <BODY><EXPORTDATA>
-    <REQUESTDESC>
-      <REPORTNAME>Day Book</REPORTNAME>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSDaybook</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        <SVDATE>${date}</SVDATE>
-        ${tallyCompany ? `<SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>` : ''}
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
       </STATICVARIABLES>
-    </REQUESTDESC>
-  </EXPORTDATA></BODY>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSDaybook" ISMODIFY="No">
+            <TYPE>Voucher</TYPE>
+            <FILTER>InDateRange</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="InDateRange">
+            $$IsInRange:Date:$$StrToDate:"${from}":$$StrToDate:"${to}"
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log(`[DayBook][${date}] response length:`, responseText.length)
-  // Log the full raw XML so we can see every available field
-  console.log(`[DayBook][${date}] RAW RESPONSE:\n`, responseText)
+  console.log(`[Daybook] ${from} → ${to} | response length:`, responseText.length)
+  console.log('[Daybook] raw (first 2000):', responseText.slice(0, 2000))
 
-  const vouchers = parseVouchers(responseText)
-  console.log(`[DayBook][${date}] parsed vouchers:`, JSON.stringify(vouchers, null, 2))
+  const allVouchers = parseVouchers(responseText)
+
+  // JS safety filter: even if Tally returns out-of-range vouchers, exclude them here
+  const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
+  const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
+  const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
+
+  console.log(`[Daybook] total from Tally: ${allVouchers.length}, in range [${fromISO}..${toISO}]: ${vouchers.length}`)
+  console.log('[Daybook] unique types:', [...new Set(allVouchers.map(v => v.type))])
   return { vouchers, rawXml: responseText }
 }
 
@@ -690,7 +711,7 @@ function parseVouchers(xml) {
       ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
       : rawDate
 
-    // Amount: find LEDGERENTRIES.LIST where ISPARTYLEDGER=Yes — this is the grand total
+    // Amount: find LEDGERENTRIES.LIST where ISPARTYLEDGER=Yes (Sales/Receipt vouchers)
     let amount = 0
     const ledgerListRe = /<LEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/LEDGERENTRIES\.LIST>/gi
     for (const le of block.matchAll(ledgerListRe)) {
@@ -700,7 +721,17 @@ function parseVouchers(xml) {
       if (leAmtRaw) { amount = Math.abs(parseFloat(leAmtRaw.replace(/,/g, '')) || 0); break }
     }
 
-    // Fallback: sum ALLINVENTORYENTRIES amounts (taxable value without GST)
+    // Fallback: ALLLEDGERENTRIES.LIST where ISPARTYLEDGER=Yes (Payment/Journal vouchers)
+    if (amount === 0) {
+      for (const le of block.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi)) {
+        const leBlock = le[0]
+        if (!/ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)) continue
+        const leAmtRaw = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
+        if (leAmtRaw) { amount = Math.abs(parseFloat(leAmtRaw.replace(/,/g, '')) || 0); break }
+      }
+    }
+
+    // Last fallback: sum ALLINVENTORYENTRIES amounts (taxable value without GST)
     if (amount === 0) {
       for (const ie of block.matchAll(/<ALLINVENTORYENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLINVENTORYENTRIES\.LIST>/gi)) {
         const ieAmt = decode(ie[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')

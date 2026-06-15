@@ -168,8 +168,6 @@ export default function Dashboard() {
   const [loading,     setLoading]     = useState(false)
   const [fetched,     setFetched]     = useState(false)
   const [error,       setError]       = useState<string | null>(null)
-  const [progress,    setProgress]    = useState<string | null>(null)
-
   const handlePreset = (key: string) => {
     setPreset(key)
     const { from, to } = getPreset(key)
@@ -181,39 +179,21 @@ export default function Dashboard() {
     if (!connected) { toast.error('Extension not connected. Make sure Tally is running.'); return }
     setLoading(true)
     setError(null)
-    setProgress(null)
     try {
-      // Build list of every date in range
-      const dates: string[] = []
-      for (const d = new Date(fromDate); d <= new Date(toDate); d.setDate(d.getDate() + 1)) {
-        dates.push(d.toISOString().slice(0, 10))
-      }
+      const { vouchers: allVouchers, rawXml } = await fetchDaybook(
+        toTallyDate(fromDate), toTallyDate(toDate), tallyUrl, tallyCompany,
+      )
 
-      const allVouchers: { date: string; type: string; party: string; amount: number; voucherNo: string }[] = []
+      console.log('[DayBook] RAW XML:', rawXml)
+      console.log('[DayBook] Parsed vouchers:', allVouchers)
 
-      for (let i = 0; i < dates.length; i++) {
-        const date = dates[i]
-        setProgress(`Fetching ${i + 1} / ${dates.length} days (${date})…`)
-        const { vouchers, rawXml } = await fetchDaybook(toTallyDate(date), tallyUrl, tallyCompany)
-
-        // Log raw XML for the first day so we can inspect available fields
-        if (i === 0) {
-          console.log('[DayBook] RAW XML for first day:', rawXml)
-          console.log('[DayBook] Parsed vouchers for first day:', vouchers)
-        }
-
-        allVouchers.push(...vouchers)
-      }
-
-      setProgress(null)
-
-      // Filter to Sales vouchers only (Day Book returns all types)
+      // Filter to Sales vouchers only (Tally returns all types)
       const salesVouchers = allVouchers.filter((v) =>
         v.type.toLowerCase().includes('sales')
       )
 
-      console.log('[DayBook] Total vouchers across range:', allVouchers.length, '| Sales:', salesVouchers.length)
-      console.log('[DayBook] Unique voucher types found:', [...new Set(allVouchers.map((v) => v.type))])
+      console.log('[DayBook] Total:', allVouchers.length, '| Sales:', salesVouchers.length)
+      console.log('[DayBook] Unique types:', [...new Set(allVouchers.map((v) => v.type))])
 
       setChartData(groupVouchers(salesVouchers, granularity, fromDate, toDate))
       setTotal(salesVouchers.reduce((s, v) => s + v.amount, 0))
@@ -232,7 +212,6 @@ export default function Dashboard() {
       toast.error(msg)
     } finally {
       setLoading(false)
-      setProgress(null)
     }
   }, [connected, fromDate, toDate, granularity, tallyUrl, tallyCompany])
 
@@ -312,9 +291,6 @@ export default function Dashboard() {
                 className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-brand-500"
               />
             </div>
-            {progress && (
-              <span className="text-xs text-brand-600 font-medium">{progress}</span>
-            )}
             <Button
               variant="primary"
               onClick={fetchData}

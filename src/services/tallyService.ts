@@ -208,12 +208,13 @@ export async function syncBankToTally(
 }
 
 export async function fetchDaybook(
-  date: string,       // YYYYMMDD e.g. "20260615"
+  fromDate: string,   // YYYYMMDD e.g. "20260601"
+  toDate: string,     // YYYYMMDD e.g. "20260617"
   tallyUrl: string,
   tallyCompany?: string,
 ): Promise<{ vouchers: TallyVoucher[]; rawXml: string }> {
   const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string }>('FETCH_DAYBOOK', {
-    date, tallyUrl, tallyCompany,
+    fromDate, toDate, tallyUrl, tallyCompany,
   })
   return result
 }
