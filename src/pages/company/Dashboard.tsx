@@ -4,10 +4,10 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts'
-import { TrendingUp, RefreshCw, AlertCircle } from 'lucide-react'
+import { TrendingUp, RefreshCw, AlertCircle, PackageX } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchTopDebtors } from '@/services/tallyService'
+import { fetchDaybook, fetchTopDebtors, fetchSlowMovingStock, type SlowStockItem } from '@/services/tallyService'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
@@ -165,6 +165,7 @@ export default function Dashboard() {
   const [chartData,   setChartData]   = useState<ChartPoint[]>([])
   const [topParties,  setTopParties]  = useState<{ party: string; amount: number }[]>([])
   const [total,       setTotal]       = useState(0)
+  const [slowStock,   setSlowStock]   = useState<SlowStockItem[]>([])
   const [loading,     setLoading]     = useState(false)
   const [fetched,     setFetched]     = useState(false)
   const [error,       setError]       = useState<string | null>(null)
@@ -203,6 +204,13 @@ export default function Dashboard() {
         setTopParties(debtors.map((r) => ({ party: r.name, amount: r.balance })))
       } catch (partyErr) {
         console.warn('[Dashboard] Agent fetch failed — is TallySyncAgent running?', partyErr)
+      }
+
+      try {
+        const { items } = await fetchSlowMovingStock(tallyUrl, tallyCompany)
+        setSlowStock(items)
+      } catch (stockErr) {
+        console.warn('[Dashboard] Slow stock fetch failed:', stockErr)
       }
 
       setFetched(true)
@@ -413,6 +421,59 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Slow moving stock card */}
+        {fetched && slowStock.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <PackageX className="w-4 h-4 text-amber-500" />
+              <p className="text-xs font-semibold text-gray-600">Slow Moving Stock</p>
+              <span className="ml-auto text-xs text-gray-400">Current FY · sorted by days since last sale</span>
+            </div>
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-2 px-2 font-semibold text-gray-500">#</th>
+                  <th className="text-left py-2 px-2 font-semibold text-gray-500">Item</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-500">Closing Qty</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-500">Stock Value</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-500">Last Sold</th>
+                  <th className="text-right py-2 px-2 font-semibold text-gray-500">Days Since</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {slowStock.slice(0, 20).map((item, i) => {
+                  const never = item.daysSince === 9999
+                  return (
+                    <tr key={item.name} className="hover:bg-gray-50">
+                      <td className="py-2 px-2 text-gray-400">{i + 1}</td>
+                      <td className="py-2 px-2 text-gray-800 font-medium max-w-[220px] truncate" title={item.name}>{item.name}</td>
+                      <td className="py-2 px-2 text-right text-gray-600">{item.closingBalance.toFixed(2)}</td>
+                      <td className="py-2 px-2 text-right text-gray-800">{formatCurrency(item.closingValue)}</td>
+                      <td className="py-2 px-2 text-right text-gray-500">
+                        {never ? '—' : new Date(item.lastSaleDate!).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          never
+                            ? 'bg-red-50 text-red-600'
+                            : item.daysSince >= 90
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-green-50 text-green-700'
+                        }`}>
+                          {never ? 'Never sold' : `${item.daysSince}d`}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {slowStock.length > 20 && (
+              <p className="text-xs text-gray-400 mt-2 text-center">Showing top 20 of {slowStock.length} items</p>
+            )}
           </div>
         )}
 

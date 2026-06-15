@@ -219,6 +219,21 @@ export async function fetchDaybook(
   return result
 }
 
+export interface SlowStockItem {
+  name:           string
+  closingBalance: number
+  closingValue:   number
+  lastSaleDate:   string | null  // "YYYY-MM-DD" or null if never sold this FY
+  daysSince:      number         // 9999 = never sold
+}
+
+export async function fetchSlowMovingStock(
+  tallyUrl: string,
+  tallyCompany?: string,
+): Promise<{ items: SlowStockItem[] }> {
+  return sendToExtension<{ items: SlowStockItem[] }>('FETCH_SLOW_STOCK', { tallyUrl, tallyCompany })
+}
+
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
   console.group('[Sync] Tally XML Payload')
   console.log('URL:', tallyUrl)

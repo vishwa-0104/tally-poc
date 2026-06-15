@@ -113,6 +113,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ vouchers: [], rawXml: '', error: err.message }))
       return true
 
+    case 'FETCH_SLOW_STOCK':
+      handleFetchSlowStock(payload.tallyUrl, payload.tallyCompany)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ items: [], error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -688,6 +694,90 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
 
   return { vouchers, rawXml: responseText }
 }
+
+// ── Slow / inactive stock ────────────────────────────────────────────────────
+// Scans the full financial year of sales vouchers to find the last sale date
+// for each stock item. Returns all items with closing stock sorted by
+// daysSince desc (never-sold / oldest sale first).
+
+async function handleFetchSlowStock(tallyUrl, tallyCompany) {
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+  const pad    = (n) => String(n).padStart(2, '0')
+
+  // Full financial year (Apr 1 → today) to capture complete sale history
+  const today  = new Date()
+  const fyYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
+  const fyFrom = toTallyDisplayDate(`${fyYear}0401`)
+  const fyTo   = toTallyDisplayDate(`${today.getFullYear()}${pad(today.getMonth()+1)}${pad(today.getDate())}`)
+
+  const makeXml = (id, from, to) => `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>${id}</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${from}</SVFROMDATE>
+        <SVTODATE>${to}</SVTODATE>
+        ${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  console.log(`[SlowStock] FY: ${fyFrom} → ${fyTo}`)
+  const [movementText, balanceText] = await Promise.all([
+    postToTally(makeXml('TBSInventoryMovement', fyFrom, fyTo), tallyUrl),
+    postToTally(makeXml('TBSStockBalance',      fyFrom, fyTo), tallyUrl),
+  ])
+
+  // Build lastSaleDate map: itemName → most recent sale date
+  const lastSaleMap = {}
+  for (const vMatch of movementText.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)) {
+    const block = vMatch[0]
+    const type  = decode(block.match(/<VOUCHERTYPENAME[^>]*>([^<]+)<\/VOUCHERTYPENAME>/i)?.[1] ?? '')
+    if (!type.toLowerCase().includes('sales')) continue
+    const rawDate = decode(block.match(/<DATE[^>]*>([^<]+)<\/DATE>/i)?.[1] ?? '')
+    if (!rawDate || rawDate.length !== 8) continue
+    const isoDate = `${rawDate.slice(0,4)}-${rawDate.slice(4,6)}-${rawDate.slice(6,8)}`
+    for (const inv of block.matchAll(/<ALLINVENTORYENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLINVENTORYENTRIES\.LIST>/gi)) {
+      const name = decode(inv[0].match(/<STOCKITEMNAME[^>]*>([^<]+)<\/STOCKITEMNAME>/i)?.[1] ?? '')
+      if (name && (!lastSaleMap[name] || isoDate > lastSaleMap[name])) lastSaleMap[name] = isoDate
+    }
+  }
+
+  // Parse closing stock
+  const todayISO = today.toISOString().slice(0, 10)
+  const items = []
+  for (const match of balanceText.matchAll(/<STOCKITEM\b[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)) {
+    const block   = match[0]
+    const name    = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+    if (!name) continue
+    const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
+    const valRaw  = decode(block.match(/<CLOSINGVALUE[^>]*>([^<]+)<\/CLOSINGVALUE>/i)?.[1] ?? '0')
+    const balance = parseFloat(balRaw.replace(/[^0-9.-]/g, '')) || 0
+    const value   = Math.abs(parseFloat(valRaw.replace(/[^0-9.-]/g, '')) || 0)
+    if (balance <= 0 && value <= 0) continue
+    const lastSaleDate = lastSaleMap[name] ?? null
+    const daysSince    = lastSaleDate
+      ? Math.floor((new Date(todayISO) - new Date(lastSaleDate)) / 86400000)
+      : 9999
+    items.push({ name, closingBalance: balance, closingValue: value, lastSaleDate, daysSince })
+  }
+
+  items.sort((a, b) => b.daysSince - a.daysSince)
+
+  console.log(`[SlowStock] Items with stock: ${items.length}`)
+  console.log('[SlowStock] Top 5 slowest:', JSON.stringify(
+    items.slice(0,5).map(i => ({ name: i.name, lastSaleDate: i.lastSaleDate, daysSince: i.daysSince })), null, 2
+  ))
+  return { items }
+}
+
 
 function parseVouchers(xml) {
   const vouchers = []

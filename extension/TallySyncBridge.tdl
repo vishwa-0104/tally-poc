@@ -25,3 +25,14 @@
     Fetch       : Date, VoucherTypeName, PartyLedgerName, VoucherNumber, Amount
     Fetch       : LedgerEntries.IsPartyLedger, LedgerEntries.Amount
     Fetch       : AllLedgerEntries.IsPartyLedger, AllLedgerEntries.Amount
+
+; All stock items with current closing quantity and value
+[Collection: TBSStockBalance]
+    Type        : StockItem
+    Fetch       : Name, ClosingBalance, ClosingValue
+
+; All voucher inventory lines — used to detect stock movement in a period
+[Collection: TBSInventoryMovement]
+    Type        : Voucher
+    Fetch       : Date, VoucherTypeName
+    Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
