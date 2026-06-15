@@ -7,7 +7,7 @@ import {
 import { TrendingUp, RefreshCw, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchTallyVouchers, fetchTopDebtors } from '@/services/tallyService'
+import { fetchDaybook, fetchTopDebtors } from '@/services/tallyService'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
@@ -161,7 +161,6 @@ export default function Dashboard() {
   const [fromDate,    setFromDate]    = useState(initDates.from)
   const [toDate,      setToDate]      = useState(initDates.to)
   const [granularity, setGranularity] = useState<Granularity>('daily')
-  const voucherType = 'Sales'
 
   const [chartData,   setChartData]   = useState<ChartPoint[]>([])
   const [topParties,  setTopParties]  = useState<{ party: string; amount: number }[]>([])
@@ -169,6 +168,7 @@ export default function Dashboard() {
   const [loading,     setLoading]     = useState(false)
   const [fetched,     setFetched]     = useState(false)
   const [error,       setError]       = useState<string | null>(null)
+  const [progress,    setProgress]    = useState<string | null>(null)
 
   const handlePreset = (key: string) => {
     setPreset(key)
@@ -181,11 +181,42 @@ export default function Dashboard() {
     if (!connected) { toast.error('Extension not connected. Make sure Tally is running.'); return }
     setLoading(true)
     setError(null)
+    setProgress(null)
     try {
-      const all      = await fetchTallyVouchers(toTallyDate(fromDate), toTallyDate(toDate), voucherType, tallyUrl, tallyCompany)
-      const vouchers = all.filter((v) => v.date >= fromDate && v.date <= toDate)
-      setChartData(groupVouchers(vouchers, granularity, fromDate, toDate))
-      setTotal(vouchers.reduce((s, v) => s + v.amount, 0))
+      // Build list of every date in range
+      const dates: string[] = []
+      for (const d = new Date(fromDate); d <= new Date(toDate); d.setDate(d.getDate() + 1)) {
+        dates.push(d.toISOString().slice(0, 10))
+      }
+
+      const allVouchers: { date: string; type: string; party: string; amount: number; voucherNo: string }[] = []
+
+      for (let i = 0; i < dates.length; i++) {
+        const date = dates[i]
+        setProgress(`Fetching ${i + 1} / ${dates.length} days (${date})…`)
+        const { vouchers, rawXml } = await fetchDaybook(toTallyDate(date), tallyUrl, tallyCompany)
+
+        // Log raw XML for the first day so we can inspect available fields
+        if (i === 0) {
+          console.log('[DayBook] RAW XML for first day:', rawXml)
+          console.log('[DayBook] Parsed vouchers for first day:', vouchers)
+        }
+
+        allVouchers.push(...vouchers)
+      }
+
+      setProgress(null)
+
+      // Filter to Sales vouchers only (Day Book returns all types)
+      const salesVouchers = allVouchers.filter((v) =>
+        v.type.toLowerCase().includes('sales')
+      )
+
+      console.log('[DayBook] Total vouchers across range:', allVouchers.length, '| Sales:', salesVouchers.length)
+      console.log('[DayBook] Unique voucher types found:', [...new Set(allVouchers.map((v) => v.type))])
+
+      setChartData(groupVouchers(salesVouchers, granularity, fromDate, toDate))
+      setTotal(salesVouchers.reduce((s, v) => s + v.amount, 0))
 
       try {
         const debtors = await fetchTopDebtors(10)
@@ -201,8 +232,9 @@ export default function Dashboard() {
       toast.error(msg)
     } finally {
       setLoading(false)
+      setProgress(null)
     }
-  }, [connected, fromDate, toDate, voucherType, granularity, tallyUrl, tallyCompany])
+  }, [connected, fromDate, toDate, granularity, tallyUrl, tallyCompany])
 
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-gray-50">
@@ -280,6 +312,9 @@ export default function Dashboard() {
                 className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-brand-500"
               />
             </div>
+            {progress && (
+              <span className="text-xs text-brand-600 font-medium">{progress}</span>
+            )}
             <Button
               variant="primary"
               onClick={fetchData}
@@ -363,7 +398,7 @@ export default function Dashboard() {
                   <Area
                     type="monotone"
                     dataKey="amount"
-                    name={voucherType}
+                    name="Sales"
                     stroke="#1A56B0"
                     strokeWidth={2}
                     fill="url(#salesGradient)"
