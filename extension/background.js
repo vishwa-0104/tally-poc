@@ -639,15 +639,11 @@ async function handleFetchAgent(endpoint, params) {
 }
 
 // ── Fetch Day Book for a single date ────────────────────────────────────────
-// TDL Collection approach for date-range voucher fetch.
-// Embeds dates directly in the filter formula using $$StrToDate with display format ("DD-Mon-YYYY")
-// because $$SVFromDate/$$SVToDate do not resolve inside FILTER formulae.
-// JS-side date filter is applied after parsing as a safety net.
+// Fetch ALL vouchers from Tally (no TDL date filter — Tally's filter functions are unreliable).
+// Date filtering is done in JavaScript using the <DATE> field embedded in each voucher.
+// This is the only robust approach that works across all Tally versions.
 
 async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
-  const from = toTallyDisplayDate(fromDate)  // e.g. "01-Apr-2026"
-  const to   = toTallyDisplayDate(toDate)    // e.g. "17-Jun-2026"
-
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -664,11 +660,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
         <TDLMESSAGE>
           <COLLECTION NAME="TBSDaybook" ISMODIFY="No">
             <TYPE>Voucher</TYPE>
-            <FILTER>InDateRange</FILTER>
           </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="InDateRange">
-            $$IsInRange:Date:$$StrToDate:"${from}":$$StrToDate:"${to}"
-          </SYSTEM>
         </TDLMESSAGE>
       </TDL>
     </DESC>
@@ -676,18 +668,18 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log(`[Daybook] ${from} → ${to} | response length:`, responseText.length)
+  console.log(`[Daybook] response length:`, responseText.length)
   console.log('[Daybook] raw (first 2000):', responseText.slice(0, 2000))
 
   const allVouchers = parseVouchers(responseText)
 
-  // JS safety filter: even if Tally returns out-of-range vouchers, exclude them here
+  // Filter by date range in JS — <DATE>YYYYMMDD</DATE> is always present in every voucher
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
-  console.log(`[Daybook] total from Tally: ${allVouchers.length}, in range [${fromISO}..${toISO}]: ${vouchers.length}`)
-  console.log('[Daybook] unique types:', [...new Set(allVouchers.map(v => v.type))])
+  console.log(`[Daybook] from Tally: ${allVouchers.length} vouchers | in range [${fromISO}..${toISO}]: ${vouchers.length}`)
+  console.log('[Daybook] unique types in range:', [...new Set(vouchers.map(v => v.type))])
   return { vouchers, rawXml: responseText }
 }
 
