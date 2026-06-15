@@ -730,10 +730,7 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 </ENVELOPE>`
 
   console.log(`[SlowStock] FY: ${fyFrom} → ${fyTo}`)
-  const [movementText, balanceText] = await Promise.all([
-    postToTally(makeXml('TBSInventoryMovement', fyFrom, fyTo), tallyUrl),
-    postToTally(makeXml('TBSStockBalance',      fyFrom, fyTo), tallyUrl),
-  ])
+  const movementText = await postToTally(makeXml('TBSInventoryMovement', fyFrom, fyTo), tallyUrl)
 
   // Build lastSaleDate map: itemName → most recent sale date
   const lastSaleMap = {}
@@ -750,31 +747,16 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
     }
   }
 
-  // Parse closing stock
   const todayISO = today.toISOString().slice(0, 10)
-  const items = []
-  for (const match of balanceText.matchAll(/<STOCKITEM\b[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)) {
-    const block   = match[0]
-    const name    = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
-    if (!name) continue
-    const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
-    const valRaw  = decode(block.match(/<CLOSINGVALUE[^>]*>([^<]+)<\/CLOSINGVALUE>/i)?.[1] ?? '0')
-    const balance = parseFloat(balRaw.replace(/[^0-9.-]/g, '')) || 0
-    const value   = Math.abs(parseFloat(valRaw.replace(/[^0-9.-]/g, '')) || 0)
-    if (balance <= 0 && value <= 0) continue
-    const lastSaleDate = lastSaleMap[name] ?? null
-    const daysSince    = lastSaleDate
-      ? Math.floor((new Date(todayISO) - new Date(lastSaleDate)) / 86400000)
-      : 9999
-    items.push({ name, closingBalance: balance, closingValue: value, lastSaleDate, daysSince })
-  }
+  const items = Object.entries(lastSaleMap).map(([name, lastSaleDate]) => {
+    const daysSince = Math.floor((new Date(todayISO) - new Date(lastSaleDate)) / 86400000)
+    return { name, lastSaleDate, daysSince }
+  })
 
   items.sort((a, b) => b.daysSince - a.daysSince)
 
-  console.log(`[SlowStock] Items with stock: ${items.length}`)
-  console.log('[SlowStock] Top 5 slowest:', JSON.stringify(
-    items.slice(0,5).map(i => ({ name: i.name, lastSaleDate: i.lastSaleDate, daysSince: i.daysSince })), null, 2
-  ))
+  console.log(`[SlowStock] Unique items sold this FY: ${items.length}`)
+  console.log('[SlowStock] Top 5 slowest:', JSON.stringify(items.slice(0,5), null, 2))
   return { items }
 }
 

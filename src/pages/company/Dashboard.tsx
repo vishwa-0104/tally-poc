@@ -437,38 +437,29 @@ export default function Dashboard() {
                 <tr className="border-b border-gray-100">
                   <th className="text-left py-2 px-2 font-semibold text-gray-500">#</th>
                   <th className="text-left py-2 px-2 font-semibold text-gray-500">Item</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-500">Closing Qty</th>
-                  <th className="text-right py-2 px-2 font-semibold text-gray-500">Stock Value</th>
                   <th className="text-right py-2 px-2 font-semibold text-gray-500">Last Sold</th>
                   <th className="text-right py-2 px-2 font-semibold text-gray-500">Days Since</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {slowStock.slice(0, 20).map((item, i) => {
-                  const never = item.daysSince === 9999
-                  return (
-                    <tr key={item.name} className="hover:bg-gray-50">
-                      <td className="py-2 px-2 text-gray-400">{i + 1}</td>
-                      <td className="py-2 px-2 text-gray-800 font-medium max-w-[220px] truncate" title={item.name}>{item.name}</td>
-                      <td className="py-2 px-2 text-right text-gray-600">{item.closingBalance.toFixed(2)}</td>
-                      <td className="py-2 px-2 text-right text-gray-800">{formatCurrency(item.closingValue)}</td>
-                      <td className="py-2 px-2 text-right text-gray-500">
-                        {never ? '—' : new Date(item.lastSaleDate!).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                          never
-                            ? 'bg-red-50 text-red-600'
-                            : item.daysSince >= 90
-                            ? 'bg-amber-50 text-amber-700'
-                            : 'bg-green-50 text-green-700'
-                        }`}>
-                          {never ? 'Never sold' : `${item.daysSince}d`}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {slowStock.slice(0, 20).map((item, i) => (
+                  <tr key={item.name} className="hover:bg-gray-50">
+                    <td className="py-2 px-2 text-gray-400">{i + 1}</td>
+                    <td className="py-2 px-2 text-gray-800 font-medium max-w-[260px] truncate" title={item.name}>{item.name}</td>
+                    <td className="py-2 px-2 text-right text-gray-500">
+                      {new Date(item.lastSaleDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td className="py-2 px-2 text-right">
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        item.daysSince >= 90 ? 'bg-red-50 text-red-600' :
+                        item.daysSince >= 30 ? 'bg-amber-50 text-amber-700' :
+                                               'bg-green-50 text-green-700'
+                      }`}>
+                        {item.daysSince}d
+                      </span>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             {slowStock.length > 20 && (

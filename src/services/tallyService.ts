@@ -220,11 +220,9 @@ export async function fetchDaybook(
 }
 
 export interface SlowStockItem {
-  name:           string
-  closingBalance: number
-  closingValue:   number
-  lastSaleDate:   string | null  // "YYYY-MM-DD" or null if never sold this FY
-  daysSince:      number         // 9999 = never sold
+  name:         string
+  lastSaleDate: string   // "YYYY-MM-DD"
+  daysSince:    number
 }
 
 export async function fetchSlowMovingStock(
