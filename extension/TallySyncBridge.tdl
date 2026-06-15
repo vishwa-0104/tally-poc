@@ -1,0 +1,27 @@
+; TallySyncBridge.tdl — TallyBillSync Dashboard Data Provider
+;
+; ─── HOW TO LOAD ────────────────────────────────────────────────────────────
+;
+; Tally Prime:
+;   Gateway of Tally > F12 Configure > TDL & Add-on
+;   Click "Add TDL File" and browse to this file.
+;
+; Tally ERP 9:
+;   Gateway of Tally > F12 Configure > TDL Configuration
+;   Set "Load TDL files on startup" = Yes
+;   In "List of TDL Files" add the full path to this file.
+;
+; Restart Tally after loading.
+; The TBSVouchers collection will then be available via the HTTP port.
+;
+; ─── WHAT IT DOES ───────────────────────────────────────────────────────────
+;
+; Exposes a collection named TBSVouchers that the TallyBillSync Chrome
+; extension queries via HTTP to build the sales dashboard.
+; ────────────────────────────────────────────────────────────────────────────
+
+[Collection: TBSVouchers]
+    Type        : Voucher
+    Fetch       : Date, VoucherTypeName, PartyLedgerName, VoucherNumber, Amount
+    Fetch       : LedgerEntries.IsPartyLedger, LedgerEntries.Amount
+    Fetch       : AllLedgerEntries.IsPartyLedger, AllLedgerEntries.Amount

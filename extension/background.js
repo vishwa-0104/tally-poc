@@ -639,42 +639,45 @@ async function handleFetchAgent(endpoint, params) {
 }
 
 // ── Fetch Day Book for a single date ────────────────────────────────────────
-// Fetch vouchers using Day Book report — the only Tally approach confirmed to return real voucher data.
-// SVFROMDATE/SVTODATE are set for context; Tally may ignore them and return its active date's data.
-// JS date filtering on the response handles the actual range selection.
+// Queries the TBSVouchers collection defined in TallySyncBridge.tdl (must be loaded in Tally).
+// SVFROMDATE/SVTODATE tell Tally which period to scope to.
+// JS date filter applied after parsing as a safety net.
 
 async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
   const from = toTallyDisplayDate(fromDate)  // "01-Apr-2026"
   const to   = toTallyDisplayDate(toDate)    // "30-Jun-2026"
 
   const xml = `<ENVELOPE>
-  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
-  <BODY><EXPORTDATA>
-    <REQUESTDESC>
-      <REPORTNAME>Day Book</REPORTNAME>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSVouchers</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         <SVFROMDATE>${from}</SVFROMDATE>
         <SVTODATE>${to}</SVTODATE>
-        ${tallyCompany ? `<SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>` : ''}
+        ${companyVar(tallyCompany)}
       </STATICVARIABLES>
-    </REQUESTDESC>
-  </EXPORTDATA></BODY>
+    </DESC>
+  </BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log(`[Daybook] ${from} → ${to} | response length:`, responseText.length)
-  console.log('[Daybook] raw (first 3000):', responseText.slice(0, 3000))
+  console.log(`[Daybook/TDL] ${from} → ${to} | response length:`, responseText.length)
+  console.log('[Daybook/TDL] raw (first 3000):', responseText.slice(0, 3000))
 
   const allVouchers = parseVouchers(responseText)
 
-  // Filter by date range in JS — <DATE>YYYYMMDD</DATE> is always present in every voucher
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
-  console.log(`[Daybook] from Tally: ${allVouchers.length} total | in JS range [${fromISO}..${toISO}]: ${vouchers.length}`)
-  console.log('[Daybook] all dates in response:', [...new Set(allVouchers.map(v => v.date))])
+  console.log(`[Daybook/TDL] total from Tally: ${allVouchers.length} | in range [${fromISO}..${toISO}]: ${vouchers.length}`)
+  console.log('[Daybook/TDL] unique dates:', [...new Set(allVouchers.map(v => v.date))])
   return { vouchers, rawXml: responseText }
 }
 
