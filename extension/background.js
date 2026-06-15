@@ -677,7 +677,15 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
   console.log(`[Daybook/TDL] total from Tally: ${allVouchers.length} | in range [${fromISO}..${toISO}]: ${vouchers.length}`)
-  console.log('[Daybook/TDL] unique dates:', [...new Set(allVouchers.map(v => v.date))])
+
+  // Group by date for easy verification
+  const byDate = {}
+  for (const v of vouchers) {
+    if (!byDate[v.date]) byDate[v.date] = []
+    byDate[v.date].push({ type: v.type, amount: v.amount })
+  }
+  console.log('[Daybook/TDL] grouped by date:', JSON.stringify(byDate, null, 2))
+
   return { vouchers, rawXml: responseText }
 }
 
