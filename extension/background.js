@@ -107,6 +107,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ ok: false, error: err.message }))
       return true
 
+    case 'FETCH_DAYBOOK':
+      handleFetchDaybook(payload.tallyUrl, payload.tallyCompany, payload.date)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ vouchers: [], rawXml: '', error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -630,6 +636,39 @@ async function handleFetchAgent(endpoint, params) {
   const response = await fetch(`http://localhost:9001/${endpoint}${query}`)
   if (!response.ok) throw new Error(`TallySyncAgent error: ${response.status}`)
   return response.json()
+}
+
+// ── Fetch Day Book for a single date ────────────────────────────────────────
+// Day Book ignores date ranges — it only honours a single day regardless of
+// SVFROMDATE/SVTODATE span. Call once per day and loop from the frontend.
+
+async function handleFetchDaybook(tallyUrl, tallyCompany, date) {
+  // date must be YYYYMMDD (e.g. "20260615")
+  const displayDate = toTallyDisplayDate(date) // "15-Jun-2026"
+
+  const xml = `<ENVELOPE>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA>
+    <REQUESTDESC>
+      <REPORTNAME>Day Book</REPORTNAME>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${displayDate}</SVFROMDATE>
+        <SVTODATE>${displayDate}</SVTODATE>
+        ${tallyCompany ? `<SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>` : ''}
+      </STATICVARIABLES>
+    </REQUESTDESC>
+  </EXPORTDATA></BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log(`[DayBook][${date}] response length:`, responseText.length)
+  // Log the full raw XML so we can see every available field
+  console.log(`[DayBook][${date}] RAW RESPONSE:\n`, responseText)
+
+  const vouchers = parseVouchers(responseText)
+  console.log(`[DayBook][${date}] parsed vouchers:`, JSON.stringify(vouchers, null, 2))
+  return { vouchers, rawXml: responseText }
 }
 
 function parseVouchers(xml) {

@@ -207,6 +207,17 @@ export async function syncBankToTally(
   return result
 }
 
+export async function fetchDaybook(
+  date: string,       // YYYYMMDD e.g. "20260615"
+  tallyUrl: string,
+  tallyCompany?: string,
+): Promise<{ vouchers: TallyVoucher[]; rawXml: string }> {
+  const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string }>('FETCH_DAYBOOK', {
+    date, tallyUrl, tallyCompany,
+  })
+  return result
+}
+
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
   console.group('[Sync] Tally XML Payload')
   console.log('URL:', tallyUrl)
