@@ -639,12 +639,12 @@ async function handleFetchAgent(endpoint, params) {
 }
 
 // ── Fetch Day Book for a single date ────────────────────────────────────────
-// Day Book ignores date ranges — it only honours a single day regardless of
-// SVFROMDATE/SVTODATE span. Call once per day and loop from the frontend.
+// Day Book is a single-day report. It uses SVDATE (not SVFROMDATE/SVTODATE).
+// Passing SVFROMDATE/SVTODATE is ignored — Tally always returns its current date.
+// Loop day-by-day from the frontend and call this once per date.
 
 async function handleFetchDaybook(tallyUrl, tallyCompany, date) {
-  // date must be YYYYMMDD (e.g. "20260615")
-  const displayDate = toTallyDisplayDate(date) // "15-Jun-2026"
+  // date must be YYYYMMDD (e.g. "20260615") — Tally's internal numeric date format
 
   const xml = `<ENVELOPE>
   <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
@@ -653,8 +653,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, date) {
       <REPORTNAME>Day Book</REPORTNAME>
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        <SVFROMDATE>${displayDate}</SVFROMDATE>
-        <SVTODATE>${displayDate}</SVTODATE>
+        <SVDATE>${date}</SVDATE>
         ${tallyCompany ? `<SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
     </REQUESTDESC>
