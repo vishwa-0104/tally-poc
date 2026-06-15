@@ -639,37 +639,32 @@ async function handleFetchAgent(endpoint, params) {
 }
 
 // ── Fetch Day Book for a single date ────────────────────────────────────────
-// Fetch ALL vouchers from Tally (no TDL date filter — Tally's filter functions are unreliable).
-// Date filtering is done in JavaScript using the <DATE> field embedded in each voucher.
-// This is the only robust approach that works across all Tally versions.
+// Fetch vouchers using Day Book report — the only Tally approach confirmed to return real voucher data.
+// SVFROMDATE/SVTODATE are set for context; Tally may ignore them and return its active date's data.
+// JS date filtering on the response handles the actual range selection.
 
 async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
+  const from = toTallyDisplayDate(fromDate)  // "01-Apr-2026"
+  const to   = toTallyDisplayDate(toDate)    // "30-Jun-2026"
+
   const xml = `<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>TBSDaybook</ID>
-  </HEADER>
-  <BODY>
-    <DESC>
+  <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
+  <BODY><EXPORTDATA>
+    <REQUESTDESC>
+      <REPORTNAME>Day Book</REPORTNAME>
       <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${from}</SVFROMDATE>
+        <SVTODATE>${to}</SVTODATE>
+        ${tallyCompany ? `<SVCURRENTCOMPANY>${tallyCompany}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="TBSDaybook" ISMODIFY="No">
-            <TYPE>Voucher</TYPE>
-          </COLLECTION>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
-  </BODY>
+    </REQUESTDESC>
+  </EXPORTDATA></BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log(`[Daybook] response length:`, responseText.length)
-  console.log('[Daybook] raw (first 2000):', responseText.slice(0, 2000))
+  console.log(`[Daybook] ${from} → ${to} | response length:`, responseText.length)
+  console.log('[Daybook] raw (first 3000):', responseText.slice(0, 3000))
 
   const allVouchers = parseVouchers(responseText)
 
@@ -678,8 +673,8 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
-  console.log(`[Daybook] from Tally: ${allVouchers.length} vouchers | in range [${fromISO}..${toISO}]: ${vouchers.length}`)
-  console.log('[Daybook] unique types in range:', [...new Set(vouchers.map(v => v.type))])
+  console.log(`[Daybook] from Tally: ${allVouchers.length} total | in JS range [${fromISO}..${toISO}]: ${vouchers.length}`)
+  console.log('[Daybook] all dates in response:', [...new Set(allVouchers.map(v => v.date))])
   return { vouchers, rawXml: responseText }
 }
 
