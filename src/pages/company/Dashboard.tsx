@@ -270,8 +270,10 @@ export default function Dashboard() {
       const { vouchers: all } = await fetchDaybook(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
       const sales = all.filter(v => v.type.toLowerCase().includes('sales'))
 
-      setChartData(groupVouchers(sales, granularity, from, to))
-      setTotal(sales.reduce((s, v) => s + v.amount, 0))
+      // Use taxableAmount (GST excluded) for both KPI and chart
+      const salesWithTaxable = sales.map(v => ({ ...v, amount: v.taxableAmount }))
+      setChartData(groupVouchers(salesWithTaxable, granularity, from, to))
+      setTotal(salesWithTaxable.reduce((s, v) => s + v.amount, 0))
       setActivePeriod({ from, to })
 
       try {

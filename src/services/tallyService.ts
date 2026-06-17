@@ -119,11 +119,12 @@ export async function createTallyLedger(payload: CreateLedgerPayload, tallyUrl: 
 }
 
 export interface TallyVoucher {
-  date:      string
-  type:      string
-  party:     string
-  amount:    number
-  voucherNo: string
+  date:           string
+  type:           string
+  party:          string
+  amount:         number  // total including GST (party ledger value)
+  taxableAmount:  number  // amount minus CGST/SGST/IGST/Cess
+  voucherNo:      string
 }
 
 export async function fetchTallyVouchers(

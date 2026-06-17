@@ -811,7 +811,20 @@ function parseVouchers(xml) {
 
     if (amount === 0) continue
 
-    vouchers.push({ date, type, party, amount, voucherNo })
+    // Taxable amount: total (party) minus GST ledger entries (CGST/SGST/IGST/Cess)
+    const GST_RE = /cgst|sgst|igst|cess/i
+    let gstTotal = 0
+    for (const le of block.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi)) {
+      const leBlock  = le[0]
+      if (/ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)) continue
+      const ledgerName = decode(leBlock.match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
+      if (!GST_RE.test(ledgerName)) continue
+      const leAmtRaw = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+      gstTotal += Math.abs(parseFloat(leAmtRaw.replace(/,/g, '')) || 0)
+    }
+    const taxableAmount = Math.max(0, amount - gstTotal)
+
+    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo })
   }
 
   return vouchers
