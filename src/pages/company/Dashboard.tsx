@@ -5,7 +5,7 @@ import {
   ResponsiveContainer, BarChart, Bar, Cell,
 } from 'recharts'
 import {
-  TrendingUp, AlertCircle, PackageX,
+  TrendingUp, TrendingDown, AlertCircle, PackageX,
   BarChart2, Lightbulb, AlertTriangle, CheckCircle,
   ArrowUpRight, ArrowDownRight, RefreshCw, Settings,
 } from 'lucide-react'
@@ -221,11 +221,30 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
   placeholder?: boolean
   targetInfo?: { target: number; achieved: number } | null
 }) {
+  const DisplayIcon = targetInfo
+    ? targetInfo.achieved >= 100 ? CheckCircle
+    : targetInfo.achieved >= 75  ? TrendingUp
+    : targetInfo.achieved >= 50  ? AlertTriangle
+    : TrendingDown
+    : Icon
+  const iconBg = targetInfo
+    ? targetInfo.achieved >= 100 ? 'bg-green-50'
+    : targetInfo.achieved >= 75  ? 'bg-amber-50'
+    : targetInfo.achieved >= 50  ? 'bg-orange-50'
+    : 'bg-red-50'
+    : 'bg-blue-50'
+  const iconColor = targetInfo
+    ? targetInfo.achieved >= 100 ? 'text-green-600'
+    : targetInfo.achieved >= 75  ? 'text-amber-500'
+    : targetInfo.achieved >= 50  ? 'text-orange-500'
+    : 'text-red-500'
+    : 'text-blue-600'
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-start justify-between mb-3">
-        <div className="p-2 bg-blue-50 rounded-lg">
-          <Icon className="w-4 h-4 text-blue-600" />
+        <div className={`p-2 ${iconBg} rounded-lg`}>
+          <DisplayIcon className={`w-4 h-4 ${iconColor}`} />
         </div>
         {trend !== undefined && (
           <span className={`text-xs font-semibold flex items-center gap-0.5 ${trend.value >= 0 ? 'text-green-600' : 'text-red-500'}`}>
@@ -342,12 +361,18 @@ export default function Dashboard() {
     setError(null)
     try {
       const { vouchers: all } = await fetchDaybook(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
-      const sales = all.filter(v => v.type.toLowerCase().includes('sales'))
+      const sales       = all.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
+      const creditNotes = all.filter(v => v.type.toLowerCase().includes('credit note'))
 
-      // Use taxableAmount (GST excluded) for both KPI and chart
-      const salesWithTaxable = sales.map(v => ({ ...v, amount: v.taxableAmount }))
-      setChartData(groupVouchers(salesWithTaxable, granularity, from, to))
-      setTotal(salesWithTaxable.reduce((s, v) => s + v.amount, 0))
+      // Use taxableAmount (GST excluded); credit notes reduce net sales
+      const chartVouchers = [
+        ...sales.map(v => ({ ...v, amount: v.taxableAmount })),
+        ...creditNotes.map(v => ({ ...v, amount: -v.taxableAmount })),
+      ]
+      setChartData(groupVouchers(chartVouchers, granularity, from, to))
+      const salesTotal  = sales.reduce((s, v) => s + v.taxableAmount, 0)
+      const creditTotal = creditNotes.reduce((s, v) => s + v.taxableAmount, 0)
+      setTotal(salesTotal - creditTotal)
       setActivePeriod({ from, to })
 
       try {
