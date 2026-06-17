@@ -132,19 +132,20 @@ function getQuarterMonths(): number[] {
   return [1, 2, 3]
 }
 
-// Returns months if custom dates align exactly to a valid FY quarter, else null
-const FY_QUARTERS = [
-  { months: [4, 5, 6],    start: '-04-01', end: '-06-30' },
-  { months: [7, 8, 9],    start: '-07-01', end: '-09-30' },
-  { months: [10, 11, 12], start: '-10-01', end: '-12-31' },
-  { months: [1, 2, 3],    start: '-01-01', end: '-03-31' },
-]
+// Returns months if custom dates align to one or more complete calendar months, else null
 function getMonthsForCustom(from: string, to: string): number[] | null {
-  const year = from.slice(0, 4)
-  for (const q of FY_QUARTERS) {
-    if (from === `${year}${q.start}` && to === `${year}${q.end}`) return q.months
+  const [fy, fm, fd] = from.split('-').map(Number)
+  const [ty, tm, td] = to.split('-').map(Number)
+  if (fd !== 1) return null
+  // last day of the `to` month
+  if (td !== new Date(ty, tm, 0).getDate()) return null
+  const months: number[] = []
+  let y = fy, m = fm
+  while (y < ty || (y === ty && m <= tm)) {
+    months.push(m)
+    m++; if (m > 12) { m = 1; y++ }
   }
-  return null
+  return months.length > 0 ? months : null
 }
 
 function computeTargetForPeriod(
