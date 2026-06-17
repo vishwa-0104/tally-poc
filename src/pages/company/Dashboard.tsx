@@ -373,7 +373,7 @@ export default function Dashboard() {
       console.log('[Voucher Totals by Type]', byType)
 
       const sales       = all.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
-      const creditNotes = all.filter(v => v.type.toLowerCase().includes('credit note'))
+      const creditNotes = all.filter(v => v.type.toLowerCase() === 'credit note')
 
       // Use taxableAmount (GST excluded); credit notes reduce net sales
       const chartVouchers = [
