@@ -361,6 +361,17 @@ export default function Dashboard() {
     setError(null)
     try {
       const { vouchers: all } = await fetchDaybook(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
+
+      // Debug: totals per voucher type
+      const byType: Record<string, { preGst: number; gst: number; count: number }> = {}
+      for (const v of all) {
+        if (!byType[v.type]) byType[v.type] = { preGst: 0, gst: 0, count: 0 }
+        byType[v.type].preGst += v.taxableAmount
+        byType[v.type].gst    += v.amount - v.taxableAmount
+        byType[v.type].count  += 1
+      }
+      console.log('[Voucher Totals by Type]', byType)
+
       const sales       = all.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
       const creditNotes = all.filter(v => v.type.toLowerCase().includes('credit note'))
 
