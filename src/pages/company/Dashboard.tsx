@@ -247,13 +247,14 @@ export default function Dashboard() {
   const [customFrom,    setCustomFrom]    = useState(todayStr())
   const [customTo,      setCustomTo]      = useState(todayStr())
 
-  const [chartData,  setChartData]  = useState<ChartPoint[]>([])
-  const [topParties, setTopParties] = useState<{ party: string; amount: number }[]>([])
-  const [total,      setTotal]      = useState(0)
-  const [slowStock,  setSlowStock]  = useState<SlowStockItem[]>([])
-  const [loading,    setLoading]    = useState(false)
-  const [fetched,    setFetched]    = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
+  const [chartData,     setChartData]     = useState<ChartPoint[]>([])
+  const [topParties,    setTopParties]    = useState<{ party: string; amount: number }[]>([])
+  const [total,         setTotal]         = useState(0)
+  const [slowStock,     setSlowStock]     = useState<SlowStockItem[]>([])
+  const [loading,       setLoading]       = useState(false)
+  const [fetched,       setFetched]       = useState(false)
+  const [error,         setError]         = useState<string | null>(null)
+  const [activePeriod,  setActivePeriod]  = useState<{ from: string; to: string } | null>(null)
 
   const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string) => {
     if (!connected) {
@@ -271,6 +272,7 @@ export default function Dashboard() {
 
       setChartData(groupVouchers(sales, granularity, from, to))
       setTotal(sales.reduce((s, v) => s + v.amount, 0))
+      setActivePeriod({ from, to })
 
       try {
         const debtors = await fetchTopDebtors(10)
@@ -401,9 +403,14 @@ export default function Dashboard() {
               <KpiCard
                 title="Total Sales"
                 value={fetched ? formatCurrency(total) : '—'}
-                subtitle={filterPreset === 'today' ? "Today's revenue" : 'Selected period'}
+                subtitle={
+                  activePeriod
+                    ? activePeriod.from === activePeriod.to
+                      ? new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                      : `${new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(activePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                    : 'Loading…'
+                }
                 icon={TrendingUp}
-                trend={fetched && total > 0 ? { value: 5.2 } : undefined}
               />
               <KpiCard
                 title="EBITDA"
