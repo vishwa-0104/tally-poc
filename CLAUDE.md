@@ -1,6 +1,6 @@
-# CLAUDE.md — Tally Bill Sync
+# CLAUDE.md
 
-This file is loaded at the start of every Claude Code session. Read it fully before taking any action.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ---
 
@@ -61,36 +61,34 @@ Default accounts (seeded):
 
 ```
 tally-bill-sync/
-├── src/                    # React frontend
+├── src/
 │   ├── components/
 │   │   ├── admin/          # Admin-only UI components
 │   │   ├── company/        # Company-only UI components
-│   │   ├── shared/         # Used by both portals (AppLayout, ProtectedRoute, ExtensionStatus)
+│   │   ├── shared/         # AppLayout, ProtectedRoute, ExtensionStatus
 │   │   └── ui/             # Design system (Button, Input, Select, Modal, Badge, StatCard)
 │   ├── hooks/              # useExtension.ts, useTallyLedgers.ts
 │   ├── lib/                # api.ts (axios), utils.ts, validators.ts (Zod), mockData.ts
-│   ├── pages/              # admin/, company/, LandingPage, LoginPage
-│   ├── services/           # aiService.ts (parse), tallyService.ts (extension messaging)
+│   ├── pages/
+│   │   ├── admin/          # AdminDashboard, AdminCompanies, AdminUsers, AdminLeads, AdminAnalytics
+│   │   └── company/        # Dashboard, CompanyBills, BankStatement, BankReconciliation,
+│   │                       # CashBook, VendorReconciliation, CompanySettings, CompanySyncLog
+│   ├── services/           # aiService.ts (Claude parse), tallyService.ts (extension messaging)
 │   ├── store/              # Zustand: authStore, billStore, companyStore
 │   └── types/index.ts      # All TypeScript interfaces
 ├── server/
 │   ├── prisma/
-│   │   ├── schema.prisma   # DB schema (User, Company, Bill, LineItem)
+│   │   ├── schema.prisma   # DB schema
 │   │   └── seed.ts         # Idempotent seed with upsert
 │   └── src/
-│       ├── routes/         # auth.ts, bills.ts, companies.ts
+│       ├── routes/         # auth.ts, bills.ts, companies.ts, users.ts, leads.ts
 │       ├── middleware/auth.ts  # JWT verify, req.auth, requireAdmin
-│       ├── app.ts          # Express app, CORS, Helmet, routes
+│       ├── app.ts          # Express app, routes mounted at /api
 │       ├── db.ts           # Prisma client singleton
 │       └── index.ts        # Server entry
-├── extension/              # Chrome extension
-│   ├── manifest.json       # MV3, externally_connectable for localhost
-│   ├── background.js       # Service worker: PING, FETCH_LEDGERS, SYNC_TO_TALLY
-│   ├── popup.html/js       # Test connection UI
-├── Dockerfile              # Frontend: Node builder → Nginx
-├── server/Dockerfile       # Backend: Node builder → Node runtime
-├── docker-compose.yml      # 3 services: postgres, backend, frontend
-├── nginx.conf              # /api/* → backend:3001, SPA fallback
+├── extension/
+│   ├── background.js       # Service worker — all Tally communication lives here
+│   └── popup.html/js       # Test connection UI
 └── server/entrypoint.sh    # prisma db push → seed → node dist/index.js
 ```
 
@@ -98,32 +96,17 @@ tally-bill-sync/
 
 ## Environment Variables
 
-### Root `.env` (affects both frontend build and backend)
+### Root `.env`
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | Claude API key. Without it, AI parsing returns mock data |
-| `JWT_SECRET` | Yes | Token signing secret. Change before production |
-| `VITE_CHROME_EXTENSION_ID` | For Tally sync | Chrome extension ID from `chrome://extensions`. Empty = mock mode |
+| `ANTHROPIC_API_KEY` | Yes | Without it, AI parsing returns mock data |
+| `JWT_SECRET` | Yes | Token signing secret |
+| `VITE_CHROME_EXTENSION_ID` | For Tally sync | From `chrome://extensions`. Empty = mock mode |
+| `VITE_ALLOW_EXTENSION_MOCK` | Dev only | `true` to simulate extension connected |
+| `VITE_ALLOW_SYNC_MOCK` | Dev only | `true` to return fake sync result |
 
-### Dev-only (not needed for Docker)
-
-| Variable | Description |
-|----------|-------------|
-| `VITE_ALLOW_EXTENSION_MOCK` | `true` to simulate extension connected in UI |
-| `VITE_ALLOW_SYNC_MOCK` | `true` to return fake successful sync result |
-
-### Frontend env access
-```typescript
-import.meta.env.VITE_CHROME_EXTENSION_ID  // baked in at build time
-```
-
-### Backend env access
-```typescript
-process.env.ANTHROPIC_API_KEY  // runtime
-```
-
-> **Important**: `VITE_*` variables are baked into the frontend bundle at build time. Changing them requires a rebuild (`docker-compose up --build`).
+`VITE_*` variables are baked into the frontend bundle at build time — changing them requires a rebuild.
 
 ---
 
@@ -131,73 +114,103 @@ process.env.ANTHROPIC_API_KEY  // runtime
 
 ```
 User ──many-to-one──► Company ──one-to-many──► Bill ──one-to-many──► LineItem
+                              └──one-to-many──► SalesTarget
 ```
 
-Bill status lifecycle:
-```
-parsed → mapped → synced
-              ↓
-            error
-```
+Bill status lifecycle: `parsed → mapped → synced` (or `error`)
 
-Prisma binary targets include `linux-musl-openssl-3.0.x` (required for Alpine Docker). Do not remove this.
-
-Schema is applied via `prisma db push` (not `prisma migrate deploy` — no migration files exist).
+Key schema notes:
+- Schema is applied via `prisma db push` — no migration files exist.
+- Prisma `binaryTargets` must include `linux-musl-openssl-3.0.x` (Alpine Docker). Do not remove.
+- `SalesTarget`: stores monthly sales targets per company per financial year (`fyYear` = year April starts, e.g. 2025 for FY2025-26; `month` = calendar month 1–12).
 
 ---
 
 ## API Routes
 
-Base: `/api`
+Base: `/api`. All routes except `/auth/*` and `/health` require `Authorization: Bearer <token>`.
+Company-role users can only access their own `companyId`. Admin has no `companyId`.
 
 ```
-POST   /auth/login                          → { token, user }
-POST   /auth/register                       → { token, user }
+POST   /auth/login
+POST   /auth/register
 
-GET    /companies                           → Company[] (admin only)
-POST   /companies                           → Create company + user (admin only)
-GET    /companies/:id                       → Company
-PUT    /companies/:id/mapping               → Update ledger mapping
+GET    /companies                              → admin only
+POST   /companies                             → admin only
+GET    /companies/:id
+PATCH  /companies/:id                         → admin only
+PATCH  /companies/:id/quota                   → admin only
+GET    /companies/:id/parse-usage             → admin only
+GET    /companies/:id/features
+PUT    /companies/:id/mapping
+GET    /companies/:id/ledgers
+PUT    /companies/:id/ledgers
+GET    /companies/:id/stock-items
+PUT    /companies/:id/stock-items
+GET    /companies/:id/stock-groups
+PUT    /companies/:id/stock-groups
+GET    /companies/:id/stock-units
+PUT    /companies/:id/stock-units
+GET    /companies/:id/stock-item-aliases
+POST   /companies/:id/stock-item-aliases
+POST   /companies/:id/voucher-counter/next
+GET    /companies/:id/targets                 → monthly sales targets for current FY
+PUT    /companies/:id/targets                 → upsert { fyYear, targets: [{month, target}] }
 
-GET    /companies/:companyId/bills          → Bill[] with lineItems
-POST   /companies/:companyId/bills          → Create bill
-GET    /bills/:id                           → Bill with lineItems
-PUT    /bills/:id                           → Update bill (status, mapping, lineItems)
-DELETE /bills/:id                           → Delete
-POST   /bills/parse                         → AI parse: { base64, mediaType } → ParsedBillData
+GET    /companies/:companyId/bills
+POST   /companies/:companyId/bills
+GET    /bills/:id
+PUT    /bills/:id
+DELETE /bills/:id
+POST   /bills/parse                           → AI parse: { base64, mediaType }
+POST   /bank/parse                            → parse bank statement
+POST   /reconcile/analyze                     → reconciliation analysis
 
-GET    /health                              → { ok: true }
+GET    /health
 ```
-
-Auth: all routes except `/auth/*` and `/health` require `Authorization: Bearer <token>`.
-
-Company-role users can only access their own `companyId` data. Admin has no `companyId`.
 
 ---
 
 ## Chrome Extension Messaging Contract
 
-The frontend calls `chrome.runtime.sendMessage(extensionId, message, callback)`. The extension service worker handles three message types:
+`tallyService.ts` calls `chrome.runtime.sendMessage(extensionId, { type, ...payload }, callback)`. All Tally HTTP calls are made by the extension (not the browser) to bypass CORS. If the extension ID is not set, `sendToExtension()` falls back to mock data.
 
-| Type | Payload | Response |
-|------|---------|----------|
-| `PING` | — | `{ version: string }` |
-| `FETCH_LEDGERS` | `{ port: number }` | `{ ledgers: { name: string; group: string }[] }` |
-| `SYNC_TO_TALLY` | `{ xml: string; port: number }` | `TallySyncResult` |
+| Type | Purpose |
+|------|---------|
+| `PING` | Check extension alive → `{ version }` |
+| `FETCH_LEDGERS` | All ledgers with group + GSTIN → `{ ledgers }` |
+| `FETCH_STOCK_ITEMS` | Stock items → `{ items }` |
+| `FETCH_STOCK_GROUPS` | Stock groups → `{ groups }` |
+| `FETCH_STOCK_UNITS` | Units of measure → `{ units }` |
+| `FETCH_GODOWNS` | Godowns/warehouses → `{ godowns }` |
+| `FETCH_VOUCHER_TYPES` | Voucher type names → `{ voucherTypes }` |
+| `FETCH_VOUCHERS` | Vouchers in date range by type → `{ vouchers: TallyVoucher[] }` |
+| `FETCH_SALES_PARTY` | Sales totals by party → `{ parties }` |
+| `FETCH_DAYBOOK` | All vouchers in date range → `{ vouchers: TallyVoucher[], rawXml }` |
+| `FETCH_SLOW_STOCK` | Items with no recent sales → `{ items: SlowStockItem[] }` |
+| `FETCH_AGENT` | TallySyncAgent proxy (top-debtors, health) → varies |
+| `SYNC_TO_TALLY` | POST purchase voucher XML → `TallySyncResult` |
+| `SYNC_BANK_TO_TALLY` | POST bank entries as vouchers → `TallySyncResult` |
+| `CREATE_LEDGER` | Create new ledger in Tally |
+| `CREATE_STOCK_ITEM` | Create new stock item |
+| `CREATE_STOCK_GROUP` | Create new stock group |
+
+### TallyVoucher fields
 
 ```typescript
-interface TallySyncResult {
-  success: boolean
-  created: number
-  altered: number
-  errors: number
-  message?: string
+interface TallyVoucher {
+  date:          string  // YYYY-MM-DD
+  type:          string  // voucher type name e.g. "Sales"
+  party:         string
+  amount:        number  // total including GST (party ledger value)
+  taxableAmount: number  // amount minus CGST/SGST/IGST/Cess entries
+  voucherNo:     string
 }
 ```
 
-If `VITE_CHROME_EXTENSION_ID` is not set or `chrome.runtime` is unavailable, `tallyService.ts` falls back to `simulateExtensionResponse()` which returns mock data.
+Always use `taxableAmount` for sales reporting/KPIs. `amount` includes GST.
 
-Ledger filtering in `MappingForm.tsx`:
+### Ledger filtering in `MappingForm.tsx`
 - **Vendor**: group matches `sundry creditor/debtor`
 - **Purchase**: group matches `purchase`
 - **CGST/SGST/IGST**: name contains `cgst`/`sgst`/`igst`
@@ -205,45 +218,50 @@ Ledger filtering in `MappingForm.tsx`:
 
 ---
 
-## State Management (Zustand)
+## Company Dashboard
 
-Three stores, all backed by REST API:
+`src/pages/company/Dashboard.tsx` — three-tab layout:
+
+| Tab | Content |
+|-----|---------|
+| **Performance** | Date filter + KPI row (Sales, EBITDA, Slow Moving Stock) + Sales Trend chart + Top Debtors table. Auto-fetches today on mount. |
+| **Analysis** | Static dummy charts (sales by category, YoY comparison). Placeholder for future. |
+| **CFO Suggestions** | Static AI-style insight cards. Placeholder for future. |
+
+**Date filters**: Today · This Quarter (FY quarter) · This Year (full FY Apr–Mar) · Custom.
+- Granularity auto-selects: Today→daily, Quarter→weekly, Year→monthly.
+- Target achievement comparison shown on Sales KPI only for Quarter / Year / Custom-that-aligns-to-a-valid-FY-quarter. Hidden for Today and arbitrary custom ranges.
+
+**Sales targets**: Fetched from `/companies/:id/targets`. Monthly values (Apr–Mar). Configured via a modal opened from a gear icon in the dashboard header.
+
+---
+
+## State Management (Zustand)
 
 ```typescript
 // authStore — persisted to localStorage key 'tally-auth'
 { user, token, isAuthenticated, login(), logout() }
 
-// companyStore — fetched from /api/companies
-{ companies, fetchCompanies(), addCompany(), getCompany(),
-  incrementSynced(), decrementPending(), ... }
+// companyStore
+{ companies, fetchCompanies(), addCompany(), getCompany(), incrementSynced(), ... }
 
 // billStore — fetched per company
 { bills, fetchBills(), addBill(), getBill(), updateBillStatus() }
 ```
 
-Axios interceptor (`src/lib/api.ts`) reads JWT from `localStorage.getItem('tally-auth')` → parses Zustand persist wrapper → injects `Authorization` header.
+Axios interceptor (`src/lib/api.ts`) reads JWT from localStorage → parses Zustand persist wrapper → injects `Authorization` header.
 
 ---
 
 ## Forms
 
-All forms use **React Hook Form** + **Zod** resolver. Schemas are in `src/lib/validators.ts`:
-
-| Schema | Used in |
-|--------|---------|
-| `loginSchema` | LoginPage |
-| `newCompanySchema` | AddCompanyModal |
-| `mappingSchema` | MappingForm |
-
-The `mappingSchema` requires `vendorLedger`, `purchaseLedger`, `cgstLedger`, `sgstLedger` (all `min(1)`). This is intentional — these must be filled before syncing to Tally.
+All forms use **React Hook Form** + **Zod** resolver. Schemas in `src/lib/validators.ts`.
 
 ---
 
 ## Tally XML
 
-The `buildTallyXml()` function in `src/lib/utils.ts` generates a `TALLYMESSAGE` Purchase voucher XML. The extension POSTs this to `http://localhost:{port}`.
-
-Tally's response is parsed for `<CREATED>`, `<ALTERED>`, `<ERRORS>` tags to determine success.
+`buildTallyXml()` in `src/lib/utils.ts` generates a `TALLYMESSAGE` Purchase voucher XML posted via the extension to `http://localhost:{port}`. Tally response is parsed for `<CREATED>`, `<ALTERED>`, `<ERRORS>` tags.
 
 ---
 
@@ -257,7 +275,7 @@ Tally's response is parsed for `<CREATED>`, `<ALTERED>`, `<ERRORS>` tags to dete
 | Store files | `*Store.ts` | `billStore.ts` |
 | Service files | `*Service.ts` | `aiService.ts` |
 | Types | All in `src/types/index.ts` | |
-| Async API calls | `fetch*`, `sync*`, `parse*` prefix | `fetchTallyLedgers()` |
+| Async API calls | `fetch*`, `sync*`, `parse*` prefix | |
 
 ---
 
@@ -265,28 +283,25 @@ Tally's response is parsed for `<CREATED>`, `<ALTERED>`, `<ERRORS>` tags to dete
 
 - TypeScript strict mode. Fix type errors, never use `any` unless unavoidable.
 - No unused imports or variables (ESLint zero-warning policy).
-- Format: No Prettier config — match surrounding code style.
+- No Prettier config — match surrounding code style.
 - Tailwind for all styling. Custom classes in `src/index.css` (`.input-base`, `.input-error`, `.card`).
-- `cn()` utility from `src/lib/utils.ts` for conditional Tailwind classes.
-- Do not add docstrings or comments unless logic is non-obvious.
-- Do not add error handling for scenarios that cannot happen.
+- `cn()` from `src/lib/utils.ts` for conditional Tailwind classes.
+- No docstrings or comments unless logic is non-obvious.
 
 ---
 
 ## Docker Notes
 
-- Frontend image: Node 20 builder → Nginx Alpine. Built from root `Dockerfile`.
-- Backend image: Node 20 Alpine builder (with `openssl`) → Node 20 Alpine runtime. Built from `server/Dockerfile`.
-- Prisma requires `openssl` in Alpine — both builder and runtime stages install it via `apk add --no-cache openssl`.
-- Prisma `binaryTargets` must include `linux-musl-openssl-3.0.x` in `schema.prisma`.
+- Frontend image: Node 20 builder → Nginx Alpine (`Dockerfile` at root).
+- Backend image: Node 20 Alpine builder → Node 20 Alpine runtime (`server/Dockerfile`). Both stages need `apk add --no-cache openssl`.
+- Node modules copied from builder to runtime (not reinstalled) to preserve Prisma postinstall artifacts.
 - `server/entrypoint.sh` must have LF line endings (enforced by `.gitattributes`).
-- Node modules are copied from builder to runtime stage (not reinstalled) to preserve Prisma postinstall artifacts.
 
 ---
 
 ## Plan Mode
 
-Use plan mode (`EnterPlanMode`) before starting any task that:
+Use `EnterPlanMode` before starting any task that:
 - Touches more than 2–3 files
 - Changes existing API contracts (routes, message types, Zod schemas)
 - Modifies the database schema
@@ -295,4 +310,4 @@ Use plan mode (`EnterPlanMode`) before starting any task that:
 
 For small fixes (single file, clear change), skip plan mode and act directly.
 
-Context Management Rule: > "Monitor the session context window. If the context exceeds 60% capacity, automatically execute the /compact command with a summary of the current task and pending items before proceeding with the next command."
+> Context Management: if the session context exceeds 60% capacity, run `/compact` with a summary of current task and pending items before continuing.

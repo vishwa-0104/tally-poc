@@ -7,13 +7,15 @@ import {
 import {
   TrendingUp, AlertCircle, PackageX,
   BarChart2, Lightbulb, AlertTriangle, CheckCircle,
-  ArrowUpRight, ArrowDownRight, RefreshCw,
+  ArrowUpRight, ArrowDownRight, RefreshCw, Settings,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { fetchDaybook, fetchTopDebtors, fetchSlowMovingStock, type SlowStockItem } from '@/services/tallyService'
+import { fetchSalesTargets } from '@/lib/api'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
+import { SalesTargetModal } from '@/components/company/SalesTargetModal'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -115,6 +117,52 @@ function groupVouchers(
     }))
 }
 
+// ── Target helpers ────────────────────────────────────────────────────────────
+
+function getCurrentFyYear() {
+  const today = new Date()
+  return today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
+}
+
+function getQuarterMonths(): number[] {
+  const m = new Date().getMonth()
+  if (m >= 3 && m <= 5) return [4, 5, 6]
+  if (m >= 6 && m <= 8) return [7, 8, 9]
+  if (m >= 9)           return [10, 11, 12]
+  return [1, 2, 3]
+}
+
+// Returns months if custom dates align exactly to a valid FY quarter, else null
+const FY_QUARTERS = [
+  { months: [4, 5, 6],    start: '-04-01', end: '-06-30' },
+  { months: [7, 8, 9],    start: '-07-01', end: '-09-30' },
+  { months: [10, 11, 12], start: '-10-01', end: '-12-31' },
+  { months: [1, 2, 3],    start: '-01-01', end: '-03-31' },
+]
+function getMonthsForCustom(from: string, to: string): number[] | null {
+  const year = from.slice(0, 4)
+  for (const q of FY_QUARTERS) {
+    if (from === `${year}${q.start}` && to === `${year}${q.end}`) return q.months
+  }
+  return null
+}
+
+function computeTargetForPeriod(
+  preset: FilterPreset,
+  customFrom: string,
+  customTo: string,
+  targets: Record<number, number>,
+): number | null {
+  let months: number[] | null = null
+  if (preset === 'today')   return null
+  if (preset === 'quarter') months = getQuarterMonths()
+  if (preset === 'year')    months = [1,2,3,4,5,6,7,8,9,10,11,12]
+  if (preset === 'custom')  months = getMonthsForCustom(customFrom, customTo)
+  if (!months) return null
+  const sum = months.reduce((s, m) => s + (targets[m] ?? 0), 0)
+  return sum > 0 ? sum : null
+}
+
 // ── Static data for Analysis + CFO tabs ───────────────────────────────────────
 
 const dummySalesByCategory = [
@@ -163,13 +211,14 @@ const cfoSuggestions = [
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = false }: {
+function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = false, targetInfo }: {
   title: string
   value: string | number
   subtitle: string
   icon: React.ElementType
   trend?: { value: number }
   placeholder?: boolean
+  targetInfo?: { target: number; achieved: number } | null
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -191,6 +240,26 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
       </p>
       <p className="text-xs font-semibold text-gray-600">{title}</p>
       <p className="text-[11px] text-gray-400 mt-0.5">{subtitle}</p>
+      {targetInfo && (
+        <div className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
+          <div className="flex justify-between text-[11px]">
+            <span className="text-gray-500">Target Achievement</span>
+            <span className={`font-semibold ${targetInfo.achieved >= 100 ? 'text-green-600' : 'text-red-500'}`}>
+              {targetInfo.achieved.toFixed(1)}%
+            </span>
+          </div>
+          <div className="flex justify-between text-[11px]">
+            <span className="text-gray-500">Target</span>
+            <span className="text-gray-600">{formatCurrency(targetInfo.target)}</span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
+            <div
+              className={`h-1 rounded-full transition-all ${targetInfo.achieved >= 100 ? 'bg-green-500' : 'bg-red-400'}`}
+              style={{ width: `${Math.min(100, targetInfo.achieved)}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -242,10 +311,14 @@ export default function Dashboard() {
   const tallyUrl     = getTallyUrl(companyId, company?.port)
   const tallyCompany = company?.name ?? undefined
 
-  const [activeTab,     setActiveTab]     = useState<Tab>('performance')
-  const [filterPreset,  setFilterPreset]  = useState<FilterPreset>('today')
-  const [customFrom,    setCustomFrom]    = useState(todayStr())
-  const [customTo,      setCustomTo]      = useState(todayStr())
+  const fyYear = getCurrentFyYear()
+
+  const [activeTab,       setActiveTab]       = useState<Tab>('performance')
+  const [filterPreset,    setFilterPreset]    = useState<FilterPreset>('today')
+  const [customFrom,      setCustomFrom]      = useState(todayStr())
+  const [customTo,        setCustomTo]        = useState(todayStr())
+  const [showTargetModal, setShowTargetModal] = useState(false)
+  const [monthlyTargets,  setMonthlyTargets]  = useState<Record<number, number>>({})
 
   const [chartData,     setChartData]     = useState<ChartPoint[]>([])
   const [topParties,    setTopParties]    = useState<{ party: string; amount: number }[]>([])
@@ -296,9 +369,18 @@ export default function Dashboard() {
     }
   }, [connected, tallyUrl, tallyCompany])
 
-  // Auto-fetch today on mount
+  // Auto-fetch today + load targets on mount
   useEffect(() => {
     fetchData('today', todayStr(), todayStr())
+    if (companyId) {
+      fetchSalesTargets(companyId, fyYear)
+        .then(rows => {
+          const map: Record<number, number> = {}
+          rows.forEach(r => { map[r.month] = r.target })
+          setMonthlyTargets(map)
+        })
+        .catch(() => { /* targets are optional */ })
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabChange = (tab: Tab) => {
@@ -340,15 +422,41 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Connection badge */}
-          {!connected && (
-            <span className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
-              Extension not connected
-            </span>
-          )}
-          {connected && <span className="w-[140px]" />}
+          {/* Right side: connection badge + configure */}
+          <div className="flex items-center gap-2">
+            {!connected && (
+              <span className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+                Extension not connected
+              </span>
+            )}
+            <button
+              onClick={() => setShowTargetModal(true)}
+              title="Configure sales targets"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
+
+      <SalesTargetModal
+        open={showTargetModal}
+        onClose={() => {
+          setShowTargetModal(false)
+          // Reload targets after modal closes in case they were updated
+          if (companyId) {
+            fetchSalesTargets(companyId, fyYear)
+              .then(rows => {
+                const map: Record<number, number> = {}
+                rows.forEach(r => { map[r.month] = r.target })
+                setMonthlyTargets(map)
+              })
+              .catch(() => { /* ignore */ })
+          }
+        }}
+        companyId={companyId}
+      />
 
       {/* ── Page body ── */}
       <div className="px-6 py-5 max-w-6xl w-full mx-auto space-y-5">
@@ -402,18 +510,29 @@ export default function Dashboard() {
 
             {/* KPI cards */}
             <div className="grid grid-cols-3 gap-4">
-              <KpiCard
-                title="Total Sales"
-                value={fetched ? formatCurrency(total) : '—'}
-                subtitle={
-                  activePeriod
-                    ? activePeriod.from === activePeriod.to
-                      ? new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                      : `${new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(activePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
-                    : 'Loading…'
-                }
-                icon={TrendingUp}
-              />
+              {(() => {
+                const periodTarget = fetched
+                  ? computeTargetForPeriod(filterPreset, customFrom, customTo, monthlyTargets)
+                  : null
+                const targetInfo = (periodTarget && total > 0)
+                  ? { target: periodTarget, achieved: (total / periodTarget) * 100 }
+                  : null
+                return (
+                  <KpiCard
+                    title="Total Sales"
+                    value={fetched ? formatCurrency(total) : '—'}
+                    subtitle={
+                      activePeriod
+                        ? activePeriod.from === activePeriod.to
+                          ? new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : `${new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(activePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                        : 'Loading…'
+                    }
+                    icon={TrendingUp}
+                    targetInfo={targetInfo}
+                  />
+                )
+              })()}
               <KpiCard
                 title="EBITDA"
                 value="—"

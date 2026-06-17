@@ -72,6 +72,7 @@ model Company {
   features         CompanyFeature[]
   bankSyncLogs     BankSyncLog[]
   cashBookSyncLogs CashBookSyncLog[]
+  salesTargets     SalesTarget[]
   voucherType      String         @default("GST PURCHASE")
   syncTimestamps   Json?
   createdAt        DateTime       @default(now())
@@ -249,6 +250,17 @@ model Lead {
   remarks     String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+}
+
+model SalesTarget {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  fyYear    Int     // FY start year: 2025 = FY2025-26 (Apr 2025 – Mar 2026)
+  month     Int     // calendar month 1–12
+  target    Float
+
+  @@unique([companyId, fyYear, month])
 }
 
 model LineItem {

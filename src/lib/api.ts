@@ -19,6 +19,22 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+export async function fetchSalesTargets(
+  companyId: string,
+  fyYear: number,
+): Promise<{ month: number; target: number }[]> {
+  const { data } = await api.get(`/companies/${companyId}/targets`, { params: { fyYear } })
+  return data
+}
+
+export async function saveSalesTargets(
+  companyId: string,
+  fyYear: number,
+  targets: { month: number; target: number }[],
+): Promise<void> {
+  await api.put(`/companies/${companyId}/targets`, { fyYear, targets })
+}
+
 // On 401, clear auth and redirect to login
 api.interceptors.response.use(
   (r) => r,

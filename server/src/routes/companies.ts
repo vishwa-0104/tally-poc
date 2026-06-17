@@ -522,6 +522,50 @@ companiesRouter.put('/companies/:id/features', requireAdmin, async (req, res) =>
   res.json({ feature, enabled })
 })
 
+// GET /api/companies/:id/targets?fyYear=2025
+companiesRouter.get('/companies/:id/targets', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const today = new Date()
+  const defaultFy = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
+  const fyYear = parseInt(req.query.fyYear as string) || defaultFy
+  const targets = await prisma.salesTarget.findMany({
+    where: { companyId: req.params.id, fyYear },
+    select: { month: true, target: true },
+  })
+  res.json(targets)
+})
+
+// PUT /api/companies/:id/targets
+companiesRouter.put('/companies/:id/targets', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.object({
+    fyYear:  z.number().int(),
+    targets: z.array(z.object({
+      month:  z.number().int().min(1).max(12),
+      target: z.number().min(0),
+    })),
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const { fyYear, targets } = result.data
+  const companyId = req.params.id
+  await prisma.$transaction(
+    targets.map(({ month, target }) =>
+      prisma.salesTarget.upsert({
+        where:  { companyId_fyYear_month: { companyId, fyYear, month } },
+        update: { target },
+        create: { companyId, fyYear, month, target },
+      })
+    )
+  )
+  res.json({ ok: true })
+})
+
 // GET /api/companies/:id/godowns
 companiesRouter.get('/companies/:id/godowns', async (req, res) => {
   if (!(await canAccessCompany(req.auth, req.params.id))) {
