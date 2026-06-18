@@ -404,13 +404,23 @@ export default function Dashboard() {
         setPrevDaySales(null)
         const yDate = new Date(); yDate.setDate(yDate.getDate() - 1)
         const yd    = fmt(yDate)
+        console.log('[PrevDay] Fetching yesterday sales. Date:', yd, 'TallyDate:', toTallyDate(yd))
+        console.log('[Today] Total sales:', salesTotal - creditTotal, '| date:', from)
         fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany)
           .then(({ vouchers: yv }) => {
+            console.log('[PrevDay] Raw vouchers received:', yv.length, yv)
             const yS = yv.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
             const yC = yv.filter(v => v.type.toLowerCase() === 'credit note')
-            setPrevDaySales(yS.reduce((s, v) => s + v.taxableAmount, 0) - yC.reduce((s, v) => s + v.taxableAmount, 0))
+            const yTotal = yS.reduce((s, v) => s + v.taxableAmount, 0) - yC.reduce((s, v) => s + v.taxableAmount, 0)
+            console.log('[PrevDay] Sales vouchers:', yS.length, '| Credit notes:', yC.length, '| Total:', yTotal)
+            console.log('[Comparison] Today:', salesTotal - creditTotal, '| Yesterday:', yTotal,
+              '| Change:', (((salesTotal - creditTotal) - yTotal) / (yTotal || 1) * 100).toFixed(1) + '%')
+            setPrevDaySales(yTotal)
           })
-          .catch(() => setPrevDaySales(null))
+          .catch((err) => {
+            console.error('[PrevDay] Failed to fetch yesterday data:', err)
+            setPrevDaySales(null)
+          })
       } else {
         setPrevDaySales(null)
       }
