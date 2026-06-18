@@ -2,7 +2,7 @@
 set -e
 
 echo "Applying database schema..."
-npx prisma db push --skip-generate
+npx prisma db push --skip-generate --accept-data-loss
 
 echo "Seeding database..."
 npm run db:seed || echo "Seed warning (may already be seeded)"
