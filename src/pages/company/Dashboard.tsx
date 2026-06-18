@@ -362,6 +362,15 @@ export default function Dashboard() {
   const [error,         setError]         = useState<string | null>(null)
   const [activePeriod,  setActivePeriod]  = useState<{ from: string; to: string } | null>(null)
 
+  // Debug state watchers — remove once stable
+  useEffect(() => {
+    console.log('[State] prevDaySales →', prevDaySales, '| fetched:', fetched, '| filterPreset:', filterPreset)
+  }, [prevDaySales, fetched, filterPreset])
+
+  useEffect(() => {
+    console.log('[State] slowStock count →', slowStock.length, '| fetched:', fetched)
+  }, [slowStock, fetched])
+
   const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string) => {
     if (!connected) {
       toast.error('Extension not connected. Make sure Tally is running.')
@@ -396,34 +405,10 @@ export default function Dashboard() {
       setChartData(groupVouchers(chartVouchers, granularity, from, to))
       const salesTotal  = sales.reduce((s, v) => s + v.taxableAmount, 0)
       const creditTotal = creditNotes.reduce((s, v) => s + v.taxableAmount, 0)
-      setTotal(salesTotal - creditTotal)
+      const todaySalesTotal = salesTotal - creditTotal
+      setTotal(todaySalesTotal)
       setActivePeriod({ from, to })
-
-      // Fetch yesterday's sales for today preset (non-blocking)
-      if (preset === 'today') {
-        setPrevDaySales(null)
-        const yDate = new Date(); yDate.setDate(yDate.getDate() - 1)
-        const yd    = fmt(yDate)
-        console.log('[PrevDay] Fetching yesterday sales. Date:', yd, 'TallyDate:', toTallyDate(yd))
-        console.log('[Today] Total sales:', salesTotal - creditTotal, '| date:', from)
-        fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany)
-          .then(({ vouchers: yv }) => {
-            console.log('[PrevDay] Raw vouchers received:', yv.length, yv)
-            const yS = yv.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
-            const yC = yv.filter(v => v.type.toLowerCase() === 'credit note')
-            const yTotal = yS.reduce((s, v) => s + v.taxableAmount, 0) - yC.reduce((s, v) => s + v.taxableAmount, 0)
-            console.log('[PrevDay] Sales vouchers:', yS.length, '| Credit notes:', yC.length, '| Total:', yTotal)
-            console.log('[Comparison] Today:', salesTotal - creditTotal, '| Yesterday:', yTotal,
-              '| Change:', (((salesTotal - creditTotal) - yTotal) / (yTotal || 1) * 100).toFixed(1) + '%')
-            setPrevDaySales(yTotal)
-          })
-          .catch((err) => {
-            console.error('[PrevDay] Failed to fetch yesterday data:', err)
-            setPrevDaySales(null)
-          })
-      } else {
-        setPrevDaySales(null)
-      }
+      console.log('[Today] Total sales:', todaySalesTotal, '| date:', from)
 
       try {
         const debtors = await fetchTopDebtors(10)
@@ -436,6 +421,30 @@ export default function Dashboard() {
       } catch { /* non-critical */ }
 
       setFetched(true)
+
+      // Yesterday fetch is LAST — after slow stock — so Tally isn't hit concurrently
+      if (preset === 'today') {
+        setPrevDaySales(null)
+        const yDate = new Date(); yDate.setDate(yDate.getDate() - 1)
+        const yd    = fmt(yDate)
+        console.log('[PrevDay] Fetching yesterday sales. Date:', yd, 'TallyDate:', toTallyDate(yd))
+        try {
+          const { vouchers: yv } = await fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany)
+          console.log('[PrevDay] Raw vouchers received:', yv.length, yv)
+          const yS = yv.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
+          const yC = yv.filter(v => v.type.toLowerCase() === 'credit note')
+          const yTotal = yS.reduce((s, v) => s + v.taxableAmount, 0) - yC.reduce((s, v) => s + v.taxableAmount, 0)
+          console.log('[PrevDay] Sales vouchers:', yS.length, '| Credit notes:', yC.length, '| Total:', yTotal)
+          console.log('[Comparison] Today:', todaySalesTotal, '| Yesterday:', yTotal,
+            '| Change:', (((todaySalesTotal - yTotal) / (yTotal || 1)) * 100).toFixed(1) + '%')
+          setPrevDaySales(yTotal)
+        } catch (err) {
+          console.error('[PrevDay] Failed to fetch yesterday data:', err)
+          setPrevDaySales(null)
+        }
+      } else {
+        setPrevDaySales(null)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch data'
       setError(msg)
@@ -606,9 +615,13 @@ export default function Dashboard() {
                     }
                     icon={TrendingUp}
                     targetInfo={targetInfo}
-                    prevValue={filterPreset === 'today' && fetched && prevDaySales !== null
-                      ? { amount: prevDaySales, current: total }
-                      : null}
+                    prevValue={(() => {
+                      const pv = filterPreset === 'today' && fetched && prevDaySales !== null
+                        ? { amount: prevDaySales, current: total }
+                        : null
+                      console.log('[Render] KpiCard prevValue:', pv, { filterPreset, fetched, prevDaySales, total })
+                      return pv
+                    })()}
                   />
                 )
               })()}
