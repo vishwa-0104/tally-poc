@@ -212,7 +212,7 @@ const cfoSuggestions = [
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = false, targetInfo }: {
+function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = false, targetInfo, prevValue }: {
   title: string
   value: string | number
   subtitle: string
@@ -220,6 +220,7 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
   trend?: { value: number }
   placeholder?: boolean
   targetInfo?: { target: number; achieved: number } | null
+  prevValue?: { amount: number; current: number } | null
 }) {
   const DisplayIcon = targetInfo
     ? targetInfo.achieved >= 100 ? CheckCircle
@@ -277,6 +278,17 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
               className={`h-1 rounded-full transition-all ${targetInfo.achieved >= 100 ? 'bg-green-500' : 'bg-red-400'}`}
               style={{ width: `${Math.min(100, targetInfo.achieved)}%` }}
             />
+          </div>
+        </div>
+      )}
+      {prevValue != null && (
+        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
+          <span className="text-[11px] text-gray-400">Previous day</span>
+          <div className="flex items-center gap-1">
+            {prevValue.current >= prevValue.amount
+              ? <ArrowUpRight className="w-3 h-3 text-green-500" />
+              : <ArrowDownRight className="w-3 h-3 text-red-400" />}
+            <span className="text-[11px] text-gray-600 font-medium">{formatCurrency(prevValue.amount)}</span>
           </div>
         </div>
       )}
@@ -343,6 +355,7 @@ export default function Dashboard() {
   const [chartData,     setChartData]     = useState<ChartPoint[]>([])
   const [topParties,    setTopParties]    = useState<{ party: string; amount: number }[]>([])
   const [total,         setTotal]         = useState(0)
+  const [prevDaySales,  setPrevDaySales]  = useState<number | null>(null)
   const [slowStock,     setSlowStock]     = useState<SlowStockItem[]>([])
   const [loading,       setLoading]       = useState(false)
   const [fetched,       setFetched]       = useState(false)
@@ -385,6 +398,22 @@ export default function Dashboard() {
       const creditTotal = creditNotes.reduce((s, v) => s + v.taxableAmount, 0)
       setTotal(salesTotal - creditTotal)
       setActivePeriod({ from, to })
+
+      // Fetch yesterday's sales for today preset (non-blocking)
+      if (preset === 'today') {
+        setPrevDaySales(null)
+        const yDate = new Date(); yDate.setDate(yDate.getDate() - 1)
+        const yd    = fmt(yDate)
+        fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany)
+          .then(({ vouchers: yv }) => {
+            const yS = yv.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
+            const yC = yv.filter(v => v.type.toLowerCase() === 'credit note')
+            setPrevDaySales(yS.reduce((s, v) => s + v.taxableAmount, 0) - yC.reduce((s, v) => s + v.taxableAmount, 0))
+          })
+          .catch(() => setPrevDaySales(null))
+      } else {
+        setPrevDaySales(null)
+      }
 
       try {
         const debtors = await fetchTopDebtors(10)
@@ -567,6 +596,9 @@ export default function Dashboard() {
                     }
                     icon={TrendingUp}
                     targetInfo={targetInfo}
+                    prevValue={filterPreset === 'today' && fetched && prevDaySales !== null
+                      ? { amount: prevDaySales, current: total }
+                      : null}
                   />
                 )
               })()}
