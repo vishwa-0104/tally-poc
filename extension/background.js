@@ -119,6 +119,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ items: [], error: err.message }))
       return true
 
+    case 'FETCH_LEDGER_BALANCES':
+      handleFetchLedgerBalances(payload.tallyUrl, payload.tallyCompany, payload.asOfDate)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ rawLedgers: [], error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -1243,4 +1249,67 @@ async function postToTally(xml, tallyUrl) {
   }
 
   return response.text()
+}
+
+// ── Ledger balances (closing balance as of a date) ───────────────────────────
+// Uses the preloaded TBSLedgerBalances collection from TallySyncBridge.tdl.
+// No inline TDL — avoids the per-request compile overhead that causes Tally to hang.
+
+async function handleFetchLedgerBalances(tallyUrl, tallyCompany, asOfDate) {
+  const today = new Date()
+  const pad   = (n) => String(n).padStart(2, '0')
+  const fyYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
+  const fyStart = `${fyYear}0401`
+  const toDateRaw = asOfDate || `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`
+
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSLedgerBalances</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${toTallyDisplayDate(fyStart)}</SVFROMDATE>
+        <SVTODATE>${toTallyDisplayDate(toDateRaw)}</SVTODATE>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log('[LedgerBalances] response length:', responseText.length, '| first 1000:', responseText.slice(0, 1000))
+
+  const rawLedgers = parseLedgerBalances(responseText)
+  console.log('[LedgerBalances] parsed count:', rawLedgers.length, '| sample:', rawLedgers.slice(0, 5))
+  return { rawLedgers }
+}
+
+function parseLedgerBalances(xml) {
+  const results = []
+  const blocks = [...xml.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)]
+  for (const [, inner] of blocks) {
+    const nameM   = inner.match(/<NAME[^>]*>\s*([\s\S]*?)\s*<\/NAME>/i)
+    const parentM = inner.match(/<PARENT[^>]*>\s*([\s\S]*?)\s*<\/PARENT>/i)
+    const balM    = inner.match(/<CLOSINGBALANCE[^>]*>\s*([\s\S]*?)\s*<\/CLOSINGBALANCE>/i)
+    if (!nameM) continue
+    const name    = nameM[1].trim()
+    const group   = parentM ? parentM[1].trim() : ''
+    const balance = balM ? parseTallyBalance(balM[1].trim()) : 0
+    if (name) results.push({ name, group, balance })
+  }
+  return results
+}
+
+// Tally returns "14000.00 Dr" (asset/positive) or "5000.00 Cr" (liability/negative)
+function parseTallyBalance(str) {
+  const clean = str.replace(/,/g, '')
+  const m = clean.match(/([-\d.]+)\s*(Dr|Cr)?/i)
+  if (!m) return 0
+  const num  = parseFloat(m[1]) || 0
+  const isCr = (m[2] || '').toLowerCase() === 'cr'
+  return isCr ? -num : num
 }

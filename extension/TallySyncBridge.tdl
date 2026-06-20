@@ -24,7 +24,12 @@
     Type        : Voucher
     Fetch       : Date, VoucherTypeName, PartyLedgerName, VoucherNumber, Amount
     Fetch       : LedgerEntries.IsPartyLedger, LedgerEntries.Amount
-    Fetch       : AllLedgerEntries.IsPartyLedger, AllLedgerEntries.Amount
+    Fetch       : AllLedgerEntries.LedgerName, AllLedgerEntries.IsPartyLedger, AllLedgerEntries.Amount
+
+; All ledger balances as of a given date — used for Cash In Hand, Receivables, Payables tiles
+[Collection: TBSLedgerBalances]
+    Type        : Ledger
+    Fetch       : Name, Parent, ClosingBalance
 
 ; All stock items with current closing quantity and value
 [Collection: TBSStockBalance]

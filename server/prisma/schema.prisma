@@ -73,9 +73,10 @@ model Company {
   bankSyncLogs     BankSyncLog[]
   cashBookSyncLogs CashBookSyncLog[]
   salesTargets     SalesTarget[]
-  voucherType      String         @default("GST PURCHASE")
-  syncTimestamps   Json?
-  createdAt        DateTime       @default(now())
+  voucherType       String         @default("GST PURCHASE")
+  syncTimestamps    Json?
+  dashboardSettings Json?
+  createdAt         DateTime       @default(now())
 }
 
 model ParseUsageLog {

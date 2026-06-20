@@ -233,6 +233,22 @@ export async function fetchSlowMovingStock(
   return sendToExtension<{ items: SlowStockItem[] }>('FETCH_SLOW_STOCK', { tallyUrl, tallyCompany })
 }
 
+export interface RawLedger {
+  name:    string
+  group:   string
+  balance: number  // positive = Dr (asset), negative = Cr (liability)
+}
+
+export async function fetchLedgerBalances(
+  tallyUrl: string,
+  tallyCompany?: string,
+  asOfDate?: string,   // YYYYMMDD — defaults to today in the extension handler
+): Promise<{ rawLedgers: RawLedger[] }> {
+  return sendToExtension<{ rawLedgers: RawLedger[] }>('FETCH_LEDGER_BALANCES', {
+    tallyUrl, tallyCompany, asOfDate,
+  })
+}
+
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
   console.group('[Sync] Tally XML Payload')
   console.log('URL:', tallyUrl)

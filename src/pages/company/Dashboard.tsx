@@ -7,11 +7,12 @@ import {
 import {
   TrendingUp, TrendingDown, AlertCircle, PackageX,
   BarChart2, Lightbulb, AlertTriangle, CheckCircle,
-  ArrowUpRight, ArrowDownRight, RefreshCw, Settings,
+  ArrowUpRight, ArrowDownRight, RefreshCw, Settings, Wallet, Building2,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchTopDebtors, fetchSlowMovingStock, type SlowStockItem } from '@/services/tallyService'
-import { fetchSalesTargets } from '@/lib/api'
+import { fetchDaybook, fetchTopDebtors, fetchSlowMovingStock, fetchLedgerBalances, type SlowStockItem, type TallyVoucher, type RawLedger } from '@/services/tallyService'
+import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
+import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
@@ -115,6 +116,87 @@ function groupVouchers(
       label:  formatLabel(granularity === 'monthly' ? key + '-01' : key, granularity),
       amount: parseFloat(amount.toFixed(2)),
     }))
+}
+
+// ── Dashboard settings helpers ────────────────────────────────────────────────
+
+function isSalesVoucher(v: TallyVoucher, settings: DashboardSettings): boolean {
+  const saved = settings.today?.salesVoucherTypes
+  if (saved?.length) return saved.some(t => v.type.toLowerCase() === t.toLowerCase())
+  return v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit')
+}
+
+// Parse rawXml from TBSVouchers (which now includes AllLedgerEntries.LedgerName)
+// to compute cash inflow and outflow for the period.
+function computeCashFlow(
+  rawXml: string,
+  rawLedgers: RawLedger[],
+  settings: DashboardSettings,
+): { inflow: number; outflow: number; inHand: number } {
+  // Determine which ledger names are "cash" ledgers
+  const savedInflow  = settings.today?.cashInflowLedgers
+  const savedOutflow = settings.today?.cashOutflowLedgers
+  const cashByGroup  = new Set(
+    rawLedgers
+      .filter(l => l.group.toLowerCase().includes('cash'))
+      .map(l => l.name.toLowerCase()),
+  )
+  const inflowSet  = savedInflow?.length
+    ? new Set(savedInflow.map(n => n.toLowerCase()))
+    : cashByGroup
+  const outflowSet = savedOutflow?.length
+    ? new Set(savedOutflow.map(n => n.toLowerCase()))
+    : cashByGroup
+
+  // Parse <ALLLEDGERENTRIES.LIST> blocks from rawXml
+  let inflow = 0, outflow = 0
+  const entryRe = /<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi
+  for (const [, block] of [...rawXml.matchAll(entryRe)]) {
+    const nameM   = block.match(/<LEDGERNAME[^>]*>([\s\S]*?)<\/LEDGERNAME>/i)
+    const amountM = block.match(/<AMOUNT[^>]*>([\s\S]*?)<\/AMOUNT>/i)
+    if (!nameM || !amountM) continue
+    const ledger = nameM[1].trim().toLowerCase()
+    const amount = parseFloat(amountM[1].replace(/,/g, '')) || 0
+    if (amount > 0 && inflowSet.has(ledger))  inflow  += amount
+    if (amount < 0 && outflowSet.has(ledger)) outflow += Math.abs(amount)
+  }
+
+  // Cash In Hand = sum of closing balances of cash (or saved inflow) ledgers
+  const inHandSet = savedInflow?.length ? inflowSet : cashByGroup
+  const inHand = rawLedgers
+    .filter(l => inHandSet.has(l.name.toLowerCase()))
+    .reduce((s, l) => s + l.balance, 0)
+
+  return { inflow, outflow, inHand }
+}
+
+function computeBankFlow(
+  rawXml: string,
+  rawLedgers: RawLedger[],
+): { inflow: number; outflow: number; balance: number } {
+  const bankByGroup = new Set(
+    rawLedgers
+      .filter(l => l.group.toLowerCase().includes('bank'))
+      .map(l => l.name.toLowerCase()),
+  )
+
+  let inflow = 0, outflow = 0
+  const entryRe = /<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi
+  for (const [, block] of [...rawXml.matchAll(entryRe)]) {
+    const nameM   = block.match(/<LEDGERNAME[^>]*>([\s\S]*?)<\/LEDGERNAME>/i)
+    const amountM = block.match(/<AMOUNT[^>]*>([\s\S]*?)<\/AMOUNT>/i)
+    if (!nameM || !amountM) continue
+    const ledger = nameM[1].trim().toLowerCase()
+    const amount = parseFloat(amountM[1].replace(/,/g, '')) || 0
+    if (amount > 0 && bankByGroup.has(ledger)) inflow  += amount
+    if (amount < 0 && bankByGroup.has(ledger)) outflow += Math.abs(amount)
+  }
+
+  const balance = rawLedgers
+    .filter(l => bankByGroup.has(l.name.toLowerCase()))
+    .reduce((s, l) => s + l.balance, 0)
+
+  return { inflow, outflow, balance }
 }
 
 // ── Target helpers ────────────────────────────────────────────────────────────
@@ -318,6 +400,70 @@ function BarTip({ active, payload, label }: { active?: boolean; payload?: { valu
   )
 }
 
+function CashCard({ inflow, outflow, inHand }: {
+  inflow:  number | null
+  outflow: number | null
+  inHand:  number | null
+}) {
+  const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className="p-2 bg-emerald-50 rounded-lg">
+          <Wallet className="w-4 h-4 text-emerald-600" />
+        </div>
+      </div>
+      <p className="text-2xl font-bold tracking-tight text-gray-900 mb-0.5">Cash</p>
+      <div className="mt-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">Cash Inflow</span>
+          <span className="text-xs font-semibold text-emerald-600">{val(inflow)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">Cash Outflow</span>
+          <span className="text-xs font-semibold text-red-500">{val(outflow)}</span>
+        </div>
+        <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+          <span className="text-xs text-gray-500">Cash In Hand</span>
+          <span className="text-xs font-semibold text-gray-800">{val(inHand)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BankCard({ inflow, outflow, balance }: {
+  inflow:   number | null
+  outflow:  number | null
+  balance:  number | null
+}) {
+  const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className="p-2 bg-blue-50 rounded-lg">
+          <Building2 className="w-4 h-4 text-blue-600" />
+        </div>
+      </div>
+      <p className="text-2xl font-bold tracking-tight text-gray-900 mb-0.5">Banks</p>
+      <div className="mt-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">Bank Inflow</span>
+          <span className="text-xs font-semibold text-emerald-600">{val(inflow)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">Bank Outflow</span>
+          <span className="text-xs font-semibold text-red-500">{val(outflow)}</span>
+        </div>
+        <div className="flex items-center justify-between border-t border-gray-100 pt-2">
+          <span className="text-xs text-gray-500">Balance in Bank</span>
+          <span className="text-xs font-semibold text-gray-800">{val(balance)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 const TABS: { key: Tab; label: string }[] = [
@@ -352,6 +498,16 @@ export default function Dashboard() {
   const [showTargetModal, setShowTargetModal] = useState(false)
   const [monthlyTargets,  setMonthlyTargets]  = useState<Record<number, number>>({})
 
+  const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({})
+
+  const [cashInflow,  setCashInflow]  = useState<number | null>(null)
+  const [cashOutflow, setCashOutflow] = useState<number | null>(null)
+  const [cashInHand,  setCashInHand]  = useState<number | null>(null)
+
+  const [bankInflow,   setBankInflow]   = useState<number | null>(null)
+  const [bankOutflow,  setBankOutflow]  = useState<number | null>(null)
+  const [bankBalance,  setBankBalance]  = useState<number | null>(null)
+
   const [chartData,     setChartData]     = useState<ChartPoint[]>([])
   const [topParties,    setTopParties]    = useState<{ party: string; amount: number }[]>([])
   const [total,         setTotal]         = useState(0)
@@ -361,15 +517,6 @@ export default function Dashboard() {
   const [fetched,       setFetched]       = useState(false)
   const [error,         setError]         = useState<string | null>(null)
   const [activePeriod,  setActivePeriod]  = useState<{ from: string; to: string } | null>(null)
-
-  // Debug state watchers — remove once stable
-  useEffect(() => {
-    console.log('[State] prevDaySales →', prevDaySales, '| fetched:', fetched, '| filterPreset:', filterPreset)
-  }, [prevDaySales, fetched, filterPreset])
-
-  useEffect(() => {
-    console.log('[State] slowStock count →', slowStock.length, '| fetched:', fetched)
-  }, [slowStock, fetched])
 
   const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string) => {
     if (!connected) {
@@ -382,7 +529,7 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const { vouchers: all } = await fetchDaybook(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
+      const { vouchers: all, rawXml } = await fetchDaybook(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
 
       // Debug: totals per voucher type
       const byType: Record<string, { preGst: number; gst: number; count: number }> = {}
@@ -394,7 +541,7 @@ export default function Dashboard() {
       }
       console.log('[Voucher Totals by Type]', byType)
 
-      const sales       = all.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
+      const sales       = all.filter(v => isSalesVoucher(v, dashboardSettings))
       const creditNotes = all.filter(v => v.type.toLowerCase() === 'credit note')
 
       // Use taxableAmount (GST excluded); credit notes reduce net sales
@@ -420,6 +567,25 @@ export default function Dashboard() {
         setSlowStock(items)
       } catch { /* non-critical */ }
 
+      // Fetch ledger balances for Cash/Bank — sequential, after slow stock
+      try {
+        const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(to))
+        const cf = computeCashFlow(rawXml, rawLedgers, dashboardSettings)
+        console.log('[CashFlow] inflow:', cf.inflow, '| outflow:', cf.outflow, '| inHand:', cf.inHand)
+        setCashInflow(cf.inflow)
+        setCashOutflow(cf.outflow)
+        setCashInHand(cf.inHand)
+        const bf = computeBankFlow(rawXml, rawLedgers)
+        console.log('[BankFlow] inflow:', bf.inflow, '| outflow:', bf.outflow, '| balance:', bf.balance)
+        setBankInflow(bf.inflow)
+        setBankOutflow(bf.outflow)
+        setBankBalance(bf.balance)
+      } catch (err) {
+        console.error('[CashFlow] fetchLedgerBalances failed:', err)
+        setCashInflow(null); setCashOutflow(null); setCashInHand(null)
+        setBankInflow(null); setBankOutflow(null); setBankBalance(null)
+      }
+
       setFetched(true)
 
       // Yesterday fetch is LAST — after slow stock — so Tally isn't hit concurrently
@@ -431,7 +597,7 @@ export default function Dashboard() {
         try {
           const { vouchers: yv } = await fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany)
           console.log('[PrevDay] Raw vouchers received:', yv.length, yv)
-          const yS = yv.filter(v => v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit'))
+          const yS = yv.filter(v => isSalesVoucher(v, dashboardSettings))
           const yC = yv.filter(v => v.type.toLowerCase() === 'credit note')
           const yTotal = yS.reduce((s, v) => s + v.taxableAmount, 0) - yC.reduce((s, v) => s + v.taxableAmount, 0)
           console.log('[PrevDay] Sales vouchers:', yS.length, '| Credit notes:', yC.length, '| Total:', yTotal)
@@ -454,18 +620,24 @@ export default function Dashboard() {
     }
   }, [connected, tallyUrl, tallyCompany])
 
-  // Auto-fetch today + load targets on mount
+  const reloadMeta = () => {
+    if (!companyId) return
+    fetchSalesTargets(companyId, fyYear)
+      .then(rows => {
+        const map: Record<number, number> = {}
+        rows.forEach(r => { map[r.month] = r.target })
+        setMonthlyTargets(map)
+      })
+      .catch(() => { /* optional */ })
+    fetchDashboardSettings(companyId)
+      .then(setDashboardSettings)
+      .catch(() => { /* optional */ })
+  }
+
+  // Auto-fetch today + load targets/settings on mount
   useEffect(() => {
     fetchData('today', todayStr(), todayStr())
-    if (companyId) {
-      fetchSalesTargets(companyId, fyYear)
-        .then(rows => {
-          const map: Record<number, number> = {}
-          rows.forEach(r => { map[r.month] = r.target })
-          setMonthlyTargets(map)
-        })
-        .catch(() => { /* targets are optional */ })
-    }
+    reloadMeta()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabChange = (tab: Tab) => {
@@ -527,20 +699,10 @@ export default function Dashboard() {
 
       <SalesTargetModal
         open={showTargetModal}
-        onClose={() => {
-          setShowTargetModal(false)
-          // Reload targets after modal closes in case they were updated
-          if (companyId) {
-            fetchSalesTargets(companyId, fyYear)
-              .then(rows => {
-                const map: Record<number, number> = {}
-                rows.forEach(r => { map[r.month] = r.target })
-                setMonthlyTargets(map)
-              })
-              .catch(() => { /* ignore */ })
-          }
-        }}
+        onClose={() => { setShowTargetModal(false); reloadMeta() }}
         companyId={companyId}
+        tallyUrl={tallyUrl}
+        tallyCompany={tallyCompany}
       />
 
       {/* ── Page body ── */}
@@ -594,7 +756,7 @@ export default function Dashboard() {
             </div>
 
             {/* KPI cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-5 gap-4">
               {(() => {
                 const periodTarget = fetched
                   ? computeTargetForPeriod(filterPreset, customFrom, customTo, monthlyTargets)
@@ -615,16 +777,22 @@ export default function Dashboard() {
                     }
                     icon={TrendingUp}
                     targetInfo={targetInfo}
-                    prevValue={(() => {
-                      const pv = filterPreset === 'today' && fetched && prevDaySales !== null
-                        ? { amount: prevDaySales, current: total }
-                        : null
-                      console.log('[Render] KpiCard prevValue:', pv, { filterPreset, fetched, prevDaySales, total })
-                      return pv
-                    })()}
+                    prevValue={filterPreset === 'today' && fetched && prevDaySales !== null
+                      ? { amount: prevDaySales, current: total }
+                      : null}
                   />
                 )
               })()}
+              <CashCard
+                inflow={fetched ? cashInflow : null}
+                outflow={fetched ? cashOutflow : null}
+                inHand={fetched ? cashInHand : null}
+              />
+              <BankCard
+                inflow={fetched ? bankInflow : null}
+                outflow={fetched ? bankOutflow : null}
+                balance={fetched ? bankBalance : null}
+              />
               <KpiCard
                 title="EBITDA"
                 value="—"

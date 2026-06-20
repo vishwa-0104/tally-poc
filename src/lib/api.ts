@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { DashboardSettings } from '@/types'
 
 export const api = axios.create({ baseURL: '/api' })
 
@@ -33,6 +34,15 @@ export async function saveSalesTargets(
   targets: { month: number; target: number }[],
 ): Promise<void> {
   await api.put(`/companies/${companyId}/targets`, { fyYear, targets })
+}
+
+export async function fetchDashboardSettings(companyId: string): Promise<DashboardSettings> {
+  const { data } = await api.get(`/companies/${companyId}/dashboard-settings`)
+  return data
+}
+
+export async function saveDashboardSettings(companyId: string, settings: DashboardSettings): Promise<void> {
+  await api.put(`/companies/${companyId}/dashboard-settings`, settings)
 }
 
 // On 401, clear auth and redirect to login

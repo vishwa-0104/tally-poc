@@ -566,6 +566,40 @@ companiesRouter.put('/companies/:id/targets', async (req, res) => {
   res.json({ ok: true })
 })
 
+// GET /api/companies/:id/dashboard-settings
+companiesRouter.get('/companies/:id/dashboard-settings', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const company = await prisma.company.findUnique({
+    where:  { id: req.params.id },
+    select: { dashboardSettings: true },
+  })
+  res.json(company?.dashboardSettings ?? {})
+})
+
+// PUT /api/companies/:id/dashboard-settings
+companiesRouter.put('/companies/:id/dashboard-settings', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.object({
+    today: z.object({
+      salesVoucherTypes:  z.array(z.string()).optional(),
+      cashInflowLedgers:  z.array(z.string()).optional(),
+      cashOutflowLedgers: z.array(z.string()).optional(),
+    }).optional(),
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  await prisma.company.update({
+    where: { id: req.params.id },
+    data:  { dashboardSettings: result.data },
+  })
+  res.json({ ok: true })
+})
+
 // GET /api/companies/:id/godowns
 companiesRouter.get('/companies/:id/godowns', async (req, res) => {
   if (!(await canAccessCompany(req.auth, req.params.id))) {

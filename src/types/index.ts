@@ -95,6 +95,14 @@ export const COMPANY_FEATURES = {
   VENDOR_RECONCILE: 'vendor_reconcile',
 } as const
 
+export interface DashboardSettings {
+  today?: {
+    salesVoucherTypes?:  string[]
+    cashInflowLedgers?:  string[]
+    cashOutflowLedgers?: string[]
+  }
+}
+
 export interface Company {
   id: string
   name: string
@@ -117,6 +125,7 @@ export interface Company {
   parseModel: string
   subscriptionExpiresAt: string | null
   subscriptionRenewedAt: string | null
+  dashboardSettings?: DashboardSettings | null
   createdAt: string
 }
 
