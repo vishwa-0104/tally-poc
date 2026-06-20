@@ -213,14 +213,22 @@ export interface CashBankFlow {
   outflow: number
 }
 
+export interface DaybookOptions {
+  cashInflowLedgers?:  string[]
+  cashOutflowLedgers?: string[]
+}
+
 export async function fetchDaybook(
-  fromDate: string,   // YYYYMMDD e.g. "20260601"
-  toDate: string,     // YYYYMMDD e.g. "20260617"
+  fromDate: string,
+  toDate: string,
   tallyUrl: string,
   tallyCompany?: string,
+  options: DaybookOptions = {},
 ): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow }> {
   const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow }>('FETCH_DAYBOOK', {
     fromDate, toDate, tallyUrl, tallyCompany,
+    cashInflowLedgers:  options.cashInflowLedgers  ?? [],
+    cashOutflowLedgers: options.cashOutflowLedgers ?? [],
   })
   return result
 }

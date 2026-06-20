@@ -458,17 +458,30 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow } = await fetchDaybook(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
+      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow } = await fetchDaybook(
+        toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany,
+        {
+          cashInflowLedgers:  settings.today?.cashInflowLedgers,
+          cashOutflowLedgers: settings.today?.cashOutflowLedgers,
+        },
+      )
 
-      // Debug: totals per voucher type
-      const byType: Record<string, { preGst: number; gst: number; count: number }> = {}
+      // Group all vouchers by type — helps verify which types to use for cash/bank
+      const byType: Record<string, { total: number; taxable: number; count: number; vouchers: { party: string; amount: number; taxable: number; date: string }[] }> = {}
       for (const v of all) {
-        if (!byType[v.type]) byType[v.type] = { preGst: 0, gst: 0, count: 0 }
-        byType[v.type].preGst += v.taxableAmount
-        byType[v.type].gst    += v.amount - v.taxableAmount
-        byType[v.type].count  += 1
+        if (!byType[v.type]) byType[v.type] = { total: 0, taxable: 0, count: 0, vouchers: [] }
+        byType[v.type].total   += v.amount
+        byType[v.type].taxable += v.taxableAmount
+        byType[v.type].count   += 1
+        byType[v.type].vouchers.push({ party: v.party, amount: v.amount, taxable: v.taxableAmount, date: v.date })
       }
-      console.log('[Voucher Totals by Type]', byType)
+      console.group('[All Vouchers grouped by Type]')
+      for (const [type, data] of Object.entries(byType)) {
+        console.group(`${type}  (count: ${data.count}  |  total: ${data.total.toFixed(2)}  |  taxable: ${data.taxable.toFixed(2)})`)
+        console.table(data.vouchers)
+        console.groupEnd()
+      }
+      console.groupEnd()
 
       const sales       = all.filter(v => isSalesVoucher(v, settings))
       const creditNotes = all.filter(v => v.type.toLowerCase() === 'credit note')
@@ -531,7 +544,7 @@ export default function Dashboard() {
         const yd    = fmt(yDate)
         console.log('[PrevDay] Fetching yesterday sales. Date:', yd, 'TallyDate:', toTallyDate(yd))
         try {
-          const { vouchers: yv } = await fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany)
+          const { vouchers: yv } = await fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany, {})
           console.log('[PrevDay] Raw vouchers received:', yv.length, yv)
           const yS = yv.filter(v => isSalesVoucher(v, settings))
           const yC = yv.filter(v => v.type.toLowerCase() === 'credit note')

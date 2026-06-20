@@ -108,9 +108,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true
 
     case 'FETCH_DAYBOOK':
-      handleFetchDaybook(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate)
+      handleFetchDaybook(
+        payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate,
+        payload.cashInflowLedgers  || [],
+        payload.cashOutflowLedgers || [],
+      )
         .then(sendResponse)
-        .catch((err) => sendResponse({ vouchers: [], rawXml: '', error: err.message }))
+        .catch((err) => sendResponse({ vouchers: [], rawXml: '', cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
       return true
 
     case 'FETCH_SLOW_STOCK':
@@ -655,7 +659,7 @@ async function handleFetchAgent(endpoint, params) {
 // SVFROMDATE/SVTODATE tell Tally which period to scope to.
 // JS date filter applied after parsing as a safety net.
 
-async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
+async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cashInflowLedgers = [], cashOutflowLedgers = []) {
   const from = toTallyDisplayDate(fromDate)  // "01-Apr-2026"
   const to   = toTallyDisplayDate(toDate)    // "30-Jun-2026"
 
@@ -682,7 +686,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
   console.log(`[Daybook/TDL] ${from} → ${to} | response length:`, responseText.length)
   console.log('[Daybook/TDL] raw (first 3000):', responseText.slice(0, 3000))
 
-  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText)
+  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, cashInflowLedgers, cashOutflowLedgers)
 
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
@@ -768,11 +772,18 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 }
 
 
-function parseVouchers(xml) {
+function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = []) {
   const vouchers = []
-  // ledgerName(lowercase) → { cashInflow, cashOutflow, bankInflow, bankOutflow }
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
+
+  // Build lookup sets from saved settings (lowercase for case-insensitive match)
+  // If no saved ledgers, fall back to name-contains matching (/cash/i or /bank/i)
+  const inflowSet  = cashInflowLedgers.length  ? new Set(cashInflowLedgers.map(n => n.toLowerCase()))  : null
+  const outflowSet = cashOutflowLedgers.length ? new Set(cashOutflowLedgers.map(n => n.toLowerCase())) : null
+
+  console.log('[parseVouchers] cashInflowLedgers:', cashInflowLedgers, '| cashOutflowLedgers:', cashOutflowLedgers)
+  console.log('[parseVouchers] inflowSet:', inflowSet ? [...inflowSet] : 'fallback /cash/i', '| outflowSet:', outflowSet ? [...outflowSet] : 'fallback /cash/i')
 
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
@@ -840,13 +851,29 @@ function parseVouchers(xml) {
         gstTotal += Math.abs(leAmt)
       }
 
-      if (!isParty && (CASH_RE.test(ledgerName) || BANK_RE.test(ledgerName))) {
-        const isCash = CASH_RE.test(ledgerName)
-        const flow   = isCash ? cashFlow : bankFlow
-        // Log every cash/bank entry so we can verify sign convention
-        console.log(`[CashBank] voucher="${type}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}" parsed=${leAmt}`)
-        if (leAmt < 0) flow.inflow  += Math.abs(leAmt)
-        if (leAmt > 0) flow.outflow += leAmt
+      const ledgerLower = ledgerName.toLowerCase()
+
+      // Determine if this ledger counts as cash inflow/outflow or bank inflow/outflow
+      const isInflowLedger  = inflowSet  ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
+      const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(ledgerName)
+      const isBankLedger    = BANK_RE.test(ledgerName)
+
+      if (!isParty && (isInflowLedger || isOutflowLedger || isBankLedger)) {
+        console.log(`[CashBank] voucher="${type}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}" parsed=${leAmt} | matchesInflow=${isInflowLedger} matchesOutflow=${isOutflowLedger} matchesBank=${isBankLedger}`)
+      }
+
+      if (!isParty) {
+        if (isInflowLedger) {
+          if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
+          else           cashFlow.outflow += leAmt
+        } else if (isOutflowLedger) {
+          if (leAmt > 0) cashFlow.outflow += leAmt
+          else           cashFlow.inflow  += Math.abs(leAmt)
+        }
+        if (isBankLedger && !isInflowLedger && !isOutflowLedger) {
+          if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
+          else           bankFlow.outflow += leAmt
+        }
       }
     }
 
