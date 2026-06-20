@@ -686,10 +686,11 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cash
   console.log(`[Daybook/TDL] ${from} → ${to} | response length:`, responseText.length)
   console.log('[Daybook/TDL] raw (first 3000):', responseText.slice(0, 3000))
 
-  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, cashInflowLedgers, cashOutflowLedgers)
-
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
+
+  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, cashInflowLedgers, cashOutflowLedgers, fromISO, toISO)
+
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
   console.log(`[Daybook/TDL] total from Tally: ${allVouchers.length} | in range [${fromISO}..${toISO}]: ${vouchers.length}`)
@@ -772,7 +773,7 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 }
 
 
-function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = []) {
+function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fromISO = '', toISO = '') {
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
@@ -858,17 +859,21 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = []) {
       const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(ledgerName)
       const isBankLedger    = BANK_RE.test(ledgerName)
 
+      // Only accumulate cash/bank flow for vouchers within the requested date range.
+      // TBSVouchers may return entries outside the range — the JS date filter handles
+      // the vouchers array, but cashFlow/bankFlow must also be date-gated here.
+      const inRange = (!fromISO || date >= fromISO) && (!toISO || date <= toISO)
+
       // NOTE: do NOT skip isParty entries for cash/bank ledgers.
       // In Cash Sale and Contra vouchers, Cash/Bank is the party ledger.
-      // Skipping it would miss all cash received directly on sales vouchers.
-      if (isInflowLedger || isOutflowLedger) {
-        let action = leAmt < 0 ? '→ CASH INFLOW  +' + Math.abs(leAmt) : '→ CASH OUTFLOW +' + leAmt
-        console.log(`[CashBank] ${action} | voucher="${type}" party="${party}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}"`)
+      if (inRange && (isInflowLedger || isOutflowLedger)) {
+        const action = leAmt < 0 ? '→ CASH INFLOW  +' + Math.abs(leAmt) : '→ CASH OUTFLOW +' + leAmt
+        console.log(`[CashBank] ${action} | date=${date} voucher="${type}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}"`)
         if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
         else           cashFlow.outflow += leAmt
-      } else if (isBankLedger) {
-        let action = leAmt < 0 ? '→ BANK INFLOW  +' + Math.abs(leAmt) : '→ BANK OUTFLOW +' + leAmt
-        console.log(`[CashBank] ${action} | voucher="${type}" party="${party}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}"`)
+      } else if (inRange && isBankLedger) {
+        const action = leAmt < 0 ? '→ BANK INFLOW  +' + Math.abs(leAmt) : '→ BANK OUTFLOW +' + leAmt
+        console.log(`[CashBank] ${action} | date=${date} voucher="${type}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}"`)
         if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
         else           bankFlow.outflow += leAmt
       }
