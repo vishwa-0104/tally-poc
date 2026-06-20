@@ -858,27 +858,19 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = []) {
       const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(ledgerName)
       const isBankLedger    = BANK_RE.test(ledgerName)
 
-      if (!isParty && (isInflowLedger || isOutflowLedger || isBankLedger)) {
-        let action = 'no match'
-        if (isInflowLedger || isOutflowLedger) {
-          if (leAmt < 0) action = '→ CASH INFLOW  +' + Math.abs(leAmt)
-          else           action = '→ CASH OUTFLOW +' + leAmt
-        } else if (isBankLedger) {
-          if (leAmt < 0) action = '→ BANK INFLOW  +' + Math.abs(leAmt)
-          else           action = '→ BANK OUTFLOW +' + leAmt
-        }
-        console.log(`[CashBank] ${action} | voucher="${type}" party="${party}" ledger="${ledgerName}" rawAmt="${leAmtRaw}"`)
-      }
-
-      if (!isParty) {
-        if (isInflowLedger || isOutflowLedger) {
-          if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
-          else           cashFlow.outflow += leAmt
-        }
-        if (isBankLedger && !isInflowLedger && !isOutflowLedger) {
-          if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
-          else           bankFlow.outflow += leAmt
-        }
+      // NOTE: do NOT skip isParty entries for cash/bank ledgers.
+      // In Cash Sale and Contra vouchers, Cash/Bank is the party ledger.
+      // Skipping it would miss all cash received directly on sales vouchers.
+      if (isInflowLedger || isOutflowLedger) {
+        let action = leAmt < 0 ? '→ CASH INFLOW  +' + Math.abs(leAmt) : '→ CASH OUTFLOW +' + leAmt
+        console.log(`[CashBank] ${action} | voucher="${type}" party="${party}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}"`)
+        if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
+        else           cashFlow.outflow += leAmt
+      } else if (isBankLedger) {
+        let action = leAmt < 0 ? '→ BANK INFLOW  +' + Math.abs(leAmt) : '→ BANK OUTFLOW +' + leAmt
+        console.log(`[CashBank] ${action} | voucher="${type}" party="${party}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}"`)
+        if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
+        else           bankFlow.outflow += leAmt
       }
     }
 
