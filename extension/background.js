@@ -682,13 +682,14 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
   console.log(`[Daybook/TDL] ${from} → ${to} | response length:`, responseText.length)
   console.log('[Daybook/TDL] raw (first 3000):', responseText.slice(0, 3000))
 
-  const allVouchers = parseVouchers(responseText)
+  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText)
 
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
   console.log(`[Daybook/TDL] total from Tally: ${allVouchers.length} | in range [${fromISO}..${toISO}]: ${vouchers.length}`)
+  console.log('[Daybook/TDL] cashFlow:', cashFlow, '| bankFlow:', bankFlow)
 
   // Group by date for easy verification
   const byDate = {}
@@ -698,7 +699,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate) {
   }
   console.log('[Daybook/TDL] grouped by date:', JSON.stringify(byDate, null, 2))
 
-  return { vouchers, rawXml: responseText }
+  return { vouchers, cashFlow, bankFlow, rawXml: responseText }
 }
 
 // ── Slow / inactive stock ────────────────────────────────────────────────────
@@ -769,6 +770,10 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 
 function parseVouchers(xml) {
   const vouchers = []
+  // ledgerName(lowercase) → { cashInflow, cashOutflow, bankInflow, bankOutflow }
+  const cashFlow = { inflow: 0, outflow: 0 }
+  const bankFlow = { inflow: 0, outflow: 0 }
+
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
 
@@ -820,20 +825,44 @@ function parseVouchers(xml) {
     // Taxable amount: total (party) minus GST ledger entries (CGST/SGST/IGST/Cess)
     const GST_RE = /cgst|sgst|igst|cess/i
     let gstTotal = 0
+
+    // Cash/Bank flow: scan all ledger entries for cash/bank ledger names.
+    // In Tally XML, amounts are signed: negative = Dr (money flowing IN to that ledger),
+    // positive = Cr (money flowing OUT from that ledger).
+    // Exception: the party ledger entry sign is the opposite of the above.
+    const CASH_RE = /cash/i
+    const BANK_RE = /bank/i
+
     for (const le of block.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi)) {
-      const leBlock  = le[0]
-      if (/ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)) continue
+      const leBlock    = le[0]
+      const isParty    = /ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)
       const ledgerName = decode(leBlock.match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
-      if (!GST_RE.test(ledgerName)) continue
-      const leAmtRaw = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
-      gstTotal += Math.abs(parseFloat(leAmtRaw.replace(/,/g, '')) || 0)
+      const leAmtRaw   = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+      const leAmt      = parseFloat(leAmtRaw.replace(/,/g, '')) || 0
+
+      if (!isParty && GST_RE.test(ledgerName)) {
+        gstTotal += Math.abs(leAmt)
+      }
+
+      // Cash/Bank inflow: ledger is Dr in this voucher → leAmt is negative in Tally XML
+      // Cash/Bank outflow: ledger is Cr in this voucher → leAmt is positive in Tally XML
+      if (!isParty && CASH_RE.test(ledgerName)) {
+        if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
+        if (leAmt > 0) cashFlow.outflow += leAmt
+      }
+      if (!isParty && BANK_RE.test(ledgerName)) {
+        if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
+        if (leAmt > 0) bankFlow.outflow += leAmt
+      }
     }
+
     const taxableAmount = Math.max(0, amount - gstTotal)
 
     vouchers.push({ date, type, party, amount, taxableAmount, voucherNo })
   }
 
-  return vouchers
+  console.log('[parseVouchers] cashFlow:', cashFlow, '| bankFlow:', bankFlow)
+  return { vouchers, cashFlow, bankFlow }
 }
 
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────

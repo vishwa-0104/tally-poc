@@ -208,13 +208,18 @@ export async function syncBankToTally(
   return result
 }
 
+export interface CashBankFlow {
+  inflow:  number
+  outflow: number
+}
+
 export async function fetchDaybook(
   fromDate: string,   // YYYYMMDD e.g. "20260601"
   toDate: string,     // YYYYMMDD e.g. "20260617"
   tallyUrl: string,
   tallyCompany?: string,
-): Promise<{ vouchers: TallyVoucher[]; rawXml: string }> {
-  const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string }>('FETCH_DAYBOOK', {
+): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow }> {
+  const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow }>('FETCH_DAYBOOK', {
     fromDate, toDate, tallyUrl, tallyCompany,
   })
   return result

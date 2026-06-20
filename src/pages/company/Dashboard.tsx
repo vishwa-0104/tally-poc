@@ -10,7 +10,7 @@ import {
   ArrowUpRight, ArrowDownRight, RefreshCw, Settings, Wallet, Building2,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchTopDebtors, fetchSlowMovingStock, fetchLedgerBalances, type SlowStockItem, type TallyVoucher, type RawLedger } from '@/services/tallyService'
+import { fetchDaybook, fetchTopDebtors, fetchSlowMovingStock, fetchLedgerBalances, type SlowStockItem, type TallyVoucher } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -126,78 +126,6 @@ function isSalesVoucher(v: TallyVoucher, settings: DashboardSettings): boolean {
   return v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit')
 }
 
-// Parse rawXml from TBSVouchers (which now includes AllLedgerEntries.LedgerName)
-// to compute cash inflow and outflow for the period.
-function computeCashFlow(
-  rawXml: string,
-  rawLedgers: RawLedger[],
-  settings: DashboardSettings,
-): { inflow: number; outflow: number; inHand: number } {
-  // Determine which ledger names are "cash" ledgers
-  const savedInflow  = settings.today?.cashInflowLedgers
-  const savedOutflow = settings.today?.cashOutflowLedgers
-  const cashByGroup  = new Set(
-    rawLedgers
-      .filter(l => l.group.toLowerCase().includes('cash'))
-      .map(l => l.name.toLowerCase()),
-  )
-  const inflowSet  = savedInflow?.length
-    ? new Set(savedInflow.map(n => n.toLowerCase()))
-    : cashByGroup
-  const outflowSet = savedOutflow?.length
-    ? new Set(savedOutflow.map(n => n.toLowerCase()))
-    : cashByGroup
-
-  // Parse <ALLLEDGERENTRIES.LIST> blocks from rawXml
-  let inflow = 0, outflow = 0
-  const entryRe = /<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi
-  for (const [, block] of [...rawXml.matchAll(entryRe)]) {
-    const nameM   = block.match(/<LEDGERNAME[^>]*>([\s\S]*?)<\/LEDGERNAME>/i)
-    const amountM = block.match(/<AMOUNT[^>]*>([\s\S]*?)<\/AMOUNT>/i)
-    if (!nameM || !amountM) continue
-    const ledger = nameM[1].trim().toLowerCase()
-    const amount = parseFloat(amountM[1].replace(/,/g, '')) || 0
-    if (amount > 0 && inflowSet.has(ledger))  inflow  += amount
-    if (amount < 0 && outflowSet.has(ledger)) outflow += Math.abs(amount)
-  }
-
-  // Cash In Hand = sum of closing balances of cash (or saved inflow) ledgers
-  const inHandSet = savedInflow?.length ? inflowSet : cashByGroup
-  const inHand = rawLedgers
-    .filter(l => inHandSet.has(l.name.toLowerCase()))
-    .reduce((s, l) => s + l.balance, 0)
-
-  return { inflow, outflow, inHand }
-}
-
-function computeBankFlow(
-  rawXml: string,
-  rawLedgers: RawLedger[],
-): { inflow: number; outflow: number; balance: number } {
-  const bankByGroup = new Set(
-    rawLedgers
-      .filter(l => l.group.toLowerCase().includes('bank'))
-      .map(l => l.name.toLowerCase()),
-  )
-
-  let inflow = 0, outflow = 0
-  const entryRe = /<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi
-  for (const [, block] of [...rawXml.matchAll(entryRe)]) {
-    const nameM   = block.match(/<LEDGERNAME[^>]*>([\s\S]*?)<\/LEDGERNAME>/i)
-    const amountM = block.match(/<AMOUNT[^>]*>([\s\S]*?)<\/AMOUNT>/i)
-    if (!nameM || !amountM) continue
-    const ledger = nameM[1].trim().toLowerCase()
-    const amount = parseFloat(amountM[1].replace(/,/g, '')) || 0
-    if (amount > 0 && bankByGroup.has(ledger)) inflow  += amount
-    if (amount < 0 && bankByGroup.has(ledger)) outflow += Math.abs(amount)
-  }
-
-  const balance = rawLedgers
-    .filter(l => bankByGroup.has(l.name.toLowerCase()))
-    .reduce((s, l) => s + l.balance, 0)
-
-  return { inflow, outflow, balance }
-}
 
 // ── Target helpers ────────────────────────────────────────────────────────────
 
@@ -530,7 +458,7 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const { vouchers: all, rawXml } = await fetchDaybook(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
+      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow } = await fetchDaybook(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
 
       // Debug: totals per voucher type
       const byType: Record<string, { preGst: number; gst: number; count: number }> = {}
@@ -564,23 +492,30 @@ export default function Dashboard() {
         setTopParties(debtors.map(r => ({ party: r.name, amount: r.balance })))
       } catch { /* agent may not be running */ }
 
-      // 3. Ledger balances — Cash In Hand + Bank Balance
+      // 3. Inflow/outflow from daybook (already parsed in background.js — no extra Tally call)
+      setCashInflow(daybookCashFlow.inflow)
+      setCashOutflow(daybookCashFlow.outflow)
+      setBankInflow(daybookBankFlow.inflow)
+      setBankOutflow(daybookBankFlow.outflow)
+      console.log('[CashFlow] inflow:', daybookCashFlow.inflow, '| outflow:', daybookCashFlow.outflow)
+      console.log('[BankFlow] inflow:', daybookBankFlow.inflow, '| outflow:', daybookBankFlow.outflow)
+
+      // 4. Ledger balances — Cash In Hand + Bank Balance only (fast, filtered collection)
       try {
         const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(to))
-        const cf = computeCashFlow(rawXml, rawLedgers, settings)
-        console.log('[CashFlow] inflow:', cf.inflow, '| outflow:', cf.outflow, '| inHand:', cf.inHand)
-        setCashInflow(cf.inflow)
-        setCashOutflow(cf.outflow)
-        setCashInHand(cf.inHand)
-        const bf = computeBankFlow(rawXml, rawLedgers)
-        console.log('[BankFlow] inflow:', bf.inflow, '| outflow:', bf.outflow, '| balance:', bf.balance)
-        setBankInflow(bf.inflow)
-        setBankOutflow(bf.outflow)
-        setBankBalance(bf.balance)
+        const cashInHand = rawLedgers
+          .filter(l => l.group.toLowerCase().includes('cash'))
+          .reduce((s, l) => s + l.balance, 0)
+        const bankBal = rawLedgers
+          .filter(l => l.group.toLowerCase().includes('bank'))
+          .reduce((s, l) => s + l.balance, 0)
+        console.log('[Balances] cashInHand:', cashInHand, '| bankBalance:', bankBal)
+        setCashInHand(cashInHand)
+        setBankBalance(bankBal)
       } catch (err) {
-        console.error('[CashFlow] fetchLedgerBalances failed:', err)
-        setCashInflow(null); setCashOutflow(null); setCashInHand(null)
-        setBankInflow(null); setBankOutflow(null); setBankBalance(null)
+        console.error('[Balances] fetchLedgerBalances failed:', err)
+        setCashInHand(null)
+        setBankBalance(null)
       }
 
       setFetched(true)
