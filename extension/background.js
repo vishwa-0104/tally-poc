@@ -859,16 +859,21 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = []) {
       const isBankLedger    = BANK_RE.test(ledgerName)
 
       if (!isParty && (isInflowLedger || isOutflowLedger || isBankLedger)) {
-        console.log(`[CashBank] voucher="${type}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}" parsed=${leAmt} | matchesInflow=${isInflowLedger} matchesOutflow=${isOutflowLedger} matchesBank=${isBankLedger}`)
+        let action = 'no match'
+        if (isInflowLedger || isOutflowLedger) {
+          if (leAmt < 0) action = '→ CASH INFLOW  +' + Math.abs(leAmt)
+          else           action = '→ CASH OUTFLOW +' + leAmt
+        } else if (isBankLedger) {
+          if (leAmt < 0) action = '→ BANK INFLOW  +' + Math.abs(leAmt)
+          else           action = '→ BANK OUTFLOW +' + leAmt
+        }
+        console.log(`[CashBank] ${action} | voucher="${type}" party="${party}" ledger="${ledgerName}" rawAmt="${leAmtRaw}"`)
       }
 
       if (!isParty) {
-        if (isInflowLedger) {
+        if (isInflowLedger || isOutflowLedger) {
           if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
           else           cashFlow.outflow += leAmt
-        } else if (isOutflowLedger) {
-          if (leAmt > 0) cashFlow.outflow += leAmt
-          else           cashFlow.inflow  += Math.abs(leAmt)
         }
         if (isBankLedger && !isInflowLedger && !isOutflowLedger) {
           if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
