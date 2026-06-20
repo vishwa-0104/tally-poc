@@ -518,7 +518,8 @@ export default function Dashboard() {
   const [error,         setError]         = useState<string | null>(null)
   const [activePeriod,  setActivePeriod]  = useState<{ from: string; to: string } | null>(null)
 
-  const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string) => {
+  const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string, settingsOverride?: DashboardSettings) => {
+    const settings = settingsOverride ?? dashboardSettings
     if (!connected) {
       toast.error('Extension not connected. Make sure Tally is running.')
       return
@@ -541,7 +542,7 @@ export default function Dashboard() {
       }
       console.log('[Voucher Totals by Type]', byType)
 
-      const sales       = all.filter(v => isSalesVoucher(v, dashboardSettings))
+      const sales       = all.filter(v => isSalesVoucher(v, settings))
       const creditNotes = all.filter(v => v.type.toLowerCase() === 'credit note')
 
       // Use taxableAmount (GST excluded); credit notes reduce net sales
@@ -570,7 +571,7 @@ export default function Dashboard() {
       // Fetch ledger balances for Cash/Bank — sequential, after slow stock
       try {
         const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(to))
-        const cf = computeCashFlow(rawXml, rawLedgers, dashboardSettings)
+        const cf = computeCashFlow(rawXml, rawLedgers, settings)
         console.log('[CashFlow] inflow:', cf.inflow, '| outflow:', cf.outflow, '| inHand:', cf.inHand)
         setCashInflow(cf.inflow)
         setCashOutflow(cf.outflow)
@@ -597,7 +598,7 @@ export default function Dashboard() {
         try {
           const { vouchers: yv } = await fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany)
           console.log('[PrevDay] Raw vouchers received:', yv.length, yv)
-          const yS = yv.filter(v => isSalesVoucher(v, dashboardSettings))
+          const yS = yv.filter(v => isSalesVoucher(v, settings))
           const yC = yv.filter(v => v.type.toLowerCase() === 'credit note')
           const yTotal = yS.reduce((s, v) => s + v.taxableAmount, 0) - yC.reduce((s, v) => s + v.taxableAmount, 0)
           console.log('[PrevDay] Sales vouchers:', yS.length, '| Credit notes:', yC.length, '| Total:', yTotal)
@@ -618,7 +619,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }, [connected, tallyUrl, tallyCompany])
+  }, [connected, tallyUrl, tallyCompany, dashboardSettings])
 
   const reloadMeta = () => {
     if (!companyId) return
@@ -629,15 +630,17 @@ export default function Dashboard() {
         setMonthlyTargets(map)
       })
       .catch(() => { /* optional */ })
-    fetchDashboardSettings(companyId)
-      .then(setDashboardSettings)
-      .catch(() => { /* optional */ })
+    return fetchDashboardSettings(companyId)
+      .then(s => { setDashboardSettings(s); return s })
+      .catch(() => ({} as DashboardSettings))
   }
 
   // Auto-fetch today + load targets/settings on mount
+  // Settings must resolve before fetchData so saved voucher types are applied
   useEffect(() => {
-    fetchData('today', todayStr(), todayStr())
     reloadMeta()
+      ?.then(s => fetchData('today', todayStr(), todayStr(), s ?? {}))
+      ?? fetchData('today', todayStr(), todayStr())
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabChange = (tab: Tab) => {
@@ -699,7 +702,10 @@ export default function Dashboard() {
 
       <SalesTargetModal
         open={showTargetModal}
-        onClose={() => { setShowTargetModal(false); reloadMeta() }}
+        onClose={() => {
+          setShowTargetModal(false)
+          reloadMeta()?.then(s => fetchData(filterPreset, customFrom, customTo, s ?? {}))
+        }}
         companyId={companyId}
         tallyUrl={tallyUrl}
         tallyCompany={tallyCompany}
