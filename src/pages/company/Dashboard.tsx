@@ -493,12 +493,16 @@ export default function Dashboard() {
       } catch { /* agent may not be running */ }
 
       // 3. Inflow/outflow from daybook (already parsed in background.js — no extra Tally call)
+      console.log('[Settings] saved salesVoucherTypes:', settings.today?.salesVoucherTypes ?? '(none — using default)')
+      console.log('[Settings] saved cashInflowLedgers:', settings.today?.cashInflowLedgers ?? '(none — using default: ledgers matching /cash/i)')
+      console.log('[Settings] saved cashOutflowLedgers:', settings.today?.cashOutflowLedgers ?? '(none — using default: ledgers matching /cash/i)')
+      console.log('[Settings] NOTE: background.js currently uses /cash/i and /bank/i name match — saved ledger settings not yet wired into background.js')
       setCashInflow(daybookCashFlow.inflow)
       setCashOutflow(daybookCashFlow.outflow)
       setBankInflow(daybookBankFlow.inflow)
       setBankOutflow(daybookBankFlow.outflow)
-      console.log('[CashFlow] inflow:', daybookCashFlow.inflow, '| outflow:', daybookCashFlow.outflow)
-      console.log('[BankFlow] inflow:', daybookBankFlow.inflow, '| outflow:', daybookBankFlow.outflow)
+      console.log('[CashFlow from Tally] inflow:', daybookCashFlow.inflow, '| outflow:', daybookCashFlow.outflow)
+      console.log('[BankFlow from Tally] inflow:', daybookBankFlow.inflow, '| outflow:', daybookBankFlow.outflow)
 
       // 4. Ledger balances — Cash In Hand + Bank Balance only (fast, filtered collection)
       try {

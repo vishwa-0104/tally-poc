@@ -826,10 +826,6 @@ function parseVouchers(xml) {
     const GST_RE = /cgst|sgst|igst|cess/i
     let gstTotal = 0
 
-    // Cash/Bank flow: scan all ledger entries for cash/bank ledger names.
-    // In Tally XML, amounts are signed: negative = Dr (money flowing IN to that ledger),
-    // positive = Cr (money flowing OUT from that ledger).
-    // Exception: the party ledger entry sign is the opposite of the above.
     const CASH_RE = /cash/i
     const BANK_RE = /bank/i
 
@@ -844,15 +840,13 @@ function parseVouchers(xml) {
         gstTotal += Math.abs(leAmt)
       }
 
-      // Cash/Bank inflow: ledger is Dr in this voucher → leAmt is negative in Tally XML
-      // Cash/Bank outflow: ledger is Cr in this voucher → leAmt is positive in Tally XML
-      if (!isParty && CASH_RE.test(ledgerName)) {
-        if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
-        if (leAmt > 0) cashFlow.outflow += leAmt
-      }
-      if (!isParty && BANK_RE.test(ledgerName)) {
-        if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
-        if (leAmt > 0) bankFlow.outflow += leAmt
+      if (!isParty && (CASH_RE.test(ledgerName) || BANK_RE.test(ledgerName))) {
+        const isCash = CASH_RE.test(ledgerName)
+        const flow   = isCash ? cashFlow : bankFlow
+        // Log every cash/bank entry so we can verify sign convention
+        console.log(`[CashBank] voucher="${type}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}" parsed=${leAmt}`)
+        if (leAmt < 0) flow.inflow  += Math.abs(leAmt)
+        if (leAmt > 0) flow.outflow += leAmt
       }
     }
 
@@ -861,7 +855,7 @@ function parseVouchers(xml) {
     vouchers.push({ date, type, party, amount, taxableAmount, voucherNo })
   }
 
-  console.log('[parseVouchers] cashFlow:', cashFlow, '| bankFlow:', bankFlow)
+  console.log('[parseVouchers] FINAL cashFlow:', cashFlow, '| bankFlow:', bankFlow)
   return { vouchers, cashFlow, bankFlow }
 }
 
