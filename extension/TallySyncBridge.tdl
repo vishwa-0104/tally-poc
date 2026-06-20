@@ -26,10 +26,16 @@
     Fetch       : LedgerEntries.IsPartyLedger, LedgerEntries.Amount
     Fetch       : AllLedgerEntries.LedgerName, AllLedgerEntries.IsPartyLedger, AllLedgerEntries.Amount
 
-; All ledger balances as of a given date — used for Cash In Hand, Receivables, Payables tiles
-[Collection: TBSLedgerBalances]
+; Cash and Bank ledger balances only — filtered to Cash-in-Hand and Bank Accounts groups.
+; Fetching ClosingBalance for ALL ledgers is extremely slow (Tally recomputes every
+; transaction from FY start for each ledger). Filtering to 5-10 ledgers makes it instant.
+[Collection: TBSCashBankBalances]
     Type        : Ledger
+    Filter      : TBSIsCashOrBank
     Fetch       : Name, Parent, ClosingBalance
+
+[System: Formula]
+    TBSIsCashOrBank : $$IsEqual:$Parent:"Cash-in-Hand" OR $$IsEqual:$Parent:"Bank Accounts"
 
 ; All stock items with current closing quantity and value
 [Collection: TBSStockBalance]

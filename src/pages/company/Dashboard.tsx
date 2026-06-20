@@ -558,17 +558,13 @@ export default function Dashboard() {
       setActivePeriod({ from, to })
       console.log('[Today] Total sales:', todaySalesTotal, '| date:', from)
 
+      // 2. Top debtors — via TallySyncAgent (not Tally HTTP), fast
       try {
         const debtors = await fetchTopDebtors(10)
         setTopParties(debtors.map(r => ({ party: r.name, amount: r.balance })))
       } catch { /* agent may not be running */ }
 
-      try {
-        const { items } = await fetchSlowMovingStock(tallyUrl, tallyCompany)
-        setSlowStock(items)
-      } catch { /* non-critical */ }
-
-      // Fetch ledger balances for Cash/Bank — sequential, after slow stock
+      // 3. Ledger balances — Cash In Hand + Bank Balance
       try {
         const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(to))
         const cf = computeCashFlow(rawXml, rawLedgers, settings)
@@ -589,7 +585,7 @@ export default function Dashboard() {
 
       setFetched(true)
 
-      // Yesterday fetch is LAST — after slow stock — so Tally isn't hit concurrently
+      // 4. Yesterday fetch — prev day sales comparison
       if (preset === 'today') {
         setPrevDaySales(null)
         const yDate = new Date(); yDate.setDate(yDate.getDate() - 1)
@@ -612,6 +608,13 @@ export default function Dashboard() {
       } else {
         setPrevDaySales(null)
       }
+
+      // 5. Slow moving stock — LAST because it's the heaviest Tally query.
+      // If it hangs, nothing else is blocked.
+      try {
+        const { items } = await fetchSlowMovingStock(tallyUrl, tallyCompany)
+        setSlowStock(items)
+      } catch { /* non-critical */ }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch data'
       setError(msg)

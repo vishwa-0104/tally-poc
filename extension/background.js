@@ -1251,9 +1251,10 @@ async function postToTally(xml, tallyUrl) {
   return response.text()
 }
 
-// ── Ledger balances (closing balance as of a date) ───────────────────────────
-// Uses the preloaded TBSLedgerBalances collection from TallySyncBridge.tdl.
-// No inline TDL — avoids the per-request compile overhead that causes Tally to hang.
+// ── Cash + Bank ledger balances (closing balance as of a date) ───────────────
+// Uses TBSCashBankBalances — filtered to Cash-in-Hand and Bank Accounts groups only.
+// Fetching ClosingBalance for ALL ledgers is O(ledgers × transactions) and causes
+// Tally to hang. Filtering to ~5-10 ledgers makes this near-instant.
 
 async function handleFetchLedgerBalances(tallyUrl, tallyCompany, asOfDate) {
   const today = new Date()
@@ -1267,7 +1268,7 @@ async function handleFetchLedgerBalances(tallyUrl, tallyCompany, asOfDate) {
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
     <TYPE>Collection</TYPE>
-    <ID>TBSLedgerBalances</ID>
+    <ID>TBSCashBankBalances</ID>
   </HEADER>
   <BODY>
     <DESC>
