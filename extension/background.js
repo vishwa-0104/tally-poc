@@ -762,6 +762,14 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 }
 
 
+// Returns all ALLLEDGERENTRIES matches from a block, trying .LIST format first,
+// then bare tag format — handles both Tally Prime and ERP 9 XML export styles.
+function matchAllLedgerEntries(block) {
+  const withList = [...block.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi)]
+  if (withList.length > 0) return withList
+  return [...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi)]
+}
+
 function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fromISO = '', toISO = '') {
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
@@ -778,6 +786,14 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
 
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
+
+  // ── Diagnostic: find what ALLLEDGERENTRIES tag format Tally is using ──
+  const aleWithList    = (xml.match(/<ALLLEDGERENTRIES\.LIST/gi)  || []).length
+  const aleWithoutList = (xml.match(/<ALLLEDGERENTRIES[^.L]/gi)   || []).length
+  console.log(`[parseVouchers] ALLLEDGERENTRIES.LIST in full XML: ${aleWithList} | ALLLEDGERENTRIES (no .LIST): ${aleWithoutList} | VOUCHER blocks: ${blocks.length}`)
+  if (blocks.length > 0) {
+    console.log('[parseVouchers] First VOUCHER block (raw 800 chars):\n', blocks[0][0].slice(0, 800))
+  }
 
   for (const match of blocks) {
     const block = match[0]
@@ -804,9 +820,9 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
       if (leAmtRaw) { amount = Math.abs(parseFloat(leAmtRaw.replace(/,/g, '')) || 0); break }
     }
 
-    // Fallback: ALLLEDGERENTRIES.LIST where ISPARTYLEDGER=Yes (Payment/Journal vouchers)
+    // Fallback: ALLLEDGERENTRIES where ISPARTYLEDGER=Yes (Payment/Journal vouchers)
     if (amount === 0) {
-      for (const le of block.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi)) {
+      for (const le of matchAllLedgerEntries(block)) {
         const leBlock = le[0]
         if (!/ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)) continue
         const leAmtRaw = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
@@ -822,16 +838,17 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
       }
     }
 
-    if (amount === 0) continue
-
     // Taxable amount: total (party) minus GST ledger entries (CGST/SGST/IGST/Cess)
+    // Cash/bank flow is computed here for ALL vouchers — BEFORE the amount===0 guard —
+    // because Contra/Journal/transfer entries often have no parseable party ledger amount
+    // but still move real money through bank/cash ledgers.
     const GST_RE = /cgst|sgst|igst|cess/i
     let gstTotal = 0
 
     const CASH_RE = /cash/i
     const BANK_RE = /bank/i
 
-    for (const le of block.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi)) {
+    for (const le of matchAllLedgerEntries(block)) {
       const leBlock    = le[0]
       const isParty    = /ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)
       const ledgerName = decode(leBlock.match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
@@ -876,6 +893,13 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
       }
 
       xlsRows.push(`${date}\t${voucherNo}\t${type}\t${party}\t${ledgerName}\t${leAmtRaw}\t${leAmt.toFixed(2)}\t${classification}\t${isParty ? 'Yes' : 'No'}\t${inRange ? 'Yes' : 'No'}`)
+    }
+
+    // Skip pushing to vouchers array if no party amount found — these entries still
+    // contributed to cashFlow/bankFlow above so they are not lost.
+    if (amount === 0) {
+      console.log(`[parseVouchers] SKIP voucher from sales array (no party amount): date=${date} type="${type}" voucherNo="${voucherNo}"`)
+      continue
     }
 
     const taxableAmount = Math.max(0, amount - gstTotal)
