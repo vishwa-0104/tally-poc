@@ -66,7 +66,7 @@ async function main() {
       id: 'c2',
       name: 'Sharma Wholesale',
       gstin: '07AABCS1429B1Z2',
-      port: 9001,
+      port: 9000,
     },
   })
 

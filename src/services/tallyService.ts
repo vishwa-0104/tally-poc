@@ -157,35 +157,6 @@ export async function fetchSalesPartyData(
   return result.parties
 }
 
-export interface AgentDebtorRow {
-  name:    string
-  balance: number
-}
-
-export async function fetchTopDebtors(limit = 10): Promise<AgentDebtorRow[]> {
-  const result = await sendToExtension<{ ok: boolean; data: AgentDebtorRow[] }>('FETCH_AGENT', {
-    endpoint: 'top-debtors',
-    params: { limit: String(limit) },
-  })
-  return result.data ?? []
-}
-
-export interface AgentHealth {
-  ok:             boolean
-  version?:       string
-  tallyConnected?: boolean
-  error?:         string
-}
-
-export async function checkAgentHealth(): Promise<AgentHealth> {
-  try {
-    const result = await sendToExtension<AgentHealth>('FETCH_AGENT', { endpoint: 'health', params: {} })
-    return result
-  } catch {
-    return { ok: false }
-  }
-}
-
 export interface BankSyncRow {
   date: string
   description: string
@@ -258,6 +229,16 @@ export async function fetchLedgerBalances(
   asOfDate?: string,   // YYYYMMDD — defaults to today in the extension handler
 ): Promise<{ rawLedgers: RawLedger[] }> {
   return sendToExtension<{ rawLedgers: RawLedger[] }>('FETCH_LEDGER_BALANCES', {
+    tallyUrl, tallyCompany, asOfDate,
+  })
+}
+
+export async function fetchGroupBalances(
+  tallyUrl: string,
+  tallyCompany?: string,
+  asOfDate?: string,   // YYYYMMDD — ignored by Tally, always returns current date balance
+): Promise<{ receivables: number; payables: number }> {
+  return sendToExtension<{ receivables: number; payables: number }>('FETCH_GROUP_BALANCES', {
     tallyUrl, tallyCompany, asOfDate,
   })
 }

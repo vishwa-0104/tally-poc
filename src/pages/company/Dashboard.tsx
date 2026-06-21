@@ -1,16 +1,17 @@
 import { useState, useCallback, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Cell,
 } from 'recharts'
 import {
-  TrendingUp, TrendingDown, AlertCircle, PackageX,
-  BarChart2, Lightbulb, AlertTriangle, CheckCircle,
+  TrendingUp, TrendingDown, AlertCircle,
+  Lightbulb, AlertTriangle, CheckCircle,
   ArrowUpRight, ArrowDownRight, RefreshCw, Settings, Wallet, Building2,
+  Users, Store,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchTopDebtors, fetchSlowMovingStock, fetchLedgerBalances, type SlowStockItem, type TallyVoucher } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, type SlowStockItem, type TallyVoucher } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -22,8 +23,6 @@ import { SalesTargetModal } from '@/components/company/SalesTargetModal'
 
 type Tab           = 'performance' | 'analysis' | 'cfo'
 type FilterPreset  = 'today' | 'quarter' | 'year' | 'custom'
-type Granularity   = 'daily' | 'weekly' | 'monthly'
-interface ChartPoint { label: string; amount: number }
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -50,72 +49,6 @@ function getFilterDates(preset: FilterPreset, cfrom: string, cto: string) {
     return { from: fmt(fyStart), to: fmt(today) }
   }
   return { from: cfrom, to: cto }
-}
-
-function autoGranularity(preset: FilterPreset): Granularity {
-  if (preset === 'today')   return 'daily'
-  if (preset === 'quarter') return 'weekly'
-  return 'monthly'
-}
-
-function getWeekStart(d: Date): string {
-  const day = d.getDay() || 7
-  const mon = new Date(d)
-  mon.setDate(d.getDate() - day + 1)
-  return mon.toISOString().slice(0, 10)
-}
-
-function getWeekNumber(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
-  const day  = date.getUTCDay() || 7
-  date.setUTCDate(date.getUTCDate() + 4 - day)
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
-  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
-}
-
-function formatLabel(dateStr: string, granularity: Granularity): string {
-  const d = new Date(dateStr)
-  if (granularity === 'daily')   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
-  if (granularity === 'weekly')  return `W${getWeekNumber(d)}`
-  return d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
-}
-
-function groupVouchers(
-  vouchers: { date: string; amount: number }[],
-  granularity: Granularity,
-  fromDate: string,
-  toDate: string,
-): ChartPoint[] {
-  const map  = new Map<string, number>()
-  const start = new Date(fromDate)
-  const end   = new Date(toDate)
-
-  if (granularity === 'daily') {
-    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1))
-      map.set(d.toISOString().slice(0, 10), 0)
-  } else if (granularity === 'weekly') {
-    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 7))
-      map.set(getWeekStart(d), 0)
-  } else {
-    for (const d = new Date(start); d <= end; d.setMonth(d.getMonth() + 1))
-      map.set(d.toISOString().slice(0, 7), 0)
-  }
-
-  for (const v of vouchers) {
-    const d   = new Date(v.date)
-    const key =
-      granularity === 'daily'  ? v.date :
-      granularity === 'weekly' ? getWeekStart(d) :
-                                 v.date.slice(0, 7)
-    map.set(key, (map.get(key) ?? 0) + v.amount)
-  }
-
-  return [...map.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, amount]) => ({
-      label:  formatLabel(granularity === 'monthly' ? key + '-01' : key, granularity),
-      amount: parseFloat(amount.toFixed(2)),
-    }))
 }
 
 // ── Dashboard settings helpers ────────────────────────────────────────────────
@@ -266,11 +199,11 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
           </span>
         )}
       </div>
-      <p className={`text-2xl font-bold tracking-tight mb-0.5 ${placeholder ? 'text-gray-300' : 'text-gray-900'}`}>
+      <p className={`text-lg font-bold tracking-tight mb-0.5 ${placeholder ? 'text-gray-300' : 'text-gray-900'}`}>
         {placeholder ? '—' : value}
       </p>
-      <p className="text-xs font-semibold text-gray-600">{title}</p>
-      <p className="text-[11px] text-gray-400 mt-0.5">{subtitle}</p>
+      <p className="text-[11px] font-semibold text-gray-600">{title}</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{subtitle}</p>
       {targetInfo && (
         <div className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
           <div className="flex justify-between text-[11px]">
@@ -306,16 +239,6 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
   )
 }
 
-function SalesTip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow px-3 py-2 text-xs">
-      <p className="font-semibold text-gray-600 mb-0.5">{label}</p>
-      <p className="text-blue-700 font-bold">{formatCurrency(payload[0].value)}</p>
-    </div>
-  )
-}
-
 function BarTip({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) {
   if (!active || !payload?.length) return null
   return (
@@ -336,24 +259,24 @@ function CashCard({ inflow, outflow, inHand }: {
   const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className="p-2 bg-emerald-50 rounded-lg">
-          <Wallet className="w-4 h-4 text-emerald-600" />
+      <div className="flex items-start justify-between mb-2">
+        <div className="p-1.5 bg-emerald-50 rounded-lg">
+          <Wallet className="w-3.5 h-3.5 text-emerald-600" />
         </div>
       </div>
-      <p className="text-2xl font-bold tracking-tight text-gray-900 mb-0.5">Cash</p>
-      <div className="mt-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">Cash Inflow</span>
-          <span className="text-xs font-semibold text-emerald-600">{val(inflow)}</span>
+      <p className="text-sm font-bold text-gray-900 mb-2">Cash</p>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-500 flex-1">Cash Inflow</span>
+          <span className="text-[11px] font-semibold text-emerald-600 shrink-0 whitespace-nowrap">{val(inflow)}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">Cash Outflow</span>
-          <span className="text-xs font-semibold text-red-500">{val(outflow)}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-500 flex-1">Cash Outflow</span>
+          <span className="text-[11px] font-semibold text-red-500 shrink-0 whitespace-nowrap">{val(outflow)}</span>
         </div>
-        <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-          <span className="text-xs text-gray-500">Cash In Hand</span>
-          <span className="text-xs font-semibold text-gray-800">{val(inHand)}</span>
+        <div className="flex items-center gap-2 border-t border-gray-100 pt-1.5">
+          <span className="text-[11px] text-gray-500 flex-1">Cash In Hand</span>
+          <span className="text-[11px] font-semibold text-gray-800 shrink-0 whitespace-nowrap">{val(inHand)}</span>
         </div>
       </div>
     </div>
@@ -368,26 +291,155 @@ function BankCard({ inflow, outflow, balance }: {
   const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className="p-2 bg-blue-50 rounded-lg">
-          <Building2 className="w-4 h-4 text-blue-600" />
+      <div className="flex items-start justify-between mb-2">
+        <div className="p-1.5 bg-blue-50 rounded-lg">
+          <Building2 className="w-3.5 h-3.5 text-blue-600" />
         </div>
       </div>
-      <p className="text-2xl font-bold tracking-tight text-gray-900 mb-0.5">Banks</p>
-      <div className="mt-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">Bank Inflow</span>
-          <span className="text-xs font-semibold text-emerald-600">{val(inflow)}</span>
+      <p className="text-sm font-bold text-gray-900 mb-2">Banks</p>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-500 flex-1">Bank Inflow</span>
+          <span className="text-[11px] font-semibold text-emerald-600 shrink-0 whitespace-nowrap">{val(inflow)}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">Bank Outflow</span>
-          <span className="text-xs font-semibold text-red-500">{val(outflow)}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-gray-500 flex-1">Bank Outflow</span>
+          <span className="text-[11px] font-semibold text-red-500 shrink-0 whitespace-nowrap">{val(outflow)}</span>
         </div>
-        <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-          <span className="text-xs text-gray-500">Balance in Bank</span>
-          <span className="text-xs font-semibold text-gray-800">{val(balance)}</span>
+        <div className="flex items-center gap-2 border-t border-gray-100 pt-1.5">
+          <span className="text-[11px] text-gray-500 flex-1">Balance in Bank</span>
+          <span className="text-[11px] font-semibold text-gray-800 shrink-0 whitespace-nowrap">{val(balance)}</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ReceivablesCard({ balance, netChange }: {
+  balance:   number | null
+  netChange: number | null
+}) {
+  const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
+  const isUp   = netChange !== null && netChange > 0
+  const isDown = netChange !== null && netChange < 0
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-2">
+        <div className="p-1.5 bg-violet-50 rounded-lg">
+          <Users className="w-3.5 h-3.5 text-violet-600" />
+        </div>
+        {netChange !== null && (
+          <span className={`flex items-center ${isUp ? 'text-emerald-600' : isDown ? 'text-red-500' : 'text-gray-400'}`}>
+            {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : null}
+          </span>
+        )}
+      </div>
+      <p className={`text-lg font-bold tracking-tight mb-0.5 ${balance === null ? 'text-gray-300' : 'text-gray-900'}`}>
+        {val(balance)}
+      </p>
+      <p className="text-[11px] font-semibold text-gray-600">Receivables</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+        {balance === null ? 'Today only' : 'Sundry Debtors'}
+      </p>
+      {netChange !== null && (
+        <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1">
+          <span className="text-[10px] text-gray-400 whitespace-nowrap">Period change</span>
+          <span className={`text-[10px] font-medium whitespace-nowrap ${isUp ? 'text-emerald-600' : isDown ? 'text-red-500' : 'text-gray-500'}`}>
+            {netChange === 0 ? '—' : formatCurrency(Math.abs(netChange))}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PayablesCard({ balance, netChange }: {
+  balance:   number | null
+  netChange: number | null
+}) {
+  const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
+  const isUp   = netChange !== null && netChange > 0
+  const isDown = netChange !== null && netChange < 0
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-2">
+        <div className="p-1.5 bg-orange-50 rounded-lg">
+          <Store className="w-3.5 h-3.5 text-orange-600" />
+        </div>
+        {netChange !== null && (
+          <span className={`flex items-center ${isUp ? 'text-red-500' : isDown ? 'text-emerald-600' : 'text-gray-400'}`}>
+            {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : null}
+          </span>
+        )}
+      </div>
+      <p className={`text-lg font-bold tracking-tight mb-0.5 ${balance === null ? 'text-gray-300' : 'text-gray-900'}`}>
+        {val(balance)}
+      </p>
+      <p className="text-[11px] font-semibold text-gray-600">Payables</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+        {balance === null ? 'Today only' : 'Sundry Creditors'}
+      </p>
+      {netChange !== null && (
+        <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1">
+          <span className="text-[10px] text-gray-400 whitespace-nowrap">Period change</span>
+          <span className={`text-[10px] font-medium whitespace-nowrap ${isUp ? 'text-red-500' : isDown ? 'text-emerald-600' : 'text-gray-500'}`}>
+            {netChange === 0 ? '—' : formatCurrency(Math.abs(netChange))}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DataTableCard({
+  title,
+  columns,
+  rows,
+  loading = false,
+}: {
+  title:   string
+  columns: { label: string; right?: boolean }[]
+  rows?:   { cells: (string | React.ReactNode)[]; dim?: boolean }[]
+  loading?: boolean
+}) {
+  const showSkeleton = loading || !rows || rows.length === 0
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <p className="text-xs font-bold text-gray-700 mb-3">{title}</p>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-gray-100">
+            {columns.map((col, i) => (
+              <th key={i} className={`pb-2 px-2 text-[11px] font-semibold text-gray-400 ${col.right ? 'text-right' : 'text-left'}`}>
+                {col.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {showSkeleton
+            ? Array.from({ length: 6 }).map((_, ri) => (
+                <tr key={ri}>
+                  {columns.map((_, ci) => (
+                    <td key={ci} className="py-2.5 px-2">
+                      <div className={`h-2 bg-gray-100 rounded-full animate-pulse ${ci === 0 ? 'w-4/5' : 'w-1/2'}`} />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            : rows!.map((row, ri) => (
+                <tr key={ri} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                  {row.cells.map((cell, ci) => (
+                    <td key={ci} className={`py-1.5 px-2 ${row.dim ? 'text-gray-400' : 'text-gray-700'} ${columns[ci]?.right ? 'text-right font-medium' : ''}`}>
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -436,8 +488,11 @@ export default function Dashboard() {
   const [bankOutflow,  setBankOutflow]  = useState<number | null>(null)
   const [bankBalance,  setBankBalance]  = useState<number | null>(null)
 
-  const [chartData,     setChartData]     = useState<ChartPoint[]>([])
-  const [topParties,    setTopParties]    = useState<{ party: string; amount: number }[]>([])
+  const [receivables,         setReceivables]         = useState<number | null>(null)
+  const [payables,            setPayables]            = useState<number | null>(null)
+  const [receivablesNetChange, setReceivablesNetChange] = useState<number | null>(null)
+  const [payablesNetChange,    setPayablesNetChange]    = useState<number | null>(null)
+
   const [total,         setTotal]         = useState(0)
   const [prevDaySales,  setPrevDaySales]  = useState<number | null>(null)
   const [slowStock,     setSlowStock]     = useState<SlowStockItem[]>([])
@@ -449,11 +504,10 @@ export default function Dashboard() {
   const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string, settingsOverride?: DashboardSettings) => {
     const settings = settingsOverride ?? dashboardSettings
     if (!connected) {
-      toast.error('Extension not connected. Make sure Tally is running.')
+      toast.error('Tally not connected. Please ensure the extension is installed and Tally is open.')
       return
     }
     const { from, to } = getFilterDates(preset, cfrom, cto)
-    const granularity  = autoGranularity(preset)
 
     setLoading(true)
     setError(null)
@@ -486,26 +540,29 @@ export default function Dashboard() {
       const sales       = all.filter(v => isSalesVoucher(v, settings))
       const creditNotes = all.filter(v => v.type.toLowerCase() === 'credit note')
 
-      // Use taxableAmount (GST excluded); credit notes reduce net sales
-      const chartVouchers = [
-        ...sales.map(v => ({ ...v, amount: v.taxableAmount })),
-        ...creditNotes.map(v => ({ ...v, amount: -v.taxableAmount })),
-      ]
-      setChartData(groupVouchers(chartVouchers, granularity, from, to))
       const salesTotal  = sales.reduce((s, v) => s + v.taxableAmount, 0)
       const creditTotal = creditNotes.reduce((s, v) => s + v.taxableAmount, 0)
       const todaySalesTotal = salesTotal - creditTotal
       setTotal(todaySalesTotal)
       setActivePeriod({ from, to })
+
+      // Net change in receivables = new sales (credit extended) − receipts collected
+      const receiptTotal = all
+        .filter(v => v.type.toLowerCase().includes('receipt'))
+        .reduce((s, v) => s + v.amount, 0)
+      setReceivablesNetChange(todaySalesTotal - receiptTotal)
+
+      // Net change in payables = new purchases − payments made to vendors
+      const purchaseTotal = all
+        .filter(v => v.type.toLowerCase().includes('purchase') && !v.type.toLowerCase().includes('credit'))
+        .reduce((s, v) => s + v.taxableAmount, 0)
+      const paymentTotal = all
+        .filter(v => v.type.toLowerCase().includes('payment'))
+        .reduce((s, v) => s + v.amount, 0)
+      setPayablesNetChange(purchaseTotal - paymentTotal)
       console.log('[Today] Total sales:', todaySalesTotal, '| date:', from)
 
-      // 2. Top debtors — via TallySyncAgent (not Tally HTTP), fast
-      try {
-        const debtors = await fetchTopDebtors(10)
-        setTopParties(debtors.map(r => ({ party: r.name, amount: r.balance })))
-      } catch { /* agent may not be running */ }
-
-      // 3. Inflow/outflow from daybook (already parsed in background.js — no extra Tally call)
+      // 2. Inflow/outflow from daybook (already parsed in background.js — no extra Tally call)
       console.log('[Settings] saved salesVoucherTypes:', settings.today?.salesVoucherTypes ?? '(none — using default)')
       console.log('[Settings] saved cashInflowLedgers:', settings.today?.cashInflowLedgers ?? '(none — using default: ledgers matching /cash/i)')
       console.log('[Settings] saved cashOutflowLedgers:', settings.today?.cashOutflowLedgers ?? '(none — using default: ledgers matching /cash/i)')
@@ -517,7 +574,7 @@ export default function Dashboard() {
       console.log('[CashFlow from Tally] inflow:', daybookCashFlow.inflow, '| outflow:', daybookCashFlow.outflow)
       console.log('[BankFlow from Tally] inflow:', daybookBankFlow.inflow, '| outflow:', daybookBankFlow.outflow)
 
-      // 4. Closing balance — only accurate for today (Tally's ClosingBalance ignores SVTODATE)
+      // 4. Closing balances — only accurate for today (Tally's ClosingBalance ignores SVTODATE)
       if (to === todayStr()) {
         try {
           const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(to))
@@ -535,9 +592,22 @@ export default function Dashboard() {
           setCashInHand(null)
           setBankBalance(null)
         }
+
+        try {
+          const { receivables: rec, payables: pay } = await fetchGroupBalances(tallyUrl, tallyCompany)
+          console.log('[GroupBalances] receivables:', rec, '| payables:', pay)
+          setReceivables(rec)
+          setPayables(pay)
+        } catch (err) {
+          console.error('[GroupBalances] fetchGroupBalances failed:', err)
+          setReceivables(null)
+          setPayables(null)
+        }
       } else {
         setCashInHand(null)
         setBankBalance(null)
+        setReceivables(null)
+        setPayables(null)
       }
 
       setFetched(true)
@@ -573,9 +643,9 @@ export default function Dashboard() {
         setSlowStock(items)
       } catch { /* non-critical */ }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to fetch data'
-      setError(msg)
-      toast.error(msg)
+      console.error('[Dashboard] fetchData failed:', err)
+      setError('no-data')
+      toast.error('No data found. Please check that Tally is open and try again.')
     } finally {
       setLoading(false)
     }
@@ -721,7 +791,7 @@ export default function Dashboard() {
               {loading && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
             </div>
 
-            {/* KPI cards */}
+            {/* KPI cards — row 1: Sales, Cash, Banks, Receivables, Payables */}
             <div className="grid grid-cols-5 gap-4">
               {(() => {
                 const periodTarget = fetched
@@ -759,19 +829,52 @@ export default function Dashboard() {
                 outflow={fetched ? bankOutflow : null}
                 balance={fetched ? bankBalance : null}
               />
-              <KpiCard
-                title="EBITDA"
-                value="—"
-                subtitle="API integration coming soon"
-                icon={BarChart2}
-                placeholder
+              <ReceivablesCard
+                balance={fetched ? receivables : null}
+                netChange={fetched ? receivablesNetChange : null}
               />
-              <KpiCard
-                title="Slow Moving Stock"
-                value={fetched ? slowStock.length : '—'}
-                subtitle="Items with no recent sales"
-                icon={PackageX}
-                trend={fetched && slowStock.length > 0 ? { value: -3 } : undefined}
+              <PayablesCard
+                balance={fetched ? payables : null}
+                netChange={fetched ? payablesNetChange : null}
+              />
+            </div>
+
+            {/* Table panels — Top Performing Items | Top Performing Debtors | Slow Moving Stocks */}
+            <div className="grid grid-cols-3 gap-4">
+              <DataTableCard
+                title="Top Performing Items"
+                columns={[
+                  { label: 'Description' },
+                  { label: 'Qty',        right: true },
+                  { label: 'Amt (₹)', right: true },
+                ]}
+              />
+              <DataTableCard
+                title="Top Performing Debtors"
+                columns={[
+                  { label: 'Party' },
+                  { label: 'Amt (₹)', right: true },
+                ]}
+              />
+              <DataTableCard
+                title="Slow Moving Stocks"
+                columns={[
+                  { label: 'Stocks' },
+                  { label: 'Days', right: true },
+                ]}
+                loading={!fetched}
+                rows={fetched && slowStock.length > 0
+                  ? slowStock.slice(0, 8).map(item => ({
+                      cells: [
+                        item.name,
+                        <span className={item.daysSince >= 90 ? 'text-red-500' : item.daysSince >= 30 ? 'text-amber-500' : 'text-gray-500'}>
+                          {item.daysSince}d
+                        </span>,
+                      ],
+                    }))
+                  : fetched
+                    ? [{ cells: ['No slow-moving items found', ''], dim: true }]
+                    : undefined}
               />
             </div>
 
@@ -779,79 +882,10 @@ export default function Dashboard() {
             {error && (
               <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
                 <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                <p className="text-xs text-red-600">{error}</p>
+                <p className="text-xs text-red-600">No data available. Please ensure Tally is open and click Refresh.</p>
               </div>
             )}
 
-            {/* Sales trend chart */}
-            <div className="bg-white rounded-xl border border-gray-200 p-4">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm font-semibold text-gray-700">Sales Trend</p>
-                {fetched && (
-                  <p className="text-xs text-gray-400">
-                    {chartData.length} data point{chartData.length !== 1 ? 's' : ''}
-                  </p>
-                )}
-              </div>
-
-              {!fetched ? (
-                <div className="flex flex-col items-center justify-center h-52 gap-2">
-                  <TrendingUp className="w-8 h-8 text-gray-200" />
-                  <p className="text-xs text-gray-400">
-                    {loading ? 'Fetching data…' : 'Waiting for data'}
-                  </p>
-                </div>
-              ) : chartData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-52">
-                  <p className="text-xs text-gray-400">No sales vouchers found for this period</p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#2563EB" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#2563EB" stopOpacity={0}    />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`} width={48} />
-                    <Tooltip content={<SalesTip />} />
-                    <Area type="monotone" dataKey="amount" name="Sales" stroke="#2563EB" strokeWidth={2} fill="url(#sg)" dot={{ r: 3, fill: '#2563EB', strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-
-            {/* Top debtors */}
-            {fetched && topParties.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-3">Top Debtors by Outstanding Balance</p>
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left py-2 px-2 font-semibold text-gray-400">#</th>
-                      <th className="text-left py-2 px-2 font-semibold text-gray-400">Customer</th>
-                      <th className="text-right py-2 px-2 font-semibold text-gray-400">Outstanding</th>
-                      <th className="text-right py-2 px-2 font-semibold text-gray-400">Share</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {topParties.map((p, i) => (
-                      <tr key={p.party} className="hover:bg-gray-50">
-                        <td className="py-2 px-2 text-gray-400">{i + 1}</td>
-                        <td className="py-2 px-2 text-gray-800 font-medium">{p.party}</td>
-                        <td className="py-2 px-2 text-right text-gray-800">{formatCurrency(p.amount)}</td>
-                        <td className="py-2 px-2 text-right text-gray-500">
-                          {total > 0 ? `${((p.amount / total) * 100).toFixed(1)}%` : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </>
         )}
 

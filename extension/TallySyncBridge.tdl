@@ -37,6 +37,17 @@
 [System: Formula]
     TBSIsCashOrBank : $$IsEqual:$Parent:"Cash-in-Hand" OR $$IsEqual:$Parent:"Bank Accounts"
 
+; Sundry Debtors and Creditors aggregate closing balances (group-level, not per-ledger).
+; Querying at GROUP level means Tally returns just 2 records with the aggregated total —
+; compared to iterating every individual debtor/creditor ledger which is O(n×transactions).
+[Collection: TBSGroupBalances]
+    Type   : Group
+    Filter : TBSIsDebtorCreditor
+    Fetch  : Name, ClosingBalance
+
+[System: Formula]
+    TBSIsDebtorCreditor : $$IsEqual:$Name:"Sundry Debtors" OR $$IsEqual:$Name:"Sundry Creditors"
+
 ; All stock items with current closing quantity and value
 [Collection: TBSStockBalance]
     Type        : StockItem

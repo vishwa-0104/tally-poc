@@ -1,29 +1,8 @@
 document.getElementById('version').textContent = chrome.runtime.getManifest().version
 
-const btn        = document.getElementById('test-btn')
-const msg        = document.getElementById('status-msg')
-const portInput  = document.getElementById('port-input')
-const agentBadge = document.getElementById('agent-badge')
-
-// ── Agent health check (runs on popup open) ──────────────────────────────────
-
-async function checkAgent() {
-  try {
-    const res = await fetch('http://localhost:9001/health', { signal: AbortSignal.timeout(3000) })
-    const json = await res.json()
-    if (json.ok) {
-      agentBadge.className = 'badge ok'
-      agentBadge.innerHTML = '<span class="dot green"></span>Running'
-    } else {
-      throw new Error('not ok')
-    }
-  } catch {
-    agentBadge.className = 'badge err'
-    agentBadge.innerHTML = '<span class="dot red"></span>Not running'
-  }
-}
-
-checkAgent()
+const btn       = document.getElementById('test-btn')
+const msg       = document.getElementById('status-msg')
+const portInput = document.getElementById('port-input')
 
 // ── Tally connection test ────────────────────────────────────────────────────
 

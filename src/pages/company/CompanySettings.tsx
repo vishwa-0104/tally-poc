@@ -1,88 +1,15 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
-import { RefreshCw, CheckCircle, AlertTriangle, CreditCard, Plus, Trash2, Landmark, BookOpen, Download, Cpu } from 'lucide-react'
+import { RefreshCw, CheckCircle, AlertTriangle, CreditCard, Plus, Trash2, Landmark, BookOpen } from 'lucide-react'
 import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { Navigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits, fetchTallyVoucherTypes, checkAgentHealth } from '@/services/tallyService'
+import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits, fetchTallyVoucherTypes } from '@/services/tallyService'
 import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { LedgerMapping, BankDefaultLedger } from '@/types'
-
-const AGENT_DOWNLOAD_URL = import.meta.env.VITE_AGENT_DOWNLOAD_URL ||
-  'https://drive.google.com/file/d/1SqAsdjYS4Fpszl0f1wbmhRIbQshnK0Es/view?usp=sharing'
-
-// ── TallySyncAgent setup card ─────────────────────────────────────────────────
-
-function AgentSetup() {
-  const [status,  setStatus]  = useState<'idle' | 'checking' | 'running' | 'offline'>('idle')
-  const [version, setVersion] = useState<string | null>(null)
-
-  const handleCheck = async () => {
-    setStatus('checking')
-    const health = await checkAgentHealth()
-    if (health.ok) {
-      setStatus('running')
-      setVersion(health.version ?? null)
-    } else {
-      setStatus('offline')
-    }
-  }
-
-  return (
-    <div className="rounded-xl border border-gray-200 p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Cpu className="w-4 h-4 text-teal-600" />
-        <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">TallySyncAgent</p>
-        {status === 'running' && (
-          <span className="ml-auto flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Running{version ? ` v${version}` : ''}
-          </span>
-        )}
-        {status === 'offline' && (
-          <span className="ml-auto flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            Not running
-          </span>
-        )}
-      </div>
-
-      <p className="text-xs text-gray-500">
-        A small background app that connects to Tally ODBC and powers the Sales Dashboard.
-        Install it once on the Windows machine where Tally runs — it starts automatically with Windows.
-      </p>
-
-      <div className="flex items-center gap-2 pt-1">
-        <a
-          href={AGENT_DOWNLOAD_URL}
-          download
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 transition-colors"
-        >
-          <Download className="w-3.5 h-3.5" />
-          Download Installer (.exe)
-        </a>
-        <Button
-          variant="outline"
-          size="sm"
-          loading={status === 'checking'}
-          onClick={handleCheck}
-        >
-          <RefreshCw className="w-3 h-3" />
-          Check Status
-        </Button>
-      </div>
-
-      {status === 'offline' && (
-        <p className="text-[11px] text-red-600">
-          Agent not detected on this machine. Download and install it, then click Check Status.
-        </p>
-      )}
-    </div>
-  )
-}
 
 export const TALLY_URL_KEY         = 'tally-server-url'
 export const DEFAULT_TALLY_URL     = 'http://localhost:9000'
@@ -471,8 +398,6 @@ export default function CompanySettings() {
               <div>
                 <ExtensionStatus />
               </div>
-
-              <AgentSetup />
 
               {/* Server URL */}
               <div>

@@ -101,12 +101,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ parties: [], error: err.message }))
       return true
 
-    case 'FETCH_AGENT':
-      handleFetchAgent(payload.endpoint, payload.params)
-        .then(sendResponse)
-        .catch((err) => sendResponse({ ok: false, error: err.message }))
-      return true
-
     case 'FETCH_DAYBOOK':
       handleFetchDaybook(
         payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate,
@@ -127,6 +121,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       handleFetchLedgerBalances(payload.tallyUrl, payload.tallyCompany, payload.asOfDate)
         .then(sendResponse)
         .catch((err) => sendResponse({ rawLedgers: [], error: err.message }))
+      return true
+
+    case 'FETCH_GROUP_BALANCES':
+      handleFetchGroupBalances(payload.tallyUrl, payload.tallyCompany, payload.asOfDate)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ receivables: 0, payables: 0, error: err.message }))
       return true
 
     default:
@@ -641,17 +641,6 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 
   console.log(`[SalesParty] voucher blocks=${blocks.length} | unique parties=${parties.length} | top3: ${JSON.stringify(parties.slice(0, 3))}`)
   return { parties }
-}
-
-// ── Fetch data from local TallySyncAgent (ODBC bridge on :9001) ─────────────
-
-async function handleFetchAgent(endpoint, params) {
-  const query = params && Object.keys(params).length > 0
-    ? '?' + new URLSearchParams(params).toString()
-    : ''
-  const response = await fetch(`http://localhost:9001/${endpoint}${query}`)
-  if (!response.ok) throw new Error(`TallySyncAgent error: ${response.status}`)
-  return response.json()
 }
 
 // ── Fetch Day Book for a single date ────────────────────────────────────────
@@ -1280,6 +1269,67 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
     </IMPORTDATA>
   </BODY>
 </ENVELOPE>`
+}
+
+// ── Sundry Debtors / Creditors group-level closing balance ──────────────────
+// Uses TBSGroupBalances (defined in TallySyncBridge.tdl) which filters to the
+// two top-level groups. Tally aggregates all child ledgers into a single record,
+// so this is just 2 rows — much faster than querying individual ledger balances.
+// Same SVTODATE limitation as TBSCashBankBalances: always returns current date's value.
+
+async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
+  const today = new Date()
+  const pad   = (n) => String(n).padStart(2, '0')
+  const fyYear  = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
+  const fyStart = `${fyYear}0401`
+  const toDateRaw = asOfDate || `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`
+
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSGroupBalances</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${toTallyDisplayDate(fyStart)}</SVFROMDATE>
+        <SVTODATE>${toTallyDisplayDate(toDateRaw)}</SVTODATE>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log('[GroupBalances] response length:', responseText.length, '| first 500:', responseText.slice(0, 500))
+
+  const groups = parseGroupBalances(responseText)
+  const debtors   = groups.find(g => g.name.toLowerCase().includes('sundry debtor'))
+  const creditors = groups.find(g => g.name.toLowerCase().includes('sundry creditor'))
+
+  // Sundry Debtors closing balance is Dr (positive) — what customers owe you
+  // Sundry Creditors closing balance is Cr (negative) — what you owe vendors
+  const receivables = debtors   ? Math.abs(debtors.balance)   : 0
+  const payables    = creditors ? Math.abs(creditors.balance)  : 0
+
+  console.log('[GroupBalances] receivables:', receivables, '| payables:', payables, '| raw groups:', groups)
+  return { receivables, payables }
+}
+
+function parseGroupBalances(xml) {
+  const results = []
+  const blocks  = [...xml.matchAll(/<GROUP\b[^>]*>([\s\S]*?)<\/GROUP>/gi)]
+  for (const [, inner] of blocks) {
+    const nameM = inner.match(/<NAME[^>]*>\s*([\s\S]*?)\s*<\/NAME>/i)
+    const balM  = inner.match(/<CLOSINGBALANCE[^>]*>\s*([\s\S]*?)\s*<\/CLOSINGBALANCE>/i)
+    if (!nameM) continue
+    const name    = nameM[1].trim()
+    const balance = balM ? parseTallyBalance(balM[1].trim()) : 0
+    if (name) results.push({ name, balance })
+  }
+  return results
 }
 
 // ── HTTP helper ──────────────────────────────────────────────────────────────
