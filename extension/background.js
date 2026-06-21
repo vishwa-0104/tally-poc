@@ -675,6 +675,33 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cash
   console.log(`[Daybook/TDL] ${from} → ${to} | response length:`, responseText.length)
   console.log('[Daybook/TDL] raw (first 3000):', responseText.slice(0, 3000))
 
+  // ── Raw XML ledger entries XLS — scans FULL response, no tag-structure assumptions ──
+  // Finds every <LEDGERNAME> in the XML and looks backwards for the nearest VOUCHER context
+  // and forwards for the nearest AMOUNT. Works regardless of how Tally wraps AllLedgerEntries.
+  ;(function dumpLedgerEntriesXls() {
+    const dec = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+    const rows = []
+    const lnRe = /<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/gi
+    for (const lnM of responseText.matchAll(lnRe)) {
+      const ledgerName = dec(lnM[1])
+      const pos = lnM.index
+      // Look up to 600 chars forward for AMOUNT and ISPARTYLEDGER
+      const fwd = responseText.slice(pos, pos + 600)
+      const amtRaw  = dec(fwd.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
+      const isParty = /ISPARTYLEDGER[^>]*>Yes/i.test(fwd) ? 'Yes' : 'No'
+      // Look up to 2000 chars back for the most recent DATE and VOUCHERTYPENAME
+      const bk = responseText.slice(Math.max(0, pos - 2000), pos)
+      const dateRaw  = [...bk.matchAll(/<DATE[^>]*>(\d{8})<\/DATE>/gi)].pop()?.[1] ?? ''
+      const date     = dateRaw.length === 8 ? `${dateRaw.slice(0,4)}-${dateRaw.slice(4,6)}-${dateRaw.slice(6,8)}` : ''
+      const vType    = dec([...bk.matchAll(/<VOUCHERTYPENAME[^>]*>([^<]+)<\/VOUCHERTYPENAME>/gi)].pop()?.[1] ?? '')
+      const vNo      = dec([...bk.matchAll(/<VOUCHERNUMBER[^>]*>([^<]+)<\/VOUCHERNUMBER>/gi)].pop()?.[1] ?? '')
+      rows.push(`${date}\t${vNo}\t${vType}\t${ledgerName}\t${amtRaw}\t${isParty}`)
+    }
+    console.log('%c[Ledger Entries XLS] Copy block below → paste into Excel', 'font-weight:bold;color:#7c3aed')
+    console.log(['Date\tVoucher No\tVoucher Type\tLedger Name\tRaw Amount\tIs Party', ...rows].join('\n'))
+    console.log(`[Ledger Entries XLS] total LEDGERNAME tags found: ${rows.length}`)
+  })()
+
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
 
@@ -774,7 +801,6 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
-  const xlsRows  = []  // flat ledger-entry dump for XLS debugging
 
   // Build lookup sets from saved settings (lowercase for case-insensitive match)
   // If no saved ledgers, fall back to name-contains matching (/cash/i or /bank/i)
@@ -786,14 +812,6 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
 
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
-
-  // ── Diagnostic: find what ALLLEDGERENTRIES tag format Tally is using ──
-  const aleWithList    = (xml.match(/<ALLLEDGERENTRIES\.LIST/gi)  || []).length
-  const aleWithoutList = (xml.match(/<ALLLEDGERENTRIES[^.L]/gi)   || []).length
-  console.log(`[parseVouchers] ALLLEDGERENTRIES.LIST in full XML: ${aleWithList} | ALLLEDGERENTRIES (no .LIST): ${aleWithoutList} | VOUCHER blocks: ${blocks.length}`)
-  if (blocks.length > 0) {
-    console.log('[parseVouchers] First VOUCHER block (raw 800 chars):\n', blocks[0][0].slice(0, 800))
-  }
 
   for (const match of blocks) {
     const block = match[0]
@@ -892,7 +910,6 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
         classification = 'Party'
       }
 
-      xlsRows.push(`${date}\t${voucherNo}\t${type}\t${party}\t${ledgerName}\t${leAmtRaw}\t${leAmt.toFixed(2)}\t${classification}\t${isParty ? 'Yes' : 'No'}\t${inRange ? 'Yes' : 'No'}`)
     }
 
     // Skip pushing to vouchers array if no party amount found — these entries still
@@ -908,13 +925,6 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
   }
 
   console.log('[parseVouchers] FINAL cashFlow:', cashFlow, '| bankFlow:', bankFlow)
-
-  // ── XLS ledger-entry dump — open DevTools on the Extension's service worker to see this ──
-  // chrome://extensions → TallyBillSync → "Service Worker" → Console
-  const xlsHeader = 'Date\tVoucher No\tVoucher Type\tParty\tLedger Name\tRaw Amount\tAmount\tClassification\tIs Party\tIn Range'
-  console.log('%c[Ledger Entries XLS] Copy block below → paste into Excel', 'font-weight:bold;color:#7c3aed')
-  console.log([xlsHeader, ...xlsRows].join('\n'))
-
   return { vouchers, cashFlow, bankFlow }
 }
 
