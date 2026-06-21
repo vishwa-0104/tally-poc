@@ -517,20 +517,25 @@ export default function Dashboard() {
       console.log('[CashFlow from Tally] inflow:', daybookCashFlow.inflow, '| outflow:', daybookCashFlow.outflow)
       console.log('[BankFlow from Tally] inflow:', daybookBankFlow.inflow, '| outflow:', daybookBankFlow.outflow)
 
-      // 4. Ledger balances — Cash In Hand + Bank Balance only (fast, filtered collection)
-      try {
-        const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(to))
-        const cashInHand = rawLedgers
-          .filter(l => l.group.toLowerCase().includes('cash'))
-          .reduce((s, l) => s + l.balance, 0)
-        const bankBal = rawLedgers
-          .filter(l => l.group.toLowerCase().includes('bank'))
-          .reduce((s, l) => s + l.balance, 0)
-        console.log('[Balances] cashInHand:', cashInHand, '| bankBalance:', bankBal)
-        setCashInHand(cashInHand)
-        setBankBalance(bankBal)
-      } catch (err) {
-        console.error('[Balances] fetchLedgerBalances failed:', err)
+      // 4. Closing balance — only accurate for today (Tally's ClosingBalance ignores SVTODATE)
+      if (to === todayStr()) {
+        try {
+          const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(to))
+          const cashInHand = rawLedgers
+            .filter(l => l.group.toLowerCase().includes('cash'))
+            .reduce((s, l) => s + l.balance, 0)
+          const bankBal = rawLedgers
+            .filter(l => l.group.toLowerCase().includes('bank'))
+            .reduce((s, l) => s + l.balance, 0)
+          console.log('[Balances] cashInHand:', cashInHand, '| bankBalance:', bankBal)
+          setCashInHand(cashInHand)
+          setBankBalance(bankBal)
+        } catch (err) {
+          console.error('[Balances] fetchLedgerBalances failed:', err)
+          setCashInHand(null)
+          setBankBalance(null)
+        }
+      } else {
         setCashInHand(null)
         setBankBalance(null)
       }

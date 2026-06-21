@@ -1314,6 +1314,7 @@ async function handleFetchLedgerBalances(tallyUrl, tallyCompany, asOfDate) {
   const fyYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
   const fyStart = `${fyYear}0401`
   const toDateRaw = asOfDate || `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`
+  console.log('[LedgerBalances] asOfDate received:', asOfDate, '| toDateRaw used:', toDateRaw, '| SVFROMDATE:', toTallyDisplayDate(fyStart), '| SVTODATE:', toTallyDisplayDate(toDateRaw))
 
   const xml = `<ENVELOPE>
   <HEADER>
