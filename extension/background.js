@@ -766,6 +766,7 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
+  const xlsRows  = []  // flat ledger-entry dump for XLS debugging
 
   // Build lookup sets from saved settings (lowercase for case-insensitive match)
   // If no saved ledgers, fall back to name-contains matching (/cash/i or /bank/i)
@@ -855,17 +856,26 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
 
       // NOTE: do NOT skip isParty entries for cash/bank ledgers.
       // In Cash Sale and Contra vouchers, Cash/Bank is the party ledger.
+      let classification = 'Other'
       if (inRange && (isInflowLedger || isOutflowLedger)) {
+        classification = leAmt < 0 ? 'Cash Inflow' : 'Cash Outflow'
         const action = leAmt < 0 ? '→ CASH INFLOW  +' + Math.abs(leAmt) : '→ CASH OUTFLOW +' + leAmt
         console.log(`[CashBank] ${action} | date=${date} voucher="${type}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}"`)
         if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
         else           cashFlow.outflow += leAmt
       } else if (inRange && isBankLedger) {
+        classification = leAmt < 0 ? 'Bank Inflow' : 'Bank Outflow'
         const action = leAmt < 0 ? '→ BANK INFLOW  +' + Math.abs(leAmt) : '→ BANK OUTFLOW +' + leAmt
         console.log(`[CashBank] ${action} | date=${date} voucher="${type}" ledger="${ledgerName}" isParty=${isParty} rawAmt="${leAmtRaw}"`)
         if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
         else           bankFlow.outflow += leAmt
+      } else if (!isParty && GST_RE.test(ledgerName)) {
+        classification = 'GST'
+      } else if (isParty) {
+        classification = 'Party'
       }
+
+      xlsRows.push(`${date}\t${voucherNo}\t${type}\t${party}\t${ledgerName}\t${leAmtRaw}\t${leAmt.toFixed(2)}\t${classification}\t${isParty ? 'Yes' : 'No'}\t${inRange ? 'Yes' : 'No'}`)
     }
 
     const taxableAmount = Math.max(0, amount - gstTotal)
@@ -874,6 +884,13 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
   }
 
   console.log('[parseVouchers] FINAL cashFlow:', cashFlow, '| bankFlow:', bankFlow)
+
+  // ── XLS ledger-entry dump — open DevTools on the Extension's service worker to see this ──
+  // chrome://extensions → TallyBillSync → "Service Worker" → Console
+  const xlsHeader = 'Date\tVoucher No\tVoucher Type\tParty\tLedger Name\tRaw Amount\tAmount\tClassification\tIs Party\tIn Range'
+  console.log('%c[Ledger Entries XLS] Copy block below → paste into Excel', 'font-weight:bold;color:#7c3aed')
+  console.log([xlsHeader, ...xlsRows].join('\n'))
+
   return { vouchers, cashFlow, bankFlow }
 }
 
