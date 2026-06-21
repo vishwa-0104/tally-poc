@@ -675,31 +675,60 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cash
   console.log(`[Daybook/TDL] ${from} → ${to} | response length:`, responseText.length)
   console.log('[Daybook/TDL] raw (first 3000):', responseText.slice(0, 3000))
 
-  // ── Raw XML ledger entries XLS — scans FULL response, no tag-structure assumptions ──
-  // Finds every <LEDGERNAME> in the XML and looks backwards for the nearest VOUCHER context
-  // and forwards for the nearest AMOUNT. Works regardless of how Tally wraps AllLedgerEntries.
+  // ── Ledger Entries XLS — scans full XML, no tag-structure assumptions ──
+  // Filters to actual voucher ledger lines by requiring ISPARTYLEDGER nearby.
+  // Master-data LEDGERNAME tags (ledger definitions, stock items etc.) never
+  // have ISPARTYLEDGER alongside them, so they are excluded automatically.
   ;(function dumpLedgerEntriesXls() {
     const dec = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+    const CASH_RE = /cash/i
+    const BANK_RE = /bank/i
+    const GST_RE  = /cgst|sgst|igst|cess/i
+    const inflowSet  = cashInflowLedgers.length ? new Set(cashInflowLedgers.map(n => n.toLowerCase())) : null
+    const outflowSet = cashOutflowLedgers.length ? new Set(cashOutflowLedgers.map(n => n.toLowerCase())) : null
+
     const rows = []
     const lnRe = /<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/gi
     for (const lnM of responseText.matchAll(lnRe)) {
       const ledgerName = dec(lnM[1])
       const pos = lnM.index
-      // Look up to 600 chars forward for AMOUNT and ISPARTYLEDGER
-      const fwd = responseText.slice(pos, pos + 600)
+
+      // Forward window: AMOUNT and ISPARTYLEDGER must appear close after the ledger name
+      const fwd = responseText.slice(pos, pos + 400)
+      // Skip master-data LEDGERNAME tags — real ledger entry lines always have ISPARTYLEDGER nearby
+      if (!/ISPARTYLEDGER/i.test(fwd)) continue
+
       const amtRaw  = dec(fwd.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
-      const isParty = /ISPARTYLEDGER[^>]*>Yes/i.test(fwd) ? 'Yes' : 'No'
-      // Look up to 2000 chars back for the most recent DATE and VOUCHERTYPENAME
-      const bk = responseText.slice(Math.max(0, pos - 2000), pos)
-      const dateRaw  = [...bk.matchAll(/<DATE[^>]*>(\d{8})<\/DATE>/gi)].pop()?.[1] ?? ''
-      const date     = dateRaw.length === 8 ? `${dateRaw.slice(0,4)}-${dateRaw.slice(4,6)}-${dateRaw.slice(6,8)}` : ''
-      const vType    = dec([...bk.matchAll(/<VOUCHERTYPENAME[^>]*>([^<]+)<\/VOUCHERTYPENAME>/gi)].pop()?.[1] ?? '')
-      const vNo      = dec([...bk.matchAll(/<VOUCHERNUMBER[^>]*>([^<]+)<\/VOUCHERNUMBER>/gi)].pop()?.[1] ?? '')
-      rows.push(`${date}\t${vNo}\t${vType}\t${ledgerName}\t${amtRaw}\t${isParty}`)
+      const isParty = /ISPARTYLEDGER[^>]*>Yes/i.test(fwd)
+      const leAmt   = parseFloat(amtRaw.replace(/,/g, '')) || 0
+
+      // Backward window: nearest preceding DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME
+      const bk    = responseText.slice(Math.max(0, pos - 2000), pos)
+      const dateRaw = [...bk.matchAll(/<DATE[^>]*>(\d{8})<\/DATE>/gi)].pop()?.[1] ?? ''
+      const date    = dateRaw.length === 8 ? `${dateRaw.slice(0,4)}-${dateRaw.slice(4,6)}-${dateRaw.slice(6,8)}` : ''
+      const vType   = dec([...bk.matchAll(/<VOUCHERTYPENAME[^>]*>([^<]+)<\/VOUCHERTYPENAME>/gi)].pop()?.[1] ?? '')
+      const vNo     = dec([...bk.matchAll(/<VOUCHERNUMBER[^>]*>([^<]+)<\/VOUCHERNUMBER>/gi)].pop()?.[1] ?? '')
+      const party   = dec([...bk.matchAll(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/gi)].pop()?.[1] ?? '')
+
+      // Classify — same logic as parseVouchers cash/bank flow
+      const ledgerLower = ledgerName.toLowerCase()
+      const isInflowLedger  = inflowSet  ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
+      const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(ledgerName)
+      const isBankLedger    = BANK_RE.test(ledgerName)
+
+      let classification = 'Other'
+      if (isParty)                            classification = 'Party'
+      else if (GST_RE.test(ledgerName))       classification = 'GST'
+      else if (isInflowLedger || isOutflowLedger) classification = leAmt < 0 ? 'Cash Inflow' : 'Cash Outflow'
+      else if (isBankLedger)                  classification = leAmt < 0 ? 'Bank Inflow' : 'Bank Outflow'
+
+      rows.push(`${date}\t${vNo}\t${vType}\t${party}\t${ledgerName}\t${amtRaw}\t${leAmt.toFixed(2)}\t${classification}\t${isParty ? 'Yes' : 'No'}`)
     }
+
+    const header = 'Date\tVoucher No\tVoucher Type\tParty\tLedger Name\tRaw Amount\tAmount\tClassification\tIs Party'
     console.log('%c[Ledger Entries XLS] Copy block below → paste into Excel', 'font-weight:bold;color:#7c3aed')
-    console.log(['Date\tVoucher No\tVoucher Type\tLedger Name\tRaw Amount\tIs Party', ...rows].join('\n'))
-    console.log(`[Ledger Entries XLS] total LEDGERNAME tags found: ${rows.length}`)
+    console.log([header, ...rows].join('\n'))
+    console.log(`[Ledger Entries XLS] total ledger entry lines: ${rows.length}`)
   })()
 
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
