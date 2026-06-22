@@ -582,37 +582,25 @@ export default function Dashboard() {
       console.log('%c[Vouchers XLS] Copy the block below → paste into Excel', 'font-weight:bold;color:#0d9488')
       console.log([vTsvHeader, ...vTsvRows].join('\n'))
 
-      // 4. Closing balances — only accurate for today (Tally's ClosingBalance ignores SVTODATE)
-      // Ledger XLS is always fetched regardless of date filter so the dump is always available
-      let rawLedgersForXls: { name: string; group: string; balance: number }[] = []
-      try {
-        const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr()))
-        rawLedgersForXls = rawLedgers
-
-        // ── XLS-ready ledger dump (copy from console → paste into Excel) ──
-        const tsvHeader = 'Ledger Name\tGroup\tBalance\tType'
-        const tsvRows = rawLedgers.map(l => {
-          const type = l.group.toLowerCase().includes('cash') ? 'Cash'
-            : l.group.toLowerCase().includes('bank') ? 'Bank'
-            : 'Other'
-          return `${l.name}\t${l.group}\t${l.balance.toFixed(2)}\t${type}`
-        })
-        console.log('%c[Ledgers XLS] Copy the block below → paste into Excel', 'font-weight:bold;color:#0d9488')
-        console.log([tsvHeader, ...tsvRows].join('\n'))
-      } catch (err) {
-        console.error('[Balances] fetchLedgerBalances failed:', err)
-      }
-
+      // 4. Closing balances — only fetched and shown when filter is "Today".
+      // Tally's ClosingBalance ignores SVTODATE so historical balances are not possible.
       if (to === todayStr()) {
-        const cashLedgers = rawLedgersForXls.filter(l => l.group.toLowerCase().includes('cash'))
-        const bankLedgers = rawLedgersForXls.filter(l => l.group.toLowerCase().includes('bank'))
-        if (rawLedgersForXls.length > 0) {
-          const cashInHand = cashLedgers.reduce((s, l) => s + l.balance, 0)
-          const bankBal    = bankLedgers.reduce((s, l) => s + l.balance, 0)
-          console.log('[Balances] cashInHand:', cashInHand, '| bankBalance:', bankBal)
-          setCashInHand(cashInHand)
-          setBankBalance(bankBal)
-        } else {
+        try {
+          const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr()))
+          const cashLedgers = rawLedgers.filter(l => l.group.toLowerCase().includes('cash'))
+          const bankLedgers = rawLedgers.filter(l => l.group.toLowerCase().includes('bank'))
+          if (rawLedgers.length > 0) {
+            const cashInHand = cashLedgers.reduce((s, l) => s + l.balance, 0)
+            const bankBal    = bankLedgers.reduce((s, l) => s + l.balance, 0)
+            console.log('[Balances] cashInHand:', cashInHand, '| bankBalance:', bankBal)
+            setCashInHand(cashInHand)
+            setBankBalance(bankBal)
+          } else {
+            setCashInHand(null)
+            setBankBalance(null)
+          }
+        } catch (err) {
+          console.error('[Balances] fetchLedgerBalances failed:', err)
           setCashInHand(null)
           setBankBalance(null)
         }
