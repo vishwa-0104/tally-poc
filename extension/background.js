@@ -841,6 +841,14 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
 
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
+  const GST_RE  = /cgst|sgst|igst|cess/i
+  const CASH_RE = /cash/i
+  const BANK_RE = /bank/i
+
+  // Track each VOUCHER block's byte range and date — used in Step 2 to correctly
+  // associate ALLLEDGERENTRIES that Tally places OUTSIDE <VOUCHER> blocks
+  // (happens with multi-party "as per details" Receipt vouchers).
+  const voucherRanges = [] // [{start, end, date}], sorted by position
 
   for (const match of blocks) {
     const block = match[0]
@@ -856,6 +864,8 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
     const date = rawDate.length === 8
       ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
       : rawDate
+
+    voucherRanges.push({ start: match.index, end: match.index + match[0].length, date })
 
     // Amount: find LEDGERENTRIES.LIST where ISPARTYLEDGER=Yes (Sales/Receipt vouchers)
     let amount = 0
@@ -889,11 +899,7 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
     // Cash/bank flow is computed here for ALL vouchers — BEFORE the amount===0 guard —
     // because Contra/Journal/transfer entries often have no parseable party ledger amount
     // but still move real money through bank/cash ledgers.
-    const GST_RE = /cgst|sgst|igst|cess/i
     let gstTotal = 0
-
-    const CASH_RE = /cash/i
-    const BANK_RE = /bank/i
 
     for (const le of matchAllLedgerEntries(block)) {
       const leBlock    = le[0]
@@ -952,6 +958,67 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
 
     vouchers.push({ date, type, party, amount, taxableAmount, voucherNo })
   }
+
+  // ── Step 2: ALLLEDGERENTRIES.LIST OUTSIDE VOUCHER blocks ────────────────
+  // Tally places AllLedgerEntries outside the <VOUCHER> tag for multi-party
+  // "as per details" vouchers (no single PARTYLEDGERNAME). The per-block scan
+  // above misses these. We scan the full XML, skip entries that are inside a
+  // VOUCHER block (already handled), and look up the date of the nearest
+  // preceding VOUCHER block using a binary search over voucherRanges.
+  let outsideCount = 0
+  for (const m of xml.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi)) {
+    const pos = m.index
+
+    // Binary search: is this entry inside any VOUCHER block?
+    let lo = 0, hi = voucherRanges.length - 1, isInside = false
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2)
+      const v = voucherRanges[mid]
+      if (pos < v.start)     { hi = mid - 1 }
+      else if (pos >= v.end) { lo = mid + 1 }
+      else                   { isInside = true; break }
+    }
+    if (isInside) continue // already handled in Step 1
+
+    // Find date from nearest preceding VOUCHER block (binary search)
+    lo = 0; hi = voucherRanges.length - 1
+    let date = ''
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2)
+      if (voucherRanges[mid].end <= pos) { date = voucherRanges[mid].date; lo = mid + 1 }
+      else                               { hi = mid - 1 }
+    }
+    if (!date) continue
+    const inRange = (!fromISO || date >= fromISO) && (!toISO || date <= toISO)
+    if (!inRange) continue
+
+    const leBlock    = m[0]
+    const ledgerName = decode(leBlock.match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
+    if (!ledgerName) continue
+    const leAmtRaw   = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+    const leAmt      = parseFloat(leAmtRaw.replace(/,/g, '')) || 0
+    const isParty    = /ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)
+
+    const ledgerLower     = ledgerName.toLowerCase()
+    const isInflowLedger  = inflowSet  ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
+    const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(ledgerName)
+    const isBankLedger    = BANK_RE.test(ledgerName)
+
+    if (isInflowLedger || isOutflowLedger) {
+      const action = leAmt < 0 ? '→ CASH INFLOW  +' + Math.abs(leAmt) : '→ CASH OUTFLOW +' + leAmt
+      console.log(`[CashBank/outside] ${action} | date=${date} ledger="${ledgerName}" isParty=${isParty}`)
+      if (leAmt < 0) cashFlow.inflow  += Math.abs(leAmt)
+      else           cashFlow.outflow += leAmt
+      outsideCount++
+    } else if (isBankLedger) {
+      const action = leAmt < 0 ? '→ BANK INFLOW  +' + Math.abs(leAmt) : '→ BANK OUTFLOW +' + leAmt
+      console.log(`[CashBank/outside] ${action} | date=${date} ledger="${ledgerName}" isParty=${isParty}`)
+      if (leAmt < 0) bankFlow.inflow  += Math.abs(leAmt)
+      else           bankFlow.outflow += leAmt
+      outsideCount++
+    }
+  }
+  if (outsideCount > 0) console.log(`[parseVouchers] Step2: ${outsideCount} outside-VOUCHER bank/cash entries recovered`)
 
   console.log('[parseVouchers] FINAL cashFlow:', cashFlow, '| bankFlow:', bankFlow)
   return { vouchers, cashFlow, bankFlow }
