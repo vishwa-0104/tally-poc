@@ -104,9 +104,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'FETCH_DAYBOOK':
       handleFetchDaybook(
         payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate,
-        payload.salesAccounts     || [],
-        payload.cashInflowLedgers || [],
-        payload.bankLedgers       || [],
+        payload.salesAccounts        || [],
+        payload.salesIncludeVouchers || [],
+        payload.salesExcludeVouchers || [],
+        payload.cashInflowLedgers    || [],
+        payload.bankLedgers          || [],
       )
         .then(sendResponse)
         .catch((err) => sendResponse({ vouchers: [], rawXml: '', cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
@@ -625,7 +627,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 // SVFROMDATE/SVTODATE tell Tally which period to scope to.
 // JS date filter applied after parsing as a safety net.
 
-async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, salesAccounts = [], cashInflowLedgers = [], bankLedgers = []) {
+async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], bankLedgers = []) {
   console.log('[BankDebug] handleFetchDaybook received bankLedgers:', bankLedgers)
   const from = toTallyDisplayDate(fromDate)
   const to   = toTallyDisplayDate(toDate)
@@ -654,11 +656,11 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, sale
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
 
-  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, salesAccounts, cashInflowLedgers, fromISO, toISO, bankLedgers)
+  const { vouchers: allVouchers, cashFlow, bankFlow, topItems } = parseVouchers(responseText, salesAccounts, salesIncludeVouchers, salesExcludeVouchers, cashInflowLedgers, fromISO, toISO, bankLedgers)
 
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
-  return { vouchers, cashFlow, bankFlow, rawXml: responseText }
+  return { vouchers, cashFlow, bankFlow, topItems, rawXml: responseText }
 }
 
 // ── Slow / inactive stock ────────────────────────────────────────────────────
@@ -732,10 +734,11 @@ function matchAllLedgerEntries(block) {
   return [...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi)]
 }
 
-function parseVouchers(xml, salesAccounts = [], cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = []) {
+function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = []) {
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
+  const itemMap  = new Map() // name → { qty, unit, amount }
 
   const salesAccountSet = salesAccounts.length ? new Set(salesAccounts.map(n => n.toLowerCase())) : null
   // Cash inflow and outflow share the same ledger names — one configured list covers both
@@ -910,6 +913,43 @@ function parseVouchers(xml, salesAccounts = [], cashInflowLedgers = [], fromISO 
     const taxableAmount = Math.max(0, amount - gstTotal)
 
     vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, hasSalesLedger })
+
+    // ── Item aggregation for Top Performing Items ──────────────────────────
+    // Only count inventory entries from sales vouchers within the date range.
+    const voucherInRange = (!fromISO || date >= fromISO) && (!toISO || date <= toISO)
+    if (voucherInRange) {
+      const typeLower     = type.toLowerCase()
+      const isExcluded    = salesExcludeVouchers.length
+        ? salesExcludeVouchers.some(t => t.toLowerCase() === typeLower)
+        : /credit\s*note/i.test(type)
+      const isIncluded    = !isExcluded && (salesIncludeVouchers.length
+        ? salesIncludeVouchers.some(t => t.toLowerCase() === typeLower)
+        : /sales/i.test(type))
+      const ledgerOk      = !salesAccountSet || hasSalesLedger
+
+      if (isIncluded && ledgerOk) {
+        for (const ie of block.matchAll(/<ALLINVENTORYENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLINVENTORYENTRIES\.LIST>/gi)) {
+          const ieBlock  = ie[0]
+          const itemName = decode(ieBlock.match(/<STOCKITEMNAME[^>]*>([^<]+)<\/STOCKITEMNAME>/i)?.[1] ?? '')
+          if (!itemName) continue
+
+          const qtyRaw = decode(
+            ieBlock.match(/<BILLEDQTY[^>]*>([^<]+)<\/BILLEDQTY>/i)?.[1] ??
+            ieBlock.match(/<ACTUALQTY[^>]*>([^<]+)<\/ACTUALQTY>/i)?.[1] ?? '0'
+          )
+          const qtyNum = parseFloat(qtyRaw.replace(/,/g, '')) || 0
+          const unit   = qtyRaw.replace(/^[\d.,\s-]+/, '').trim()
+
+          const amtRaw = decode(ieBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+          const amt    = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
+
+          if (!itemMap.has(itemName)) itemMap.set(itemName, { qty: 0, unit, amount: 0 })
+          const entry = itemMap.get(itemName)
+          entry.qty    += qtyNum
+          entry.amount += amt
+        }
+      }
+    }
   }
 
   // ── Step 2: ALLLEDGERENTRIES.LIST OUTSIDE VOUCHER blocks ────────────────
@@ -971,7 +1011,13 @@ function parseVouchers(xml, salesAccounts = [], cashInflowLedgers = [], fromISO 
       outsideCount++
     }
   }
-  return { vouchers, cashFlow, bankFlow }
+
+  const topItems = [...itemMap.entries()]
+    .map(([name, { qty, unit, amount }]) => ({ name, qty, unit, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 10)
+
+  return { vouchers, cashFlow, bankFlow, topItems }
 }
 
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────

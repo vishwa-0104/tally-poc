@@ -11,7 +11,7 @@ import {
   Users, Store,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, type SlowStockItem, type TallyVoucher } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, type SlowStockItem, type TallyVoucher, type TopItem } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -463,6 +463,7 @@ export default function Dashboard() {
 
   const [receivables, setReceivables] = useState<number | null>(null)
   const [payables,    setPayables]    = useState<number | null>(null)
+  const [topItems,    setTopItems]    = useState<TopItem[]>([])
 
   const [total,         setTotal]         = useState(0)
   const [prevDaySales,  setPrevDaySales]  = useState<number | null>(null)
@@ -483,14 +484,17 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow } = await fetchDaybook(
+      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow, topItems: fetchedTopItems } = await fetchDaybook(
         toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany,
         {
-          salesAccounts:     settings.today?.salesAccounts,
-          cashInflowLedgers: settings.today?.cashInflowLedgers,
-          bankLedgers:       settings.today?.bankLedgers,
+          salesAccounts:        settings.today?.salesAccounts,
+          salesIncludeVouchers: settings.today?.salesIncludeVouchers,
+          salesExcludeVouchers: settings.today?.salesExcludeVouchers,
+          cashInflowLedgers:    settings.today?.cashInflowLedgers,
+          bankLedgers:          settings.today?.bankLedgers,
         },
       )
+      setTopItems(fetchedTopItems ?? [])
 
       // Group all vouchers by type — helps verify which types to use for cash/bank
       const byType: Record<string, { total: number; taxable: number; count: number; vouchers: { party: string; amount: number; taxable: number; date: string }[] }> = {}
@@ -804,9 +808,21 @@ export default function Dashboard() {
                 title="Top Performing Items"
                 columns={[
                   { label: 'Description' },
-                  { label: 'Qty',        right: true },
+                  { label: 'Qty',     right: true },
                   { label: 'Amt (₹)', right: true },
                 ]}
+                loading={!fetched}
+                rows={fetched && topItems.length > 0
+                  ? topItems.map(item => ({
+                      cells: [
+                        item.name,
+                        `${item.qty % 1 === 0 ? item.qty : item.qty.toFixed(2)}${item.unit ? ' ' + item.unit : ''}`,
+                        formatCurrency(item.amount),
+                      ],
+                    }))
+                  : fetched
+                    ? [{ cells: ['No items found', '', ''], dim: true }]
+                    : undefined}
               />
               <DataTableCard
                 title="Top Performing Debtors"
