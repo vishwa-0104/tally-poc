@@ -187,6 +187,7 @@ export interface CashBankFlow {
 export interface DaybookOptions {
   cashInflowLedgers?:  string[]
   cashOutflowLedgers?: string[]
+  bankLedgers?:        string[]
 }
 
 export async function fetchDaybook(
@@ -200,6 +201,7 @@ export async function fetchDaybook(
     fromDate, toDate, tallyUrl, tallyCompany,
     cashInflowLedgers:  options.cashInflowLedgers  ?? [],
     cashOutflowLedgers: options.cashOutflowLedgers ?? [],
+    bankLedgers:        options.bankLedgers        ?? [],
   })
   return result
 }

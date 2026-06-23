@@ -106,6 +106,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate,
         payload.cashInflowLedgers  || [],
         payload.cashOutflowLedgers || [],
+        payload.bankLedgers        || [],
       )
         .then(sendResponse)
         .catch((err) => sendResponse({ vouchers: [], rawXml: '', cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
@@ -624,9 +625,9 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 // SVFROMDATE/SVTODATE tell Tally which period to scope to.
 // JS date filter applied after parsing as a safety net.
 
-async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cashInflowLedgers = [], cashOutflowLedgers = []) {
-  const from = toTallyDisplayDate(fromDate)  // "01-Apr-2026"
-  const to   = toTallyDisplayDate(toDate)    // "30-Jun-2026"
+async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cashInflowLedgers = [], cashOutflowLedgers = [], bankLedgers = []) {
+  const from = toTallyDisplayDate(fromDate)
+  const to   = toTallyDisplayDate(toDate)
 
   const xml = `<ENVELOPE>
   <HEADER>
@@ -652,7 +653,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cash
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
 
-  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, cashInflowLedgers, cashOutflowLedgers, fromISO, toISO)
+  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, cashInflowLedgers, cashOutflowLedgers, fromISO, toISO, bankLedgers)
 
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
@@ -730,21 +731,21 @@ function matchAllLedgerEntries(block) {
   return [...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi)]
 }
 
-function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fromISO = '', toISO = '') {
+function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fromISO = '', toISO = '', bankLedgers = []) {
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
 
-  // Build lookup sets from saved settings (lowercase for case-insensitive match)
-  // If no saved ledgers, fall back to name-contains matching (/cash/i or /bank/i)
-  const inflowSet  = cashInflowLedgers.length  ? new Set(cashInflowLedgers.map(n => n.toLowerCase()))  : null
+  // Saved settings take priority; regex is fallback when nothing is configured
+  const inflowSet  = cashInflowLedgers.length ? new Set(cashInflowLedgers.map(n => n.toLowerCase())) : null
   const outflowSet = cashOutflowLedgers.length ? new Set(cashOutflowLedgers.map(n => n.toLowerCase())) : null
+  const bankSet    = bankLedgers.length        ? new Set(bankLedgers.map(n => n.toLowerCase()))        : null
 
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
   const GST_RE  = /cgst|sgst|igst|cess/i
   const CASH_RE = /cash/i
-  const BANK_RE = /bank/i
+  const BANK_RE = /\bbank\b/i
 
   // Track each VOUCHER block's byte range and date — used in Step 2 to correctly
   // associate ALLLEDGERENTRIES that Tally places OUTSIDE <VOUCHER> blocks
@@ -853,9 +854,9 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
       const ledgerLower = ledgerName.toLowerCase()
 
       // Determine if this ledger counts as cash inflow/outflow or bank inflow/outflow
-      const isInflowLedger  = inflowSet  ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
+      const isInflowLedger  = inflowSet ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
       const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(ledgerName)
-      const isBankLedger    = BANK_RE.test(ledgerName)
+      const isBankLedger    = bankSet   ? bankSet.has(ledgerLower)    : BANK_RE.test(ledgerName)
 
       // Only accumulate cash/bank flow for vouchers within the requested date range.
       // TBSVouchers may return entries outside the range — the JS date filter handles
@@ -935,9 +936,9 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
     const isParty    = /ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)
 
     const ledgerLower     = ledgerName.toLowerCase()
-    const isInflowLedger  = inflowSet  ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
+    const isInflowLedger  = inflowSet ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
     const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(ledgerName)
-    const isBankLedger    = BANK_RE.test(ledgerName)
+    const isBankLedger    = bankSet   ? bankSet.has(ledgerLower)    : BANK_RE.test(ledgerName)
 
     if (isInflowLedger || isOutflowLedger) {
       const action = leAmt < 0 ? '→ CASH INFLOW  +' + Math.abs(leAmt) : '→ CASH OUTFLOW +' + leAmt

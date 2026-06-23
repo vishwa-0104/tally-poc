@@ -517,6 +517,7 @@ export default function Dashboard() {
         {
           cashInflowLedgers:  settings.today?.cashInflowLedgers,
           cashOutflowLedgers: settings.today?.cashOutflowLedgers,
+          bankLedgers:        settings.today?.bankLedgers,
         },
       )
 

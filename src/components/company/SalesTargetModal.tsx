@@ -100,10 +100,12 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [salesTypes,     setSalesTypes]     = useState<string[]>([])
   const [inflowLedgers,  setInflowLedgers]  = useState<string[]>([])
   const [outflowLedgers, setOutflowLedgers] = useState<string[]>([])
+  const [bankLedgers,    setBankLedgers]    = useState<string[]>([])
 
   // Options fetched from Tally
   const [voucherTypeOpts, setVoucherTypeOpts] = useState<string[]>([])
   const [cashLedgerOpts,  setCashLedgerOpts]  = useState<string[]>([])
+  const [bankLedgerOpts,  setBankLedgerOpts]  = useState<string[]>([])
   const [loadingOpts,     setLoadingOpts]     = useState(false)
 
   const [saving, setSaving] = useState(false)
@@ -128,6 +130,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setSalesTypes(s.today?.salesVoucherTypes ?? [])
         setInflowLedgers(s.today?.cashInflowLedgers ?? [])
         setOutflowLedgers(s.today?.cashOutflowLedgers ?? [])
+        setBankLedgers(s.today?.bankLedgers ?? [])
       })
       .catch(() => { /* settings optional */ })
 
@@ -144,6 +147,11 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
           .map(l => l.name)
           .sort()
         setCashLedgerOpts(cashOnly)
+        const bankOnly = ledRes.value
+          .filter(l => l.group?.toLowerCase().includes('bank'))
+          .map(l => l.name)
+          .sort()
+        setBankLedgerOpts(bankOnly)
       }
     }).finally(() => setLoadingOpts(false))
   }, [open, companyId, fyYear, tallyUrl, tallyCompany])
@@ -159,6 +167,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         salesVoucherTypes:  salesTypes.length     > 0 ? salesTypes     : undefined,
         cashInflowLedgers:  inflowLedgers.length  > 0 ? inflowLedgers  : undefined,
         cashOutflowLedgers: outflowLedgers.length > 0 ? outflowLedgers : undefined,
+        bankLedgers:        bankLedgers.length    > 0 ? bankLedgers    : undefined,
       },
     }
 
@@ -286,6 +295,18 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
               options={cashLedgerOpts}
               selected={outflowLedgers}
               onChange={setOutflowLedgers}
+              loading={loadingOpts}
+            />
+          </div>
+
+          {/* Section D — Bank Ledgers */}
+          <div className="border-t border-gray-100 pt-5">
+            <CheckList
+              label="Bank Ledgers"
+              hint="Default: ledgers whose name contains 'bank'"
+              options={bankLedgerOpts}
+              selected={bankLedgers}
+              onChange={setBankLedgers}
               loading={loadingOpts}
             />
           </div>

@@ -100,6 +100,7 @@ export interface DashboardSettings {
     salesVoucherTypes?:  string[]
     cashInflowLedgers?:  string[]
     cashOutflowLedgers?: string[]
+    bankLedgers?:        string[]
   }
 }
 
