@@ -515,9 +515,8 @@ export default function Dashboard() {
       const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow } = await fetchDaybook(
         toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany,
         {
-          cashInflowLedgers:  settings.today?.cashInflowLedgers,
-          cashOutflowLedgers: settings.today?.cashOutflowLedgers,
-          bankLedgers:        settings.today?.bankLedgers,
+          cashInflowLedgers: settings.today?.cashInflowLedgers,
+          bankLedgers:       settings.today?.bankLedgers,
         },
       )
 

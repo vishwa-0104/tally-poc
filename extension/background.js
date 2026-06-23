@@ -104,9 +104,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case 'FETCH_DAYBOOK':
       handleFetchDaybook(
         payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate,
-        payload.cashInflowLedgers  || [],
-        payload.cashOutflowLedgers || [],
-        payload.bankLedgers        || [],
+        payload.cashInflowLedgers || [],
+        payload.bankLedgers       || [],
       )
         .then(sendResponse)
         .catch((err) => sendResponse({ vouchers: [], rawXml: '', cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
@@ -625,7 +624,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 // SVFROMDATE/SVTODATE tell Tally which period to scope to.
 // JS date filter applied after parsing as a safety net.
 
-async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cashInflowLedgers = [], cashOutflowLedgers = [], bankLedgers = []) {
+async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cashInflowLedgers = [], bankLedgers = []) {
   console.log('[BankDebug] handleFetchDaybook received bankLedgers:', bankLedgers)
   const from = toTallyDisplayDate(fromDate)
   const to   = toTallyDisplayDate(toDate)
@@ -654,7 +653,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cash
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
 
-  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, cashInflowLedgers, cashOutflowLedgers, fromISO, toISO, bankLedgers)
+  const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, cashInflowLedgers, fromISO, toISO, bankLedgers)
 
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
@@ -732,15 +731,15 @@ function matchAllLedgerEntries(block) {
   return [...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi)]
 }
 
-function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fromISO = '', toISO = '', bankLedgers = []) {
+function parseVouchers(xml, cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = []) {
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
 
-  // Saved settings take priority; regex is fallback when nothing is configured
+  // Cash inflow and outflow share the same ledger names — one configured list covers both
   const inflowSet  = cashInflowLedgers.length ? new Set(cashInflowLedgers.map(n => n.toLowerCase())) : null
-  const outflowSet = cashOutflowLedgers.length ? new Set(cashOutflowLedgers.map(n => n.toLowerCase())) : null
-  const bankSet    = bankLedgers.length        ? new Set(bankLedgers.map(n => n.toLowerCase()))        : null
+  const outflowSet = inflowSet
+  const bankSet    = bankLedgers.length       ? new Set(bankLedgers.map(n => n.toLowerCase()))       : null
 
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()

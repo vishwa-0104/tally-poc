@@ -185,9 +185,8 @@ export interface CashBankFlow {
 }
 
 export interface DaybookOptions {
-  cashInflowLedgers?:  string[]
-  cashOutflowLedgers?: string[]
-  bankLedgers?:        string[]
+  cashInflowLedgers?: string[]
+  bankLedgers?:       string[]
 }
 
 export async function fetchDaybook(
@@ -199,9 +198,8 @@ export async function fetchDaybook(
 ): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow }> {
   const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow }>('FETCH_DAYBOOK', {
     fromDate, toDate, tallyUrl, tallyCompany,
-    cashInflowLedgers:  options.cashInflowLedgers  ?? [],
-    cashOutflowLedgers: options.cashOutflowLedgers ?? [],
-    bankLedgers:        options.bankLedgers        ?? [],
+    cashInflowLedgers: options.cashInflowLedgers ?? [],
+    bankLedgers:       options.bankLedgers       ?? [],
   })
   return result
 }

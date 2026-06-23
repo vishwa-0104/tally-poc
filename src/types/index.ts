@@ -97,10 +97,9 @@ export const COMPANY_FEATURES = {
 
 export interface DashboardSettings {
   today?: {
-    salesVoucherTypes?:  string[]
-    cashInflowLedgers?:  string[]
-    cashOutflowLedgers?: string[]
-    bankLedgers?:        string[]
+    salesVoucherTypes?: string[]
+    cashInflowLedgers?: string[]
+    bankLedgers?:       string[]
   }
 }
 
