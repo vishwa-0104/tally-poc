@@ -13,7 +13,7 @@ export interface CreateStockItemPayload {
   tallyCompany?: string
 }
 
-const EXTENSION_MSG_TIMEOUT = 10_000
+const EXTENSION_MSG_TIMEOUT = 120_000
 
 /**
  * Send a message to the extension via the content script bridge.

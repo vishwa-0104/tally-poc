@@ -626,6 +626,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 // JS date filter applied after parsing as a safety net.
 
 async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cashInflowLedgers = [], cashOutflowLedgers = [], bankLedgers = []) {
+  console.log('[BankDebug] handleFetchDaybook received bankLedgers:', bankLedgers)
   const from = toTallyDisplayDate(fromDate)
   const to   = toTallyDisplayDate(toDate)
 
