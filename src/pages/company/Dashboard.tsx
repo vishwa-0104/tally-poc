@@ -315,80 +315,38 @@ function BankCard({ inflow, outflow, balance }: {
   )
 }
 
-function ReceivablesCard({ balance, netChange }: {
-  balance:   number | null
-  netChange: number | null
-}) {
+function ReceivablesCard({ balance }: { balance: number | null }) {
   const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
-  const isUp   = netChange !== null && netChange > 0
-  const isDown = netChange !== null && netChange < 0
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-start justify-between mb-2">
         <div className="p-1.5 bg-violet-50 rounded-lg">
           <Users className="w-3.5 h-3.5 text-violet-600" />
         </div>
-        {netChange !== null && (
-          <span className={`flex items-center ${isUp ? 'text-emerald-600' : isDown ? 'text-red-500' : 'text-gray-400'}`}>
-            {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : null}
-          </span>
-        )}
       </div>
       <p className={`text-lg font-bold tracking-tight mb-0.5 ${balance === null ? 'text-gray-300' : 'text-gray-900'}`}>
         {val(balance)}
       </p>
       <p className="text-[11px] font-semibold text-gray-600">Receivables</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
-        {balance === null ? 'Today only' : 'Sundry Debtors'}
-      </p>
-      {netChange !== null && (
-        <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1">
-          <span className="text-[10px] text-gray-400 whitespace-nowrap">Period change</span>
-          <span className={`text-[10px] font-medium whitespace-nowrap ${isUp ? 'text-emerald-600' : isDown ? 'text-red-500' : 'text-gray-500'}`}>
-            {netChange === 0 ? '—' : formatCurrency(Math.abs(netChange))}
-          </span>
-        </div>
-      )}
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Sundry Debtors</p>
     </div>
   )
 }
 
-function PayablesCard({ balance, netChange }: {
-  balance:   number | null
-  netChange: number | null
-}) {
+function PayablesCard({ balance }: { balance: number | null }) {
   const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
-  const isUp   = netChange !== null && netChange > 0
-  const isDown = netChange !== null && netChange < 0
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-start justify-between mb-2">
         <div className="p-1.5 bg-orange-50 rounded-lg">
           <Store className="w-3.5 h-3.5 text-orange-600" />
         </div>
-        {netChange !== null && (
-          <span className={`flex items-center ${isUp ? 'text-red-500' : isDown ? 'text-emerald-600' : 'text-gray-400'}`}>
-            {isUp ? <ArrowUpRight className="w-4 h-4" /> : isDown ? <ArrowDownRight className="w-4 h-4" /> : null}
-          </span>
-        )}
       </div>
       <p className={`text-lg font-bold tracking-tight mb-0.5 ${balance === null ? 'text-gray-300' : 'text-gray-900'}`}>
         {val(balance)}
       </p>
       <p className="text-[11px] font-semibold text-gray-600">Payables</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
-        {balance === null ? 'Today only' : 'Sundry Creditors'}
-      </p>
-      {netChange !== null && (
-        <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-between gap-1">
-          <span className="text-[10px] text-gray-400 whitespace-nowrap">Period change</span>
-          <span className={`text-[10px] font-medium whitespace-nowrap ${isUp ? 'text-red-500' : isDown ? 'text-emerald-600' : 'text-gray-500'}`}>
-            {netChange === 0 ? '—' : formatCurrency(Math.abs(netChange))}
-          </span>
-        </div>
-      )}
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Sundry Creditors</p>
     </div>
   )
 }
@@ -488,10 +446,8 @@ export default function Dashboard() {
   const [bankOutflow,  setBankOutflow]  = useState<number | null>(null)
   const [bankBalance,  setBankBalance]  = useState<number | null>(null)
 
-  const [receivables,         setReceivables]         = useState<number | null>(null)
-  const [payables,            setPayables]            = useState<number | null>(null)
-  const [receivablesNetChange, setReceivablesNetChange] = useState<number | null>(null)
-  const [payablesNetChange,    setPayablesNetChange]    = useState<number | null>(null)
+  const [receivables, setReceivables] = useState<number | null>(null)
+  const [payables,    setPayables]    = useState<number | null>(null)
 
   const [total,         setTotal]         = useState(0)
   const [prevDaySales,  setPrevDaySales]  = useState<number | null>(null)
@@ -546,20 +502,6 @@ export default function Dashboard() {
       setTotal(todaySalesTotal)
       setActivePeriod({ from, to })
 
-      // Net change in receivables = new sales (credit extended) − receipts collected
-      const receiptTotal = all
-        .filter(v => v.type.toLowerCase().includes('receipt'))
-        .reduce((s, v) => s + v.amount, 0)
-      setReceivablesNetChange(todaySalesTotal - receiptTotal)
-
-      // Net change in payables = new purchases − payments made to vendors
-      const purchaseTotal = all
-        .filter(v => v.type.toLowerCase().includes('purchase') && !v.type.toLowerCase().includes('credit'))
-        .reduce((s, v) => s + v.taxableAmount, 0)
-      const paymentTotal = all
-        .filter(v => v.type.toLowerCase().includes('payment'))
-        .reduce((s, v) => s + v.amount, 0)
-      setPayablesNetChange(purchaseTotal - paymentTotal)
       console.log('[Today] Total sales:', todaySalesTotal, '| date:', from)
 
       // 2. Inflow/outflow from daybook (already parsed in background.js — no extra Tally call)
@@ -801,8 +743,8 @@ export default function Dashboard() {
               {loading && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
             </div>
 
-            {/* KPI cards — row 1: Sales, Cash, Banks, Receivables, Payables */}
-            <div className="grid grid-cols-5 gap-4">
+            {/* KPI cards — row 1: Sales, Cash, Banks (+ Receivables, Payables for Today only) */}
+            <div className={`grid gap-4 ${filterPreset === 'today' ? 'grid-cols-5' : 'grid-cols-3'}`}>
               {(() => {
                 const periodTarget = fetched
                   ? computeTargetForPeriod(filterPreset, customFrom, customTo, monthlyTargets)
@@ -839,14 +781,12 @@ export default function Dashboard() {
                 outflow={fetched ? bankOutflow : null}
                 balance={fetched ? bankBalance : null}
               />
-              <ReceivablesCard
-                balance={fetched ? receivables : null}
-                netChange={fetched ? receivablesNetChange : null}
-              />
-              <PayablesCard
-                balance={fetched ? payables : null}
-                netChange={fetched ? payablesNetChange : null}
-              />
+              {filterPreset === 'today' && (
+                <>
+                  <ReceivablesCard balance={fetched ? receivables : null} />
+                  <PayablesCard    balance={fetched ? payables    : null} />
+                </>
+              )}
             </div>
 
             {/* Table panels — Top Performing Items | Top Performing Debtors | Slow Moving Stocks */}
