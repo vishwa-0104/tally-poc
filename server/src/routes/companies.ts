@@ -585,9 +585,11 @@ companiesRouter.put('/companies/:id/dashboard-settings', async (req, res) => {
   }
   const schema = z.object({
     today: z.object({
-      salesVoucherTypes: z.array(z.string()).optional(),
-      cashInflowLedgers: z.array(z.string()).optional(),
-      bankLedgers:       z.array(z.string()).optional(),
+      salesAccounts:        z.array(z.string()).optional(),
+      salesIncludeVouchers: z.array(z.string()).optional(),
+      salesExcludeVouchers: z.array(z.string()).optional(),
+      cashInflowLedgers:    z.array(z.string()).optional(),
+      bankLedgers:          z.array(z.string()).optional(),
     }).optional(),
   })
   const result = schema.safeParse(req.body)

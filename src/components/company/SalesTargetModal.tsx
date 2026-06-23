@@ -37,20 +37,15 @@ interface Props {
   tallyCompany?: string
 }
 
-// ── Checkbox multiselect list ─────────────────────────────────────────────────
+// ── Simple checkbox list (short lists like cash/bank ledgers) ─────────────────
 function CheckList({
   label, hint, options, selected, onChange, loading,
 }: {
-  label:    string
-  hint:     string
-  options:  string[]
-  selected: string[]
-  onChange: (v: string[]) => void
-  loading:  boolean
+  label: string; hint: string; options: string[]
+  selected: string[]; onChange: (v: string[]) => void; loading: boolean
 }) {
   const toggle = (name: string) =>
     onChange(selected.includes(name) ? selected.filter(x => x !== name) : [...selected, name])
-
   return (
     <div>
       <p className="text-xs font-semibold text-gray-700 mb-1.5">{label}</p>
@@ -64,12 +59,8 @@ function CheckList({
         <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-44 overflow-y-auto">
           {options.map(opt => (
             <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50">
-              <input
-                type="checkbox"
-                checked={selected.includes(opt)}
-                onChange={() => toggle(opt)}
-                className="accent-blue-600 w-3.5 h-3.5 shrink-0"
-              />
+              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)}
+                className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
               <span className="text-xs text-gray-700">{opt}</span>
             </label>
           ))}
@@ -78,9 +69,57 @@ function CheckList({
       {selected.length === 0 && !loading && options.length > 0 && (
         <p className="text-[11px] text-gray-400 italic mt-1">{hint}</p>
       )}
-      {selected.length > 0 && (
-        <p className="text-[11px] text-blue-600 mt-1">{selected.length} selected</p>
+      {selected.length > 0 && <p className="text-[11px] text-blue-600 mt-1">{selected.length} selected</p>}
+    </div>
+  )
+}
+
+// ── Searchable checkbox list (large lists like all ledgers / voucher types) ────
+function SearchCheckList({
+  label, hint, options, selected, onChange, loading,
+}: {
+  label: string; hint: string; options: string[]
+  selected: string[]; onChange: (v: string[]) => void; loading: boolean
+}) {
+  const [search, setSearch] = useState('')
+  const toggle = (name: string) =>
+    onChange(selected.includes(name) ? selected.filter(x => x !== name) : [...selected, name])
+  const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-700 mb-1.5">{label}</p>
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+          <Loader2 className="w-3 h-3 animate-spin" /> Fetching from Tally…
+        </div>
+      ) : options.length === 0 ? (
+        <p className="text-xs text-gray-400 italic py-1">No options found — is Tally running?</p>
+      ) : (
+        <>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search…"
+            className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 mb-1"
+          />
+          <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-gray-400 italic px-3 py-2">No matches</p>
+            ) : filtered.map(opt => (
+              <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50">
+                <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)}
+                  className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
+                <span className="text-xs text-gray-700">{opt}</span>
+              </label>
+            ))}
+          </div>
+        </>
       )}
+      {selected.length === 0 && !loading && options.length > 0 && (
+        <p className="text-[11px] text-gray-400 italic mt-1">{hint}</p>
+      )}
+      {selected.length > 0 && <p className="text-[11px] text-blue-600 mt-1">{selected.length} selected</p>}
     </div>
   )
 }
@@ -96,12 +135,16 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [budgetValues,  setBudgetValues]  = useState<Record<number, string>>({})
   const [loadingBudget, setLoadingBudget] = useState(false)
 
-  // Dashboard settings multiselect state
-  const [salesTypes,    setSalesTypes]    = useState<string[]>([])
+  // Sales settings
+  const [salesAccounts,        setSalesAccounts]        = useState<string[]>([])
+  const [salesIncludeVouchers, setSalesIncludeVouchers] = useState<string[]>([])
+  const [salesExcludeVouchers, setSalesExcludeVouchers] = useState<string[]>([])
+  // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
   const [bankLedgers,   setBankLedgers]   = useState<string[]>([])
 
   // Options fetched from Tally
+  const [allLedgerOpts,   setAllLedgerOpts]   = useState<string[]>([])
   const [voucherTypeOpts, setVoucherTypeOpts] = useState<string[]>([])
   const [cashLedgerOpts,  setCashLedgerOpts]  = useState<string[]>([])
   const [bankLedgerOpts,  setBankLedgerOpts]  = useState<string[]>([])
@@ -126,7 +169,9 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
     // Load saved settings
     fetchDashboardSettings(companyId)
       .then(s => {
-        setSalesTypes(s.today?.salesVoucherTypes ?? [])
+        setSalesAccounts(s.today?.salesAccounts ?? [])
+        setSalesIncludeVouchers(s.today?.salesIncludeVouchers ?? [])
+        setSalesExcludeVouchers(s.today?.salesExcludeVouchers ?? [])
         setInflowLedgers(s.today?.cashInflowLedgers ?? [])
         setBankLedgers(s.today?.bankLedgers ?? [])
       })
@@ -140,16 +185,12 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
     ]).then(([vtRes, ledRes]) => {
       if (vtRes.status === 'fulfilled') setVoucherTypeOpts(vtRes.value.sort())
       if (ledRes.status === 'fulfilled') {
-        const cashOnly = ledRes.value
-          .filter(l => l.group?.toLowerCase().includes('cash'))
-          .map(l => l.name)
-          .sort()
-        setCashLedgerOpts(cashOnly)
-        const bankOnly = ledRes.value
-          .filter(l => l.group?.toLowerCase().includes('bank'))
-          .map(l => l.name)
-          .sort()
-        setBankLedgerOpts(bankOnly)
+        const all  = ledRes.value.map(l => l.name).sort()
+        const cash = ledRes.value.filter(l => l.group?.toLowerCase().includes('cash')).map(l => l.name).sort()
+        const bank = ledRes.value.filter(l => l.group?.toLowerCase().includes('bank')).map(l => l.name).sort()
+        setAllLedgerOpts(all)
+        setCashLedgerOpts(cash)
+        setBankLedgerOpts(bank)
       }
     }).finally(() => setLoadingOpts(false))
   }, [open, companyId, fyYear, tallyUrl, tallyCompany])
@@ -162,9 +203,11 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
 
     const settings: DashboardSettings = {
       today: {
-        salesVoucherTypes: salesTypes.length    > 0 ? salesTypes    : undefined,
-        cashInflowLedgers: inflowLedgers.length > 0 ? inflowLedgers : undefined,
-        bankLedgers:       bankLedgers.length   > 0 ? bankLedgers   : undefined,
+        salesAccounts:        salesAccounts.length        > 0 ? salesAccounts        : undefined,
+        salesIncludeVouchers: salesIncludeVouchers.length > 0 ? salesIncludeVouchers : undefined,
+        salesExcludeVouchers: salesExcludeVouchers.length > 0 ? salesExcludeVouchers : undefined,
+        cashInflowLedgers:    inflowLedgers.length        > 0 ? inflowLedgers        : undefined,
+        bankLedgers:          bankLedgers.length          > 0 ? bankLedgers          : undefined,
       },
     }
 
@@ -264,14 +307,34 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
             )}
           </div>
 
-          {/* Section B — Sales Voucher Types */}
+          {/* Section B — Sales Accounts (ledgers) */}
           <div className="border-t border-gray-100 pt-5">
-            <CheckList
-              label="Sales Voucher Types"
-              hint="Default: any type containing 'sales' (e.g. Sales, GST Sales)"
+            <SearchCheckList
+              label="Sales Accounts"
+              hint="Default: all vouchers matching voucher type filter below"
+              options={allLedgerOpts}
+              selected={salesAccounts}
+              onChange={setSalesAccounts}
+              loading={loadingOpts}
+            />
+          </div>
+
+          {/* Section C — Sales Voucher Filters */}
+          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+            <SearchCheckList
+              label="Sales — Include Vouchers"
+              hint="Default: voucher types containing 'sales'"
               options={voucherTypeOpts}
-              selected={salesTypes}
-              onChange={setSalesTypes}
+              selected={salesIncludeVouchers}
+              onChange={setSalesIncludeVouchers}
+              loading={loadingOpts}
+            />
+            <SearchCheckList
+              label="Sales — Exclude Vouchers"
+              hint="Default: Credit Note"
+              options={voucherTypeOpts}
+              selected={salesExcludeVouchers}
+              onChange={setSalesExcludeVouchers}
               loading={loadingOpts}
             />
           </div>

@@ -53,10 +53,25 @@ function getFilterDates(preset: FilterPreset, cfrom: string, cto: string) {
 
 // ── Dashboard settings helpers ────────────────────────────────────────────────
 
-function isSalesVoucher(v: TallyVoucher, settings: DashboardSettings): boolean {
-  const saved = settings.today?.salesVoucherTypes
-  if (saved?.length) return saved.some(t => v.type.toLowerCase() === t.toLowerCase())
-  return v.type.toLowerCase().includes('sales') && !v.type.toLowerCase().includes('credit')
+function computeSalesTotal(vouchers: TallyVoucher[], settings: DashboardSettings): number {
+  const { salesAccounts, salesIncludeVouchers, salesExcludeVouchers } = settings.today ?? {}
+
+  const base = salesAccounts?.length ? vouchers.filter(v => v.hasSalesLedger) : vouchers
+
+  const included = base.filter(v => {
+    if (salesIncludeVouchers?.length)
+      return salesIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+    return /sales/i.test(v.type) && !/credit\s*note/i.test(v.type)
+  })
+
+  const excluded = base.filter(v => {
+    if (salesExcludeVouchers?.length)
+      return salesExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+    return /credit\s*note/i.test(v.type)
+  })
+
+  return included.reduce((s, v) => s + v.taxableAmount, 0)
+       - excluded.reduce((s, v) => s + v.taxableAmount, 0)
 }
 
 
@@ -471,6 +486,7 @@ export default function Dashboard() {
       const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow } = await fetchDaybook(
         toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany,
         {
+          salesAccounts:     settings.today?.salesAccounts,
           cashInflowLedgers: settings.today?.cashInflowLedgers,
           bankLedgers:       settings.today?.bankLedgers,
         },
@@ -493,19 +509,14 @@ export default function Dashboard() {
       }
       console.groupEnd()
 
-      const sales       = all.filter(v => isSalesVoucher(v, settings))
-      const creditNotes = all.filter(v => v.type.toLowerCase() === 'credit note')
-
-      const salesTotal  = sales.reduce((s, v) => s + v.taxableAmount, 0)
-      const creditTotal = creditNotes.reduce((s, v) => s + v.taxableAmount, 0)
-      const todaySalesTotal = salesTotal - creditTotal
+      const todaySalesTotal = computeSalesTotal(all, settings)
       setTotal(todaySalesTotal)
       setActivePeriod({ from, to })
 
       console.log('[Today] Total sales:', todaySalesTotal, '| date:', from)
 
       // 2. Inflow/outflow from daybook (already parsed in background.js — no extra Tally call)
-      console.log('[Settings] saved salesVoucherTypes:', settings.today?.salesVoucherTypes ?? '(none — using default)')
+      console.log('[Settings] salesAccounts:', settings.today?.salesAccounts ?? '(none)', '| include:', settings.today?.salesIncludeVouchers ?? '(none)', '| exclude:', settings.today?.salesExcludeVouchers ?? '(none)')
       console.log('[Settings] saved cashInflowLedgers:', settings.today?.cashInflowLedgers ?? '(none — using default: ledgers matching /cash/i)')
       console.log('[Settings] NOTE: outflow uses same cash ledger names as inflow')
       setCashInflow(daybookCashFlow.inflow)
@@ -574,10 +585,8 @@ export default function Dashboard() {
         try {
           const { vouchers: yv } = await fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany, {})
           console.log('[PrevDay] Raw vouchers received:', yv.length, yv)
-          const yS = yv.filter(v => isSalesVoucher(v, settings))
-          const yC = yv.filter(v => v.type.toLowerCase() === 'credit note')
-          const yTotal = yS.reduce((s, v) => s + v.taxableAmount, 0) - yC.reduce((s, v) => s + v.taxableAmount, 0)
-          console.log('[PrevDay] Sales vouchers:', yS.length, '| Credit notes:', yC.length, '| Total:', yTotal)
+          const yTotal = computeSalesTotal(yv, settings)
+          console.log('[PrevDay] Total:', yTotal)
           console.log('[Comparison] Today:', todaySalesTotal, '| Yesterday:', yTotal,
             '| Change:', (((todaySalesTotal - yTotal) / (yTotal || 1)) * 100).toFixed(1) + '%')
           setPrevDaySales(yTotal)

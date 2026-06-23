@@ -119,12 +119,13 @@ export async function createTallyLedger(payload: CreateLedgerPayload, tallyUrl: 
 }
 
 export interface TallyVoucher {
-  date:           string
-  type:           string
-  party:          string
-  amount:         number  // total including GST (party ledger value)
-  taxableAmount:  number  // amount minus CGST/SGST/IGST/Cess
-  voucherNo:      string
+  date:            string
+  type:            string
+  party:           string
+  amount:          number  // total including GST (party ledger value)
+  taxableAmount:   number  // amount minus CGST/SGST/IGST/Cess
+  voucherNo:       string
+  hasSalesLedger?: boolean // true when a configured sales account ledger appears in this voucher
 }
 
 export async function fetchTallyVouchers(
@@ -185,6 +186,7 @@ export interface CashBankFlow {
 }
 
 export interface DaybookOptions {
+  salesAccounts?:     string[]
   cashInflowLedgers?: string[]
   bankLedgers?:       string[]
 }
@@ -198,6 +200,7 @@ export async function fetchDaybook(
 ): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow }> {
   const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow }>('FETCH_DAYBOOK', {
     fromDate, toDate, tallyUrl, tallyCompany,
+    salesAccounts:     options.salesAccounts     ?? [],
     cashInflowLedgers: options.cashInflowLedgers ?? [],
     bankLedgers:       options.bankLedgers       ?? [],
   })
