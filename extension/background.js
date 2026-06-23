@@ -803,23 +803,35 @@ function parseVouchers(xml, cashInflowLedgers = [], fromISO = '', toISO = '', ba
     // but still move real money through bank/cash ledgers.
     let gstTotal = 0
 
-    // Merge all three ledger entry tag variants and deduplicate by position.
-    // LEDGERENTRIES.LIST holds the primary (bank/cash) entry in Receipt/Payment vouchers.
-    // ALLLEDGERENTRIES.LIST holds the party/detail entries.
-    // Previously only ALLLEDGERENTRIES was scanned here, so bank entries in
-    // LEDGERENTRIES.LIST were silently skipped — that was the bank flow bug.
-    const allFlowMatches = [
+    // Collect ledger entries from ALLLEDGERENTRIES.LIST / ALLLEDGERENTRIES first,
+    // then add LEDGERENTRIES.LIST entries only when the same ledger+amount doesn't
+    // already appear in the ALL set. This prevents double-counting in Purchase
+    // vouchers (where Tally duplicates bank entries across both tag types) while
+    // still capturing bank entries that only exist in LEDGERENTRIES.LIST
+    // (Receipt/Payment vouchers — the original bank flow miss we fixed).
+    const allEntries = [
       ...block.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi),
       ...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi),
+    ]
+    const simpleEntries = [
       ...block.matchAll(/<LEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/LEDGERENTRIES\.LIST>/gi),
     ]
-    const seenFlowPos = new Set()
-    const flowEntries = []
-    for (const m of allFlowMatches) {
-      if (seenFlowPos.has(m.index)) continue
-      seenFlowPos.add(m.index)
-      flowEntries.push(m)
-    }
+
+    // Key = "ledgerName::rawAmount" — same ledger+amount in both tag types = duplicate
+    const seenInAll = new Set(allEntries.map(m => {
+      const n = decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '').toLowerCase()
+      const a = decode(m[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
+      return `${n}::${a}`
+    }))
+
+    const flowEntries = [
+      ...allEntries,
+      ...simpleEntries.filter(m => {
+        const n = decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '').toLowerCase()
+        const a = decode(m[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
+        return !seenInAll.has(`${n}::${a}`)
+      }),
+    ]
 
     // DEBUG: log every ledger entry found, which tag it came from, and whether it looks like a bank entry
     const debugRows = flowEntries.map(m => {

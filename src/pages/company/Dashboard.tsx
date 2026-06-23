@@ -680,20 +680,18 @@ export default function Dashboard() {
   // Settings must resolve before fetchData so saved voucher types are applied
   useEffect(() => {
     reloadMeta()
-      ?.then(s => fetchData('today', todayStr(), todayStr(), s ?? {}))
-      ?? fetchData('today', todayStr(), todayStr())
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab)
-    if (tab === 'performance' && !fetched && !loading)
-      fetchData('today', todayStr(), todayStr())
   }
 
   const handleFilterChange = (preset: FilterPreset) => {
     setFilterPreset(preset)
-    if (preset !== 'custom')
-      fetchData(preset, customFrom, customTo)
+  }
+
+  const handleApply = () => {
+    fetchData(filterPreset, customFrom, customTo)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -745,7 +743,7 @@ export default function Dashboard() {
         open={showTargetModal}
         onClose={() => {
           setShowTargetModal(false)
-          reloadMeta()?.then(s => fetchData(filterPreset, customFrom, customTo, s ?? {}))
+          reloadMeta()
         }}
         companyId={companyId}
         tallyUrl={tallyUrl}
@@ -789,15 +787,16 @@ export default function Dashboard() {
                     onChange={e => setCustomTo(e.target.value)}
                     className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-blue-500"
                   />
-                  <button
-                    onClick={() => fetchData('custom', customFrom, customTo)}
-                    disabled={loading}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    Apply
-                  </button>
                 </>
               )}
+
+              <button
+                onClick={handleApply}
+                disabled={loading}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Apply
+              </button>
 
               {loading && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
             </div>
