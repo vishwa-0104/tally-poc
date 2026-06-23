@@ -181,11 +181,6 @@ async function handleFetchLedgers(tallyUrl, tallyCompany) {
   // Find and log the first ledger block that contains any GSTIN-like string
   // so we can see the exact tag name Tally is using
   const gstinPatternInXml = responseText.match(/<LEDGER\b[^>]*>[\s\S]{0,2000}?[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z][\s\S]{0,200}?<\/LEDGER>/i)
-  if (gstinPatternInXml) {
-    console.log('[Invoice ledgers GSTIN block sample]', gstinPatternInXml[0])
-  } else {
-    console.log('[Invoice ledgers raw - first 8000]', responseText.slice(0, 8000))
-  }
 
   const ledgers = parseLedgers(responseText)
   return { ledgers }
@@ -277,7 +272,6 @@ async function handleFetchStockItems(tallyUrl, tallyCompany) {
 
   const responseText = await postToTally(xml, tallyUrl)
   const stockItems = parseStockItems(responseText)
-  console.log('[Tally stock items] count:', stockItems.length)
   return { stockItems }
 }
 
@@ -335,7 +329,6 @@ async function handleFetchStockGroups(tallyUrl, tallyCompany) {
 
   const responseText = await postToTally(xml, tallyUrl)
   const stockGroups = parseStockGroups(responseText)
-  console.log('[Tally stock groups] count:', stockGroups.length)
   return { stockGroups }
 }
 
@@ -392,7 +385,6 @@ async function handleFetchStockUnits(tallyUrl, tallyCompany) {
 
   const responseText = await postToTally(xml, tallyUrl)
   const stockUnits = parseStockUnits(responseText)
-  console.log('[Tally stock units] count:', stockUnits.length)
   return { stockUnits }
 }
 
@@ -444,7 +436,6 @@ async function handleFetchGodowns(tallyUrl, tallyCompany) {
 
   const responseText = await postToTally(xml, tallyUrl)
   const godowns = parseGodowns(responseText)
-  console.log('[Tally godowns] count:', godowns.length)
   return { godowns }
 }
 
@@ -494,7 +485,6 @@ async function handleFetchVoucherTypes(tallyUrl, tallyCompany) {
 
   const responseText = await postToTally(xml, tallyUrl)
   const voucherTypes = parseVoucherTypes(responseText)
-  console.log('[Tally voucher types] count:', voucherTypes.length)
   return { voucherTypes }
 }
 
@@ -543,12 +533,7 @@ async function handleFetchVouchers(tallyUrl, tallyCompany, fromDate, toDate, _vo
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[SalesRegister] response length:', responseText.length)
-  console.log('[SalesRegister] raw (first 1000):', responseText.slice(0, 1000))
-
-  // Sales Register returns monthly summary (DSPPERIOD + DSPCRAMTA), not individual vouchers
   const vouchers = parseSalesRegisterSummary(responseText, fromDate)
-  console.log('[SalesRegister] parsed monthly totals:', JSON.stringify(vouchers))
   return { vouchers }
 }
 
@@ -563,8 +548,6 @@ function parseSalesRegisterSummary(xml, fromDate) {
   // Extract all DSPPERIOD and DSPCRAMTA values in order
   const periods = [...xml.matchAll(/<DSPPERIOD[^>]*>([^<]+)<\/DSPPERIOD>/gi)].map(m => decode(m[1]))
   const amounts = [...xml.matchAll(/<DSPCRAMTA[^>]*>([^<]+)<\/DSPCRAMTA>/gi)].map(m => parseFloat(decode(m[1]).replace(/,/g, '')) || 0)
-
-  console.log('[SalesRegister] periods:', periods, '| amounts:', amounts)
 
   const vouchers = []
   for (let i = 0; i < periods.length; i++) {
@@ -616,12 +599,6 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[SalesParty] response length:', responseText.length)
-  console.log('[SalesParty] raw (first 1000):', responseText.slice(0, 1000))
-
-  console.log('[SalesParty] response length:', responseText.length)
-  console.log('[SalesParty] raw (first 500):', responseText.slice(0, 500))
-
   const decode  = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
   const blocks  = [...responseText.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const map     = new Map()
@@ -639,7 +616,6 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
     .sort(([, a], [, b]) => b - a)
     .map(([name, amount]) => ({ name, amount }))
 
-  console.log(`[SalesParty] voucher blocks=${blocks.length} | unique parties=${parties.length} | top3: ${JSON.stringify(parties.slice(0, 3))}`)
   return { parties }
 }
 
@@ -672,64 +648,6 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cash
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log(`[Daybook/TDL] ${from} → ${to} | response length:`, responseText.length)
-  console.log('[Daybook/TDL] raw (first 3000):', responseText.slice(0, 3000))
-
-  // ── Ledger Entries XLS — scans full XML, no tag-structure assumptions ──
-  // Filters to actual voucher ledger lines by requiring ISPARTYLEDGER nearby.
-  // Master-data LEDGERNAME tags (ledger definitions, stock items etc.) never
-  // have ISPARTYLEDGER alongside them, so they are excluded automatically.
-  ;(function dumpLedgerEntriesXls() {
-    const dec = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
-    const CASH_RE = /cash/i
-    const BANK_RE = /bank/i
-    const GST_RE  = /cgst|sgst|igst|cess/i
-    const inflowSet  = cashInflowLedgers.length ? new Set(cashInflowLedgers.map(n => n.toLowerCase())) : null
-    const outflowSet = cashOutflowLedgers.length ? new Set(cashOutflowLedgers.map(n => n.toLowerCase())) : null
-
-    const rows = []
-    const lnRe = /<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/gi
-    for (const lnM of responseText.matchAll(lnRe)) {
-      const ledgerName = dec(lnM[1])
-      const pos = lnM.index
-
-      // Forward window: AMOUNT and ISPARTYLEDGER must appear close after the ledger name
-      const fwd = responseText.slice(pos, pos + 400)
-      // Skip master-data LEDGERNAME tags — real ledger entry lines always have ISPARTYLEDGER nearby
-      if (!/ISPARTYLEDGER/i.test(fwd)) continue
-
-      const amtRaw  = dec(fwd.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
-      const isParty = /ISPARTYLEDGER[^>]*>Yes/i.test(fwd)
-      const leAmt   = parseFloat(amtRaw.replace(/,/g, '')) || 0
-
-      // Backward window: nearest preceding DATE, VOUCHERTYPENAME, VOUCHERNUMBER, PARTYLEDGERNAME
-      const bk    = responseText.slice(Math.max(0, pos - 2000), pos)
-      const dateRaw = [...bk.matchAll(/<DATE[^>]*>(\d{8})<\/DATE>/gi)].pop()?.[1] ?? ''
-      const date    = dateRaw.length === 8 ? `${dateRaw.slice(0,4)}-${dateRaw.slice(4,6)}-${dateRaw.slice(6,8)}` : ''
-      const vType   = dec([...bk.matchAll(/<VOUCHERTYPENAME[^>]*>([^<]+)<\/VOUCHERTYPENAME>/gi)].pop()?.[1] ?? '')
-      const vNo     = dec([...bk.matchAll(/<VOUCHERNUMBER[^>]*>([^<]+)<\/VOUCHERNUMBER>/gi)].pop()?.[1] ?? '')
-      const party   = dec([...bk.matchAll(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/gi)].pop()?.[1] ?? '')
-
-      // Classify — same logic as parseVouchers cash/bank flow
-      const ledgerLower = ledgerName.toLowerCase()
-      const isInflowLedger  = inflowSet  ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
-      const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(ledgerName)
-      const isBankLedger    = BANK_RE.test(ledgerName)
-
-      let classification = 'Other'
-      if (isParty)                            classification = 'Party'
-      else if (GST_RE.test(ledgerName))       classification = 'GST'
-      else if (isInflowLedger || isOutflowLedger) classification = leAmt < 0 ? 'Cash Inflow' : 'Cash Outflow'
-      else if (isBankLedger)                  classification = leAmt < 0 ? 'Bank Inflow' : 'Bank Outflow'
-
-      rows.push(`${date}\t${vNo}\t${vType}\t${party}\t${ledgerName}\t${amtRaw}\t${leAmt.toFixed(2)}\t${classification}\t${isParty ? 'Yes' : 'No'}`)
-    }
-
-    const header = 'Date\tVoucher No\tVoucher Type\tParty\tLedger Name\tRaw Amount\tAmount\tClassification\tIs Party'
-    console.log('%c[Ledger Entries XLS] Copy block below → paste into Excel', 'font-weight:bold;color:#7c3aed')
-    console.log([header, ...rows].join('\n'))
-    console.log(`[Ledger Entries XLS] total ledger entry lines: ${rows.length}`)
-  })()
 
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
@@ -737,17 +655,6 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, cash
   const { vouchers: allVouchers, cashFlow, bankFlow } = parseVouchers(responseText, cashInflowLedgers, cashOutflowLedgers, fromISO, toISO)
 
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
-
-  console.log(`[Daybook/TDL] total from Tally: ${allVouchers.length} | in range [${fromISO}..${toISO}]: ${vouchers.length}`)
-  console.log('[Daybook/TDL] cashFlow:', cashFlow, '| bankFlow:', bankFlow)
-
-  // Group by date for easy verification
-  const byDate = {}
-  for (const v of vouchers) {
-    if (!byDate[v.date]) byDate[v.date] = []
-    byDate[v.date].push({ type: v.type, amount: v.amount })
-  }
-  console.log('[Daybook/TDL] grouped by date:', JSON.stringify(byDate, null, 2))
 
   return { vouchers, cashFlow, bankFlow, rawXml: responseText }
 }
@@ -786,7 +693,6 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
   </BODY>
 </ENVELOPE>`
 
-  console.log(`[SlowStock] FY: ${fyFrom} → ${fyTo}`)
   const movementText = await postToTally(makeXml('TBSInventoryMovement', fyFrom, fyTo), tallyUrl)
 
   // Build lastSaleDate map: itemName → most recent sale date
@@ -812,8 +718,6 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 
   items.sort((a, b) => b.daysSince - a.daysSince)
 
-  console.log(`[SlowStock] Unique items sold this FY: ${items.length}`)
-  console.log('[SlowStock] Top 5 slowest:', JSON.stringify(items.slice(0,5), null, 2))
   return { items }
 }
 
@@ -835,9 +739,6 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
   // If no saved ledgers, fall back to name-contains matching (/cash/i or /bank/i)
   const inflowSet  = cashInflowLedgers.length  ? new Set(cashInflowLedgers.map(n => n.toLowerCase()))  : null
   const outflowSet = cashOutflowLedgers.length ? new Set(cashOutflowLedgers.map(n => n.toLowerCase())) : null
-
-  console.log('[parseVouchers] cashInflowLedgers:', cashInflowLedgers, '| cashOutflowLedgers:', cashOutflowLedgers)
-  console.log('[parseVouchers] inflowSet:', inflowSet ? [...inflowSet] : 'fallback /cash/i', '| outflowSet:', outflowSet ? [...outflowSet] : 'fallback /cash/i')
 
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
@@ -901,7 +802,44 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
     // but still move real money through bank/cash ledgers.
     let gstTotal = 0
 
-    for (const le of matchAllLedgerEntries(block)) {
+    // Merge all three ledger entry tag variants and deduplicate by position.
+    // LEDGERENTRIES.LIST holds the primary (bank/cash) entry in Receipt/Payment vouchers.
+    // ALLLEDGERENTRIES.LIST holds the party/detail entries.
+    // Previously only ALLLEDGERENTRIES was scanned here, so bank entries in
+    // LEDGERENTRIES.LIST were silently skipped — that was the bank flow bug.
+    const allFlowMatches = [
+      ...block.matchAll(/<ALLLEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES\.LIST>/gi),
+      ...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi),
+      ...block.matchAll(/<LEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/LEDGERENTRIES\.LIST>/gi),
+    ]
+    const seenFlowPos = new Set()
+    const flowEntries = []
+    for (const m of allFlowMatches) {
+      if (seenFlowPos.has(m.index)) continue
+      seenFlowPos.add(m.index)
+      flowEntries.push(m)
+    }
+
+    // DEBUG: log every ledger entry found, which tag it came from, and whether it looks like a bank entry
+    const debugRows = flowEntries.map(m => {
+      const tag  = m[0].startsWith('<ALLLEDGERENTRIES.LIST') ? 'ALL.LIST'
+                 : m[0].startsWith('<ALLLEDGERENTRIES')      ? 'ALL'
+                 :                                             'SIMPLE'
+      const name = decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
+      const amt  = decode(m[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '')
+      const flag = BANK_RE.test(name) ? '🏦' : CASH_RE.test(name) ? '💵' : ''
+      return `${tag}:${flag}"${name}"(${amt})`
+    })
+    console.log(`[BankDebug] date=${date} type="${type}" voucherNo="${voucherNo}" | entries: [${debugRows.join(' | ')}]`)
+
+    // Check for bank entries that only exist in LEDGERENTRIES.LIST (previously missed)
+    const bankInAll    = flowEntries.filter(m => !m[0].startsWith('<LEDGERENTRIES') && BANK_RE.test(decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')))
+    const bankInSimple = flowEntries.filter(m =>  m[0].startsWith('<LEDGERENTRIES') && BANK_RE.test(decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')))
+    if (bankInSimple.length > 0 && bankInAll.length === 0) {
+      console.warn(`[BankDebug] ⚠️  Bank entry found ONLY in LEDGERENTRIES.LIST (was previously MISSED) | type="${type}" date=${date}`)
+    }
+
+    for (const le of flowEntries) {
       const leBlock    = le[0]
       const isParty    = /ISPARTYLEDGER[^>]*>Yes/i.test(leBlock)
       const ledgerName = decode(leBlock.match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
@@ -949,10 +887,7 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
 
     // Skip pushing to vouchers array if no party amount found — these entries still
     // contributed to cashFlow/bankFlow above so they are not lost.
-    if (amount === 0) {
-      console.log(`[parseVouchers] SKIP voucher from sales array (no party amount): date=${date} type="${type}" voucherNo="${voucherNo}"`)
-      continue
-    }
+    if (amount === 0) continue
 
     const taxableAmount = Math.max(0, amount - gstTotal)
 
@@ -1018,19 +953,13 @@ function parseVouchers(xml, cashInflowLedgers = [], cashOutflowLedgers = [], fro
       outsideCount++
     }
   }
-  if (outsideCount > 0) console.log(`[parseVouchers] Step2: ${outsideCount} outside-VOUCHER bank/cash entries recovered`)
-
-  console.log('[parseVouchers] FINAL cashFlow:', cashFlow, '| bankFlow:', bankFlow)
   return { vouchers, cashFlow, bankFlow }
 }
 
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────
 
 async function handleSyncToTally(xml, tallyUrl) {
-  console.log('[Sync] XML being posted (first 500 chars):', xml.slice(0, 500))
-  console.log('[Sync] XML length:', xml.length, '| has newlines:', xml.includes('\n'))
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[Sync] Tally raw response:', responseText.slice(0, 3000))
   return parseSyncResponse(responseText)
 }
 
@@ -1057,9 +986,6 @@ function parseSyncResponse(xml) {
   ]
     .map((m) => m[1].trim())
     .filter(Boolean)
-  console.log('[Sync] Parsed — created:', created, 'errors:', errors, 'exceptions:', exceptions, 'messages:', allErrors)
-  console.log('[Sync] Full Tally response:', xml.slice(0, 2000))
-
   if (errors > 0 || exceptions > 0 || created === 0) {
     let message = allErrors.length > 0 ? allErrors.join('; ') : null
 
@@ -1083,9 +1009,7 @@ function parseSyncResponse(xml) {
 
 async function handleCreateLedger(payload, tallyUrl) {
   const xml = buildLedgerXml(payload)
-  console.log('[CreateLedger] Full XML:\n', xml)
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[CreateLedger] Tally raw response:', responseText.slice(0, 3000))
   return parseSyncResponse(responseText)
 }
 
@@ -1146,9 +1070,7 @@ ${tallymessages}
   </BODY>
 </ENVELOPE>`
 
-  console.log('[SyncBank] Posting XML to Tally, rows:', rows.length)
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[SyncBank] Tally response:', responseText.slice(0, 2000))
   return parseSyncResponse(responseText)
 }
 
@@ -1269,9 +1191,7 @@ function buildLedgerXml({ name, gstin, pan, address, state, pincode, under, gstR
 
 async function handleCreateStockItem(payload, tallyUrl) {
   const xml = buildStockItemXml(payload)
-  console.log('[CreateStockItem] Full XML:\n', xml)
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[CreateStockItem] Tally raw response:', responseText.slice(0, 3000))
   return parseSyncResponse(responseText)
 }
 
@@ -1286,9 +1206,7 @@ function getTodayYYYYMMDD() {
 
 async function handleCreateStockGroup(payload, tallyUrl) {
   const xml = buildStockGroupXml(payload)
-  console.log('[CreateStockGroup] Full XML:\n', xml)
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[CreateStockGroup] Full Tally response:\n', responseText)
   return parseSyncResponse(responseText)
 }
 
@@ -1450,8 +1368,6 @@ async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[GroupBalances] response length:', responseText.length, '| first 500:', responseText.slice(0, 500))
-
   const groups = parseGroupBalances(responseText)
   const debtors   = groups.find(g => g.name.toLowerCase().includes('sundry debtor'))
   const creditors = groups.find(g => g.name.toLowerCase().includes('sundry creditor'))
@@ -1461,7 +1377,6 @@ async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
   const receivables = debtors   ? Math.abs(debtors.balance)   : 0
   const payables    = creditors ? Math.abs(creditors.balance)  : 0
 
-  console.log('[GroupBalances] receivables:', receivables, '| payables:', payables, '| raw groups:', groups)
   return { receivables, payables }
 }
 
@@ -1511,7 +1426,6 @@ async function handleFetchLedgerBalances(tallyUrl, tallyCompany, asOfDate) {
   const fyYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
   const fyStart = `${fyYear}0401`
   const toDateRaw = asOfDate || `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`
-  console.log('[LedgerBalances] asOfDate received:', asOfDate, '| toDateRaw used:', toDateRaw, '| SVFROMDATE:', toTallyDisplayDate(fyStart), '| SVTODATE:', toTallyDisplayDate(toDateRaw))
 
   const xml = `<ENVELOPE>
   <HEADER>
@@ -1532,10 +1446,7 @@ async function handleFetchLedgerBalances(tallyUrl, tallyCompany, asOfDate) {
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[LedgerBalances] response length:', responseText.length, '| first 1000:', responseText.slice(0, 1000))
-
   const rawLedgers = parseLedgerBalances(responseText)
-  console.log('[LedgerBalances] parsed count:', rawLedgers.length, '| sample:', rawLedgers.slice(0, 5))
   return { rawLedgers }
 }
 
