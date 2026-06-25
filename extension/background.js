@@ -789,6 +789,11 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
 
     voucherRanges.push({ start: match.index, end: match.index + match[0].length, date })
 
+    // Log raw XML for purchase vouchers to help reconcile discrepancies with Tally
+    if (/purchase/i.test(type) && !/debit\s*note/i.test(type)) {
+      console.log(`[PurchaseXML] date=${date} voucherNo="${voucherNo}" party="${party}"\n${block}`)
+    }
+
     // Amount: find LEDGERENTRIES.LIST where ISPARTYLEDGER=Yes (Sales/Receipt vouchers)
     let amount = 0
     const ledgerListRe = /<LEDGERENTRIES\.LIST[^>]*>([\s\S]*?)<\/LEDGERENTRIES\.LIST>/gi

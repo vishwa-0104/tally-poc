@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, AlertCircle,
   Lightbulb, AlertTriangle, CheckCircle,
   ArrowUpRight, ArrowDownRight, RefreshCw, Settings, Wallet, Building2,
-  Users, Store,
+  Users, Store, Download,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchSalesPartyData, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
@@ -555,9 +555,10 @@ export default function Dashboard() {
   const [grossMargin,   setGrossMargin]   = useState<number | null>(null)
   const [grossMarginPct, setGrossMarginPct] = useState<number | null>(null)
 
-  const [total,         setTotal]         = useState(0)
-  const [prevDaySales,  setPrevDaySales]  = useState<number | null>(null)
-  const [slowStock,     setSlowStock]     = useState<SlowStockItem[]>([])
+  const [total,             setTotal]             = useState(0)
+  const [prevDaySales,      setPrevDaySales]      = useState<number | null>(null)
+  const [slowStock,         setSlowStock]         = useState<SlowStockItem[]>([])
+  const [purchaseVouchers,  setPurchaseVouchers]  = useState<TallyVoucher[]>([])
   const [loading,       setLoading]       = useState(false)
   const [fetched,       setFetched]       = useState(false)
   const [error,         setError]         = useState<string | null>(null)
@@ -607,6 +608,13 @@ export default function Dashboard() {
         console.groupEnd()
       }
       console.groupEnd()
+
+      const pf = settings.ytd as PurchaseFilterSettings | undefined
+      setPurchaseVouchers(all.filter(v => {
+        if (pf?.purchaseIncludeVouchers?.length)
+          return pf.purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+        return /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type)
+      }))
 
       const todaySalesTotal = computeSalesTotal(all, salesSettings)
       setTotal(todaySalesTotal)
@@ -779,6 +787,38 @@ export default function Dashboard() {
     fetchData(filterPreset, customFrom, customTo)
   }
 
+  const exportPurchasesToXls = () => {
+    if (purchaseVouchers.length === 0) { toast.error('No purchase vouchers to export'); return }
+
+    const rows = [
+      ['Date', 'Voucher No', 'Party', 'Total Amount (with GST)', 'Taxable Amount', 'GST Amount'],
+      ...purchaseVouchers.map(v => [
+        v.date,
+        v.voucherNo,
+        v.party,
+        v.amount.toFixed(2),
+        v.taxableAmount.toFixed(2),
+        (v.amount - v.taxableAmount).toFixed(2),
+      ]),
+      [],
+      ['', '', 'TOTAL',
+        purchaseVouchers.reduce((s, v) => s + v.amount, 0).toFixed(2),
+        purchaseVouchers.reduce((s, v) => s + v.taxableAmount, 0).toFixed(2),
+        purchaseVouchers.reduce((s, v) => s + (v.amount - v.taxableAmount), 0).toFixed(2),
+      ],
+    ]
+
+    const tsv = rows.map(r => r.join('\t')).join('\n')
+    const blob = new Blob(['﻿' + tsv], { type: 'application/vnd.ms-excel;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    const period = activePeriod ? `${activePeriod.from}_${activePeriod.to}` : 'export'
+    a.href     = url
+    a.download = `purchases_${period}.xls`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -882,6 +922,17 @@ export default function Dashboard() {
               >
                 Apply
               </button>
+
+              {fetched && purchaseVouchers.length > 0 && (
+                <button
+                  onClick={exportPurchasesToXls}
+                  title={`Export ${purchaseVouchers.length} purchase vouchers to XLS`}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700"
+                >
+                  <Download className="w-3 h-3" />
+                  Purchases ({purchaseVouchers.length})
+                </button>
+              )}
 
               {loading && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
             </div>
