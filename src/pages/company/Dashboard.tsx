@@ -717,6 +717,24 @@ export default function Dashboard() {
         const directExpenses = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
         const gm    = (todaySalesTotal + closingStock) - (openingStock + purchaseTotal + directExpenses)
         const gmPct = todaySalesTotal > 0 ? (gm / todaySalesTotal) * 100 : 0
+
+        console.group('[Gross Margin] YTD breakdown')
+        console.log('Sales            :', todaySalesTotal.toFixed(2))
+        console.log('Opening Stock    :', openingStock.toFixed(2))
+        console.log('Closing Stock    :', closingStock.toFixed(2))
+        console.log('Purchases        :', purchaseTotal.toFixed(2))
+        console.log('Direct Expenses  :', directExpenses.toFixed(2))
+        console.log('─────────────────────────────────────────')
+        console.log('Formula          : (Sales + Closing) - (Opening + Purchases + DirectExp)')
+        console.log('                 :', `(${todaySalesTotal.toFixed(2)} + ${closingStock.toFixed(2)}) - (${openingStock.toFixed(2)} + ${purchaseTotal.toFixed(2)} + ${directExpenses.toFixed(2)})`)
+        console.log('Gross Margin     :', gm.toFixed(2))
+        console.log('Gross Margin %   :', gmPct.toFixed(2) + '%')
+        if (stockResult.value && (openingStock === 0 && closingStock === 0))
+          console.warn('[Gross Margin] Stock values are both 0 — check stock group settings or Tally connection')
+        if (directExpResult.status === 'rejected')
+          console.warn('[Gross Margin] Direct expenses fetch failed:', directExpResult.reason)
+        console.groupEnd()
+
         setGrossMargin(gm)
         setGrossMarginPct(gmPct)
       }
