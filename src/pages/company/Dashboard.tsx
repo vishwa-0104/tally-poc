@@ -11,7 +11,7 @@ import {
   Users, Store,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchSalesPartyData, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchSalesPartyData, fetchStockValue, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -612,13 +612,7 @@ export default function Dashboard() {
       setTotal(todaySalesTotal)
       setActivePeriod({ from, to })
 
-      if (preset === 'ytd') {
-        const purchaseTotal = computePurchaseTotal(all, settings.ytd)
-        const gm    = todaySalesTotal - purchaseTotal
-        const gmPct = todaySalesTotal > 0 ? (gm / todaySalesTotal) * 100 : 0
-        setGrossMargin(gm)
-        setGrossMarginPct(gmPct)
-      }
+      const purchaseTotal = preset === 'ytd' ? computePurchaseTotal(all, settings.ytd) : 0
 
       console.log('[Sales] Total:', todaySalesTotal, '| preset:', preset, '| from:', from, '| to:', to)
 
@@ -705,13 +699,23 @@ export default function Dashboard() {
         setPrevDaySales(null)
       }
 
-      // 5. Slow moving stock + top debtors in parallel — both non-critical.
-      const [slowResult, debtorResult] = await Promise.allSettled([
+      // 5. Non-critical fetches in parallel — none block the main KPIs.
+      const [slowResult, debtorResult, stockResult] = await Promise.allSettled([
         fetchSlowMovingStock(tallyUrl, tallyCompany),
         fetchSalesPartyData(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany),
+        preset === 'ytd'
+          ? fetchStockValue(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.stockGroups)
+          : Promise.resolve(null),
       ])
       if (slowResult.status === 'fulfilled')   setSlowStock(slowResult.value.items)
       if (debtorResult.status === 'fulfilled') setTopDebtors(debtorResult.value)
+      if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
+        const { openingStock, closingStock } = stockResult.value
+        const gm    = (todaySalesTotal + closingStock) - (openingStock + purchaseTotal)
+        const gmPct = todaySalesTotal > 0 ? (gm / todaySalesTotal) * 100 : 0
+        setGrossMargin(gm)
+        setGrossMarginPct(gmPct)
+      }
     } catch (err) {
       console.error('[Dashboard] fetchData failed:', err)
       setError('no-data')

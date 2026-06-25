@@ -106,6 +106,7 @@ export interface DashboardSettings {
   ytd?: {
     purchaseIncludeVouchers?: string[]
     purchaseExcludeVouchers?: string[]
+    stockGroups?:             string[]
     grossMarginTarget?:       number
   }
 }

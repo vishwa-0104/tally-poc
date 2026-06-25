@@ -132,6 +132,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ receivables: 0, payables: 0, error: err.message }))
       return true
 
+    case 'FETCH_STOCK_VALUE':
+      handleFetchStockValue(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate, payload.stockGroups)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ openingStock: 0, closingStock: 0, error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -1408,6 +1414,61 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
 // two top-level groups. Tally aggregates all child ledgers into a single record,
 // so this is just 2 rows — much faster than querying individual ledger balances.
 // Same SVTODATE limitation as TBSCashBankBalances: always returns current date's value.
+
+async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate, stockGroups = []) {
+  const from = toTallyDisplayDate(fromDate)
+  const to   = toTallyDisplayDate(toDate)
+
+  const filter = stockGroups.length > 0
+    ? stockGroups.map(g => `$Name = "${g}"`).join(' OR ')
+    : '$$Contains:$Name:"Stock"'
+
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSStockValue</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${from}</SVFROMDATE>
+        <SVTODATE>${to}</SVTODATE>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSStockValue" ISMODIFY="No">
+            <TYPE>Group</TYPE>
+            <NATIVEMETHOD>Name, OpeningBalance, ClosingBalance</NATIVEMETHOD>
+            <FILTER>IsTargetStockGroup</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="IsTargetStockGroup">
+            ${filter}
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  const blocks = [...responseText.matchAll(/<GROUP\b[^>]*>([\s\S]*?)<\/GROUP>/gi)]
+
+  let openingStock = 0
+  let closingStock = 0
+
+  for (const match of blocks) {
+    const inner = match[1]
+    const openingRaw = inner.match(/<OPENINGBALANCE[^>]*>([\s\S]*?)<\/OPENINGBALANCE>/i)?.[1] ?? '0'
+    const closingRaw = inner.match(/<CLOSINGBALANCE[^>]*>([\s\S]*?)<\/CLOSINGBALANCE>/i)?.[1] ?? '0'
+    openingStock += Math.abs(parseTallyBalance(openingRaw.trim()))
+    closingStock += Math.abs(parseTallyBalance(closingRaw.trim()))
+  }
+
+  return { openingStock, closingStock }
+}
 
 async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
   const today = new Date()

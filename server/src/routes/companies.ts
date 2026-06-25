@@ -594,6 +594,7 @@ companiesRouter.put('/companies/:id/dashboard-settings', async (req, res) => {
     ytd: z.object({
       purchaseIncludeVouchers: z.array(z.string()).optional(),
       purchaseExcludeVouchers: z.array(z.string()).optional(),
+      stockGroups:             z.array(z.string()).optional(),
       grossMarginTarget:       z.number().optional(),
     }).optional(),
   })

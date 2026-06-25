@@ -158,6 +158,20 @@ export async function fetchSalesPartyData(
   return result.parties
 }
 
+export async function fetchStockValue(
+  fromDate:    string,
+  toDate:      string,
+  tallyUrl:    string,
+  tallyCompany?: string,
+  stockGroups?:  string[],
+): Promise<{ openingStock: number; closingStock: number }> {
+  const result = await sendToExtension<{ openingStock: number; closingStock: number }>(
+    'FETCH_STOCK_VALUE',
+    { fromDate, toDate, tallyUrl, tallyCompany, stockGroups },
+  )
+  return result
+}
+
 export interface BankSyncRow {
   date: string
   description: string
