@@ -10,7 +10,8 @@
       "Bash(curl -v http://localhost)",
       "Bash(node -e ' *)",
       "Bash(node scripts/generate-icon.js)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(npm run *)"
     ]
   }
 }

@@ -11,7 +11,7 @@ import {
   Users, Store,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, type SlowStockItem, type TallyVoucher, type TopItem } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchSalesPartyData, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -22,7 +22,7 @@ import { SalesTargetModal } from '@/components/company/SalesTargetModal'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Tab           = 'performance' | 'analysis' | 'cfo'
-type FilterPreset  = 'today' | 'quarter' | 'year' | 'custom'
+type FilterPreset  = 'today' | 'quarter' | 'ytd' | 'custom'
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ function getFilterDates(preset: FilterPreset, cfrom: string, cto: string) {
                           : new Date(today.getFullYear(), 0, 1)
     return { from: fmt(qs), to: fmt(today) }
   }
-  if (preset === 'year') {
+  if (preset === 'ytd') {
     const fyStart = today.getMonth() >= 3
       ? new Date(today.getFullYear(), 3, 1)
       : new Date(today.getFullYear() - 1, 3, 1)
@@ -53,8 +53,38 @@ function getFilterDates(preset: FilterPreset, cfrom: string, cto: string) {
 
 // ── Dashboard settings helpers ────────────────────────────────────────────────
 
-function computeSalesTotal(vouchers: TallyVoucher[], settings: DashboardSettings): number {
-  const { salesAccounts, salesIncludeVouchers, salesExcludeVouchers } = settings.today ?? {}
+type SalesFilterSettings = {
+  salesAccounts?:        string[]
+  salesIncludeVouchers?: string[]
+  salesExcludeVouchers?: string[]
+}
+
+type PurchaseFilterSettings = {
+  purchaseIncludeVouchers?: string[]
+  purchaseExcludeVouchers?: string[]
+}
+
+function computePurchaseTotal(vouchers: TallyVoucher[], pf: PurchaseFilterSettings | undefined): number {
+  const { purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
+
+  const included = vouchers.filter(v => {
+    if (purchaseIncludeVouchers?.length)
+      return purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+    return /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type)
+  })
+
+  const excluded = vouchers.filter(v => {
+    if (purchaseExcludeVouchers?.length)
+      return purchaseExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+    return /debit\s*note/i.test(v.type)
+  })
+
+  return included.reduce((s, v) => s + v.taxableAmount, 0)
+       - excluded.reduce((s, v) => s + v.taxableAmount, 0)
+}
+
+function computeSalesTotal(vouchers: TallyVoucher[], sf: SalesFilterSettings | undefined): number {
+  const { salesAccounts, salesIncludeVouchers, salesExcludeVouchers } = sf ?? {}
 
   const base = salesAccounts?.length ? vouchers.filter(v => v.hasSalesLedger) : vouchers
 
@@ -115,7 +145,7 @@ function computeTargetForPeriod(
   let months: number[] | null = null
   if (preset === 'today')   return null
   if (preset === 'quarter') months = getQuarterMonths()
-  if (preset === 'year')    months = [1,2,3,4,5,6,7,8,9,10,11,12]
+  if (preset === 'ytd')     months = [1,2,3,4,5,6,7,8,9,10,11,12]
   if (preset === 'custom')  months = getMonthsForCustom(customFrom, customTo)
   if (!months) return null
   const sum = months.reduce((s, m) => s + (targets[m] ?? 0), 0)
@@ -366,6 +396,63 @@ function PayablesCard({ balance }: { balance: number | null }) {
   )
 }
 
+function GrossMarginCard({ value, pct, targetPct }: {
+  value:     number | null
+  pct:       number | null
+  targetPct: number | null
+}) {
+  const achieved = (pct !== null && targetPct) ? (pct / targetPct) * 100 : null
+  const iconBg    = achieved === null ? 'bg-blue-50'
+    : achieved >= 100 ? 'bg-green-50' : achieved >= 75 ? 'bg-amber-50' : 'bg-red-50'
+  const iconColor = achieved === null ? 'text-blue-600'
+    : achieved >= 100 ? 'text-green-600' : achieved >= 75 ? 'text-amber-500' : 'text-red-500'
+  const Icon = achieved === null ? TrendingUp
+    : achieved >= 100 ? CheckCircle : achieved >= 75 ? TrendingUp : TrendingDown
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className={`p-2 ${iconBg} rounded-lg`}>
+          <Icon className={`w-4 h-4 ${iconColor}`} />
+        </div>
+      </div>
+      <p className={`text-lg font-bold tracking-tight mb-0.5 ${value === null ? 'text-gray-300' : 'text-gray-900'}`}>
+        {value !== null ? formatCurrency(value) : '—'}
+      </p>
+      <p className="text-[11px] font-semibold text-gray-600">Gross Margin</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Sales − Purchases (excl. GST)</p>
+      {pct !== null && (
+        <div className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
+          <div className="flex justify-between text-[11px]">
+            <span className="text-gray-500">Margin %</span>
+            <span className="font-semibold text-gray-700">{pct.toFixed(1)}%</span>
+          </div>
+          {achieved !== null && (
+            <>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-gray-500">Target</span>
+                <span className="text-gray-600">{targetPct!.toFixed(1)}%</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-gray-500">Target Achievement</span>
+                <span className={`font-semibold ${achieved >= 100 ? 'text-green-600' : 'text-red-500'}`}>
+                  {achieved.toFixed(1)}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
+                <div
+                  className={`h-1 rounded-full transition-all ${achieved >= 100 ? 'bg-green-500' : 'bg-red-400'}`}
+                  style={{ width: `${Math.min(100, achieved)}%` }}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DataTableCard({
   title,
   columns,
@@ -428,7 +515,7 @@ const TABS: { key: Tab; label: string }[] = [
 const FILTERS: { key: FilterPreset; label: string }[] = [
   { key: 'today',   label: 'Today'        },
   { key: 'quarter', label: 'This Quarter' },
-  { key: 'year',    label: 'This Year'    },
+  { key: 'ytd',     label: 'YTD'          },
   { key: 'custom',  label: 'Custom'       },
 ]
 
@@ -463,7 +550,10 @@ export default function Dashboard() {
 
   const [receivables, setReceivables] = useState<number | null>(null)
   const [payables,    setPayables]    = useState<number | null>(null)
-  const [topItems,    setTopItems]    = useState<TopItem[]>([])
+  const [topItems,      setTopItems]      = useState<TopItem[]>([])
+  const [topDebtors,    setTopDebtors]    = useState<SalesPartyRow[]>([])
+  const [grossMargin,   setGrossMargin]   = useState<number | null>(null)
+  const [grossMarginPct, setGrossMarginPct] = useState<number | null>(null)
 
   const [total,         setTotal]         = useState(0)
   const [prevDaySales,  setPrevDaySales]  = useState<number | null>(null)
@@ -481,15 +571,21 @@ export default function Dashboard() {
     }
     const { from, to } = getFilterDates(preset, cfrom, cto)
 
+    // Sales filter settings are preset-specific: ytd uses its own saved config, everything else uses today's.
+    const salesSettings: SalesFilterSettings | undefined = preset === 'ytd' ? settings.ytd : settings.today
+
     setLoading(true)
     setError(null)
+    setTopDebtors([])
+    setGrossMargin(null)
+    setGrossMarginPct(null)
     try {
       const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow, topItems: fetchedTopItems } = await fetchDaybook(
         toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany,
         {
-          salesAccounts:        settings.today?.salesAccounts,
-          salesIncludeVouchers: settings.today?.salesIncludeVouchers,
-          salesExcludeVouchers: settings.today?.salesExcludeVouchers,
+          salesAccounts:        salesSettings?.salesAccounts,
+          salesIncludeVouchers: salesSettings?.salesIncludeVouchers,
+          salesExcludeVouchers: salesSettings?.salesExcludeVouchers,
           cashInflowLedgers:    settings.today?.cashInflowLedgers,
           bankLedgers:          settings.today?.bankLedgers,
         },
@@ -513,14 +609,22 @@ export default function Dashboard() {
       }
       console.groupEnd()
 
-      const todaySalesTotal = computeSalesTotal(all, settings)
+      const todaySalesTotal = computeSalesTotal(all, salesSettings)
       setTotal(todaySalesTotal)
       setActivePeriod({ from, to })
 
-      console.log('[Today] Total sales:', todaySalesTotal, '| date:', from)
+      if (preset === 'ytd') {
+        const purchaseTotal = computePurchaseTotal(all, settings.ytd)
+        const gm    = todaySalesTotal - purchaseTotal
+        const gmPct = todaySalesTotal > 0 ? (gm / todaySalesTotal) * 100 : 0
+        setGrossMargin(gm)
+        setGrossMarginPct(gmPct)
+      }
+
+      console.log('[Sales] Total:', todaySalesTotal, '| preset:', preset, '| from:', from, '| to:', to)
 
       // 2. Inflow/outflow from daybook (already parsed in background.js — no extra Tally call)
-      console.log('[Settings] salesAccounts:', settings.today?.salesAccounts ?? '(none)', '| include:', settings.today?.salesIncludeVouchers ?? '(none)', '| exclude:', settings.today?.salesExcludeVouchers ?? '(none)')
+      console.log('[Settings] salesAccounts:', salesSettings?.salesAccounts ?? '(none)', '| include:', salesSettings?.salesIncludeVouchers ?? '(none)', '| exclude:', salesSettings?.salesExcludeVouchers ?? '(none)')
       console.log('[Settings] saved cashInflowLedgers:', settings.today?.cashInflowLedgers ?? '(none — using default: ledgers matching /cash/i)')
       console.log('[Settings] NOTE: outflow uses same cash ledger names as inflow')
       setCashInflow(daybookCashFlow.inflow)
@@ -589,7 +693,7 @@ export default function Dashboard() {
         try {
           const { vouchers: yv } = await fetchDaybook(toTallyDate(yd), toTallyDate(yd), tallyUrl, tallyCompany, {})
           console.log('[PrevDay] Raw vouchers received:', yv.length, yv)
-          const yTotal = computeSalesTotal(yv, settings)
+          const yTotal = computeSalesTotal(yv, settings.today)
           console.log('[PrevDay] Total:', yTotal)
           console.log('[Comparison] Today:', todaySalesTotal, '| Yesterday:', yTotal,
             '| Change:', (((todaySalesTotal - yTotal) / (yTotal || 1)) * 100).toFixed(1) + '%')
@@ -602,12 +706,13 @@ export default function Dashboard() {
         setPrevDaySales(null)
       }
 
-      // 5. Slow moving stock — LAST because it's the heaviest Tally query.
-      // If it hangs, nothing else is blocked.
-      try {
-        const { items } = await fetchSlowMovingStock(tallyUrl, tallyCompany)
-        setSlowStock(items)
-      } catch { /* non-critical */ }
+      // 5. Slow moving stock + top debtors in parallel — both non-critical.
+      const [slowResult, debtorResult] = await Promise.allSettled([
+        fetchSlowMovingStock(tallyUrl, tallyCompany),
+        fetchSalesPartyData(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany),
+      ])
+      if (slowResult.status === 'fulfilled')   setSlowStock(slowResult.value.items)
+      if (debtorResult.status === 'fulfilled') setTopDebtors(debtorResult.value)
     } catch (err) {
       console.error('[Dashboard] fetchData failed:', err)
       setError('no-data')
@@ -757,7 +862,7 @@ export default function Dashboard() {
             </div>
 
             {/* KPI cards — row 1: Sales, Cash, Banks (+ Receivables, Payables for Today only) */}
-            <div className={`grid gap-4 ${filterPreset === 'today' ? 'grid-cols-5' : 'grid-cols-3'}`}>
+            <div className={`grid gap-4 ${filterPreset === 'today' ? 'grid-cols-5' : filterPreset === 'ytd' ? 'grid-cols-4' : 'grid-cols-3'}`}>
               {(() => {
                 const periodTarget = fetched
                   ? computeTargetForPeriod(filterPreset, customFrom, customTo, monthlyTargets)
@@ -784,6 +889,13 @@ export default function Dashboard() {
                   />
                 )
               })()}
+              {filterPreset === 'ytd' && (
+                <GrossMarginCard
+                  value={fetched ? grossMargin : null}
+                  pct={fetched ? grossMarginPct : null}
+                  targetPct={dashboardSettings.ytd?.grossMarginTarget ?? null}
+                />
+              )}
               <CashCard
                 inflow={fetched ? cashInflow : null}
                 outflow={fetched ? cashOutflow : null}
@@ -830,6 +942,17 @@ export default function Dashboard() {
                   { label: 'Party' },
                   { label: 'Amt (₹)', right: true },
                 ]}
+                loading={!fetched}
+                rows={fetched && topDebtors.length > 0
+                  ? topDebtors.slice(0, 8).map((d, i) => ({
+                      cells: [
+                        `${i + 1}. ${d.name}`,
+                        formatCurrency(d.amount),
+                      ],
+                    }))
+                  : fetched
+                    ? [{ cells: ['No debtors found', ''], dim: true }]
+                    : undefined}
               />
               <DataTableCard
                 title="Slow Moving Stocks"

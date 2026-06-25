@@ -97,11 +97,19 @@ export const COMPANY_FEATURES = {
 
 export interface DashboardSettings {
   today?: {
-    salesAccounts?:        string[]   // ledger names that count as sales (e.g. "GST Sales")
-    salesIncludeVouchers?: string[]   // voucher types to include in sales total
-    salesExcludeVouchers?: string[]   // voucher types to subtract from sales total
+    salesAccounts?:        string[]
+    salesIncludeVouchers?: string[]
+    salesExcludeVouchers?: string[]
     cashInflowLedgers?:    string[]
     bankLedgers?:          string[]
+  }
+  ytd?: {
+    salesAccounts?:           string[]
+    salesIncludeVouchers?:    string[]
+    salesExcludeVouchers?:    string[]
+    purchaseIncludeVouchers?: string[]
+    purchaseExcludeVouchers?: string[]
+    grossMarginTarget?:       number
   }
 }
 

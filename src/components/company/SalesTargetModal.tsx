@@ -135,10 +135,18 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [budgetValues,  setBudgetValues]  = useState<Record<number, string>>({})
   const [loadingBudget, setLoadingBudget] = useState(false)
 
-  // Sales settings
+  // Today sales settings
   const [salesAccounts,        setSalesAccounts]        = useState<string[]>([])
   const [salesIncludeVouchers, setSalesIncludeVouchers] = useState<string[]>([])
   const [salesExcludeVouchers, setSalesExcludeVouchers] = useState<string[]>([])
+
+  // YTD sales settings
+  const [ytdSalesAccounts,           setYtdSalesAccounts]           = useState<string[]>([])
+  const [ytdSalesIncludeVouchers,    setYtdSalesIncludeVouchers]    = useState<string[]>([])
+  const [ytdSalesExcludeVouchers,    setYtdSalesExcludeVouchers]    = useState<string[]>([])
+  const [ytdPurchaseIncludeVouchers, setYtdPurchaseIncludeVouchers] = useState<string[]>([])
+  const [ytdPurchaseExcludeVouchers, setYtdPurchaseExcludeVouchers] = useState<string[]>([])
+  const [ytdGrossMarginTarget,       setYtdGrossMarginTarget]       = useState<string>('')
   // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
   const [bankLedgers,   setBankLedgers]   = useState<string[]>([])
@@ -174,6 +182,12 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setSalesExcludeVouchers(s.today?.salesExcludeVouchers ?? [])
         setInflowLedgers(s.today?.cashInflowLedgers ?? [])
         setBankLedgers(s.today?.bankLedgers ?? [])
+        setYtdSalesAccounts(s.ytd?.salesAccounts ?? [])
+        setYtdSalesIncludeVouchers(s.ytd?.salesIncludeVouchers ?? [])
+        setYtdSalesExcludeVouchers(s.ytd?.salesExcludeVouchers ?? [])
+        setYtdPurchaseIncludeVouchers(s.ytd?.purchaseIncludeVouchers ?? [])
+        setYtdPurchaseExcludeVouchers(s.ytd?.purchaseExcludeVouchers ?? [])
+        setYtdGrossMarginTarget(s.ytd?.grossMarginTarget != null ? String(s.ytd.grossMarginTarget) : '')
       })
       .catch(() => { /* settings optional */ })
 
@@ -208,6 +222,14 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         salesExcludeVouchers: salesExcludeVouchers.length > 0 ? salesExcludeVouchers : undefined,
         cashInflowLedgers:    inflowLedgers.length        > 0 ? inflowLedgers        : undefined,
         bankLedgers:          bankLedgers.length          > 0 ? bankLedgers          : undefined,
+      },
+      ytd: {
+        salesAccounts:           ytdSalesAccounts.length           > 0 ? ytdSalesAccounts           : undefined,
+        salesIncludeVouchers:    ytdSalesIncludeVouchers.length    > 0 ? ytdSalesIncludeVouchers    : undefined,
+        salesExcludeVouchers:    ytdSalesExcludeVouchers.length    > 0 ? ytdSalesExcludeVouchers    : undefined,
+        purchaseIncludeVouchers: ytdPurchaseIncludeVouchers.length > 0 ? ytdPurchaseIncludeVouchers : undefined,
+        purchaseExcludeVouchers: ytdPurchaseExcludeVouchers.length > 0 ? ytdPurchaseExcludeVouchers : undefined,
+        grossMarginTarget:       ytdGrossMarginTarget ? (parseFloat(ytdGrossMarginTarget) || undefined) : undefined,
       },
     }
 
@@ -366,13 +388,83 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         </div>
       )}
 
-      {/* ── YTD / MONTHLY PLACEHOLDERS ── */}
-      {(activeTab === 'ytd' || activeTab === 'monthly') && (
+      {/* ── YTD TAB ── */}
+      {activeTab === 'ytd' && (
+        <div className="space-y-6">
+
+          <SearchCheckList
+            label="Sales Accounts"
+            hint="Default: all vouchers matching voucher type filter below"
+            options={allLedgerOpts}
+            selected={ytdSalesAccounts}
+            onChange={setYtdSalesAccounts}
+            loading={loadingOpts}
+          />
+
+          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+            <SearchCheckList
+              label="Sales — Include Vouchers"
+              hint="Default: voucher types containing 'sales'"
+              options={voucherTypeOpts}
+              selected={ytdSalesIncludeVouchers}
+              onChange={setYtdSalesIncludeVouchers}
+              loading={loadingOpts}
+            />
+            <SearchCheckList
+              label="Sales — Exclude Vouchers"
+              hint="Default: Credit Note"
+              options={voucherTypeOpts}
+              selected={ytdSalesExcludeVouchers}
+              onChange={setYtdSalesExcludeVouchers}
+              loading={loadingOpts}
+            />
+          </div>
+
+          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+            <SearchCheckList
+              label="Purchase — Include Vouchers"
+              hint="Default: voucher types containing 'purchase'"
+              options={voucherTypeOpts}
+              selected={ytdPurchaseIncludeVouchers}
+              onChange={setYtdPurchaseIncludeVouchers}
+              loading={loadingOpts}
+            />
+            <SearchCheckList
+              label="Purchase — Exclude Vouchers"
+              hint="Default: Debit Note"
+              options={voucherTypeOpts}
+              selected={ytdPurchaseExcludeVouchers}
+              onChange={setYtdPurchaseExcludeVouchers}
+              loading={loadingOpts}
+            />
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-xs font-semibold text-gray-700 mb-1.5">Gross Margin Target (%)</p>
+            <div className="relative w-40">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="e.g. 40"
+                value={ytdGrossMarginTarget}
+                onChange={e => setYtdGrossMarginTarget(e.target.value)}
+                className="w-full pr-7 pl-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 bg-white"
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+            </div>
+            <p className="text-[11px] text-gray-400 italic mt-1">Target GM% to track achievement on the dashboard</p>
+          </div>
+
+        </div>
+      )}
+
+      {/* ── MONTHLY PLACEHOLDER ── */}
+      {activeTab === 'monthly' && (
         <div className="h-40 flex flex-col items-center justify-center gap-1 text-gray-400">
           <p className="text-sm font-medium">Coming soon</p>
-          <p className="text-xs">
-            Settings for {activeTab === 'ytd' ? 'Year-to-Date' : 'Monthly'} dashboard will appear here.
-          </p>
+          <p className="text-xs">Settings for Monthly dashboard will appear here.</p>
         </div>
       )}
     </Modal>

@@ -591,6 +591,14 @@ companiesRouter.put('/companies/:id/dashboard-settings', async (req, res) => {
       cashInflowLedgers:    z.array(z.string()).optional(),
       bankLedgers:          z.array(z.string()).optional(),
     }).optional(),
+    ytd: z.object({
+      salesAccounts:           z.array(z.string()).optional(),
+      salesIncludeVouchers:    z.array(z.string()).optional(),
+      salesExcludeVouchers:    z.array(z.string()).optional(),
+      purchaseIncludeVouchers: z.array(z.string()).optional(),
+      purchaseExcludeVouchers: z.array(z.string()).optional(),
+      grossMarginTarget:       z.number().optional(),
+    }).optional(),
   })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
