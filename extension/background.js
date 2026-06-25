@@ -1457,13 +1457,50 @@ async function fetchStockSummaryTotal(tallyUrl, tallyCompany, asOfDate) {
   return total
 }
 
+async function fetchOpeningStockTotal(tallyUrl, tallyCompany, onDate) {
+  // Read DSPOPAMTA (opening amount) by requesting a single-day range where fromDate = toDate.
+  // Tally's Stock Summary then shows the period's Opening Stock separately from that day's
+  // transactions — no need to go back to the day before (which fails when company has no
+  // prior-year Tally data, e.g. March 31 returns 0 even though April 1 has opening stock).
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Export Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <EXPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Stock Summary</REPORTNAME>
+        <STATICVARIABLES>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+          <SVFROMDATE>${onDate}</SVFROMDATE>
+          <SVTODATE>${onDate}</SVTODATE>${companyVar(tallyCompany)}
+        </STATICVARIABLES>
+      </REQUESTDESC>
+    </EXPORTDATA>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+
+  // DSPOPAMTA = Display Opening Amount. Same sign convention as DSPCLAMTA.
+  const matches = [...responseText.matchAll(/<DSPOPAMTA[^>]*>([\s\S]*?)<\/DSPOPAMTA>/gi)]
+  let total = 0
+  for (const m of matches) {
+    const raw = m[1].trim()
+    if (!raw) continue
+    total += -(parseFloat(raw.replace(/,/g, '')) || 0)
+  }
+  console.log(`[StockSummary/Opening] onDate=${onDate} | entries=${matches.length} | total=${total}`)
+  return total
+}
+
 async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate) {
-  // fromDate = April 1 (FY start) for YTD. Opening stock = stock as of that date.
-  // toDate   = today. Closing stock = stock as of today.
-  // Two calls to Stock Summary report (Tally's own engine, same as what the UI shows).
+  // Opening stock: read DSPOPAMTA (opening balance) from Stock Summary at fromDate.
+  // This correctly returns the FY's opening stock even when there is no prior-year data
+  // in Tally (the old approach of querying fromDate-1 returned 0 in that case).
   const [closingStock, openingStock] = await Promise.all([
     fetchStockSummaryTotal(tallyUrl, tallyCompany, toTallyDisplayDate(toDate)),
-    fetchStockSummaryTotal(tallyUrl, tallyCompany, toTallyDisplayDate(fromDate)),
+    fetchOpeningStockTotal(tallyUrl, tallyCompany, toTallyDisplayDate(fromDate)),
   ])
 
   console.log(`[StockValue] Opening (${fromDate}): ${openingStock} | Closing (${toDate}): ${closingStock}`)
