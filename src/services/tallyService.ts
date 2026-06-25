@@ -158,6 +158,21 @@ export async function fetchSalesPartyData(
   return result.parties
 }
 
+export async function fetchLedgerAmounts(
+  fromDate:     string,
+  toDate:       string,
+  tallyUrl:     string,
+  tallyCompany?: string,
+  ledgerNames?:  string[],
+): Promise<number> {
+  if (!ledgerNames?.length) return 0
+  const result = await sendToExtension<{ total: number }>(
+    'FETCH_LEDGER_AMOUNTS',
+    { fromDate, toDate, tallyUrl, tallyCompany, ledgerNames },
+  )
+  return result.total
+}
+
 export async function fetchStockValue(
   fromDate:    string,
   toDate:      string,

@@ -11,7 +11,7 @@ import {
   Users, Store,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchSalesPartyData, fetchStockValue, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchSalesPartyData, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -700,18 +700,22 @@ export default function Dashboard() {
       }
 
       // 5. Non-critical fetches in parallel — none block the main KPIs.
-      const [slowResult, debtorResult, stockResult] = await Promise.allSettled([
+      const [slowResult, debtorResult, stockResult, directExpResult] = await Promise.allSettled([
         fetchSlowMovingStock(tallyUrl, tallyCompany),
         fetchSalesPartyData(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany),
         preset === 'ytd'
           ? fetchStockValue(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.stockGroups)
           : Promise.resolve(null),
+        preset === 'ytd'
+          ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.directExpenseLedgers)
+          : Promise.resolve(0),
       ])
       if (slowResult.status === 'fulfilled')   setSlowStock(slowResult.value.items)
       if (debtorResult.status === 'fulfilled') setTopDebtors(debtorResult.value)
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         const { openingStock, closingStock } = stockResult.value
-        const gm    = (todaySalesTotal + closingStock) - (openingStock + purchaseTotal)
+        const directExpenses = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
+        const gm    = (todaySalesTotal + closingStock) - (openingStock + purchaseTotal + directExpenses)
         const gmPct = todaySalesTotal > 0 ? (gm / todaySalesTotal) * 100 : 0
         setGrossMargin(gm)
         setGrossMarginPct(gmPct)

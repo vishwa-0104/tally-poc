@@ -138,6 +138,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ openingStock: 0, closingStock: 0, error: err.message }))
       return true
 
+    case 'FETCH_LEDGER_AMOUNTS':
+      handleFetchLedgerAmounts(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate, payload.ledgerNames)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ total: 0, error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -1468,6 +1474,56 @@ async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate, s
   }
 
   return { openingStock, closingStock }
+}
+
+async function handleFetchLedgerAmounts(tallyUrl, tallyCompany, fromDate, toDate, ledgerNames = []) {
+  if (ledgerNames.length === 0) return { total: 0 }
+
+  const from   = toTallyDisplayDate(fromDate)
+  const to     = toTallyDisplayDate(toDate)
+  const filter = ledgerNames.map(n => `$Name = "${n}"`).join(' OR ')
+
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSLedgerAmounts</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${from}</SVFROMDATE>
+        <SVTODATE>${to}</SVTODATE>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSLedgerAmounts" ISMODIFY="No">
+            <TYPE>Ledger</TYPE>
+            <NATIVEMETHOD>Name, ClosingBalance</NATIVEMETHOD>
+            <FILTER>IsTargetLedger</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="IsTargetLedger">
+            ${filter}
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  const blocks = [...responseText.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)]
+
+  let total = 0
+  for (const match of blocks) {
+    const inner  = match[1]
+    const balRaw = inner.match(/<CLOSINGBALANCE[^>]*>([\s\S]*?)<\/CLOSINGBALANCE>/i)?.[1] ?? '0'
+    total += Math.abs(parseTallyBalance(balRaw.trim()))
+  }
+
+  return { total }
 }
 
 async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
