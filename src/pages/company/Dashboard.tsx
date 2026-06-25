@@ -791,17 +791,18 @@ export default function Dashboard() {
     if (purchaseVouchers.length === 0) { toast.error('No purchase vouchers to export'); return }
 
     const rows = [
-      ['Date', 'Voucher No', 'Party', 'Total Amount (with GST)', 'Taxable Amount', 'GST Amount'],
+      ['Date', 'Voucher No', 'Voucher Type', 'Party', 'Total Amount (with GST)', 'Taxable Amount', 'GST Amount'],
       ...purchaseVouchers.map(v => [
         v.date,
         v.voucherNo,
+        v.type,
         v.party,
         v.amount.toFixed(2),
         v.taxableAmount.toFixed(2),
         (v.amount - v.taxableAmount).toFixed(2),
       ]),
       [],
-      ['', '', 'TOTAL',
+      ['', '', '', 'TOTAL',
         purchaseVouchers.reduce((s, v) => s + v.amount, 0).toFixed(2),
         purchaseVouchers.reduce((s, v) => s + v.taxableAmount, 0).toFixed(2),
         purchaseVouchers.reduce((s, v) => s + (v.amount - v.taxableAmount), 0).toFixed(2),
