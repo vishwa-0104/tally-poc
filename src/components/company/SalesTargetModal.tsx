@@ -140,10 +140,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [salesIncludeVouchers, setSalesIncludeVouchers] = useState<string[]>([])
   const [salesExcludeVouchers, setSalesExcludeVouchers] = useState<string[]>([])
 
-  // YTD sales settings
-  const [ytdSalesAccounts,           setYtdSalesAccounts]           = useState<string[]>([])
-  const [ytdSalesIncludeVouchers,    setYtdSalesIncludeVouchers]    = useState<string[]>([])
-  const [ytdSalesExcludeVouchers,    setYtdSalesExcludeVouchers]    = useState<string[]>([])
+  // YTD settings
   const [ytdPurchaseIncludeVouchers, setYtdPurchaseIncludeVouchers] = useState<string[]>([])
   const [ytdPurchaseExcludeVouchers, setYtdPurchaseExcludeVouchers] = useState<string[]>([])
   const [ytdGrossMarginTarget,       setYtdGrossMarginTarget]       = useState<string>('')
@@ -182,9 +179,6 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setSalesExcludeVouchers(s.today?.salesExcludeVouchers ?? [])
         setInflowLedgers(s.today?.cashInflowLedgers ?? [])
         setBankLedgers(s.today?.bankLedgers ?? [])
-        setYtdSalesAccounts(s.ytd?.salesAccounts ?? [])
-        setYtdSalesIncludeVouchers(s.ytd?.salesIncludeVouchers ?? [])
-        setYtdSalesExcludeVouchers(s.ytd?.salesExcludeVouchers ?? [])
         setYtdPurchaseIncludeVouchers(s.ytd?.purchaseIncludeVouchers ?? [])
         setYtdPurchaseExcludeVouchers(s.ytd?.purchaseExcludeVouchers ?? [])
         setYtdGrossMarginTarget(s.ytd?.grossMarginTarget != null ? String(s.ytd.grossMarginTarget) : '')
@@ -224,9 +218,6 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         bankLedgers:          bankLedgers.length          > 0 ? bankLedgers          : undefined,
       },
       ytd: {
-        salesAccounts:           ytdSalesAccounts.length           > 0 ? ytdSalesAccounts           : undefined,
-        salesIncludeVouchers:    ytdSalesIncludeVouchers.length    > 0 ? ytdSalesIncludeVouchers    : undefined,
-        salesExcludeVouchers:    ytdSalesExcludeVouchers.length    > 0 ? ytdSalesExcludeVouchers    : undefined,
         purchaseIncludeVouchers: ytdPurchaseIncludeVouchers.length > 0 ? ytdPurchaseIncludeVouchers : undefined,
         purchaseExcludeVouchers: ytdPurchaseExcludeVouchers.length > 0 ? ytdPurchaseExcludeVouchers : undefined,
         grossMarginTarget:       ytdGrossMarginTarget ? (parseFloat(ytdGrossMarginTarget) || undefined) : undefined,
@@ -392,35 +383,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
       {activeTab === 'ytd' && (
         <div className="space-y-6">
 
-          <SearchCheckList
-            label="Sales Accounts"
-            hint="Default: all vouchers matching voucher type filter below"
-            options={allLedgerOpts}
-            selected={ytdSalesAccounts}
-            onChange={setYtdSalesAccounts}
-            loading={loadingOpts}
-          />
-
-          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
-            <SearchCheckList
-              label="Sales — Include Vouchers"
-              hint="Default: voucher types containing 'sales'"
-              options={voucherTypeOpts}
-              selected={ytdSalesIncludeVouchers}
-              onChange={setYtdSalesIncludeVouchers}
-              loading={loadingOpts}
-            />
-            <SearchCheckList
-              label="Sales — Exclude Vouchers"
-              hint="Default: Credit Note"
-              options={voucherTypeOpts}
-              selected={ytdSalesExcludeVouchers}
-              onChange={setYtdSalesExcludeVouchers}
-              loading={loadingOpts}
-            />
-          </div>
-
-          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-5">
             <SearchCheckList
               label="Purchase — Include Vouchers"
               hint="Default: voucher types containing 'purchase'"

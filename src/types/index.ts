@@ -104,9 +104,6 @@ export interface DashboardSettings {
     bankLedgers?:          string[]
   }
   ytd?: {
-    salesAccounts?:           string[]
-    salesIncludeVouchers?:    string[]
-    salesExcludeVouchers?:    string[]
     purchaseIncludeVouchers?: string[]
     purchaseExcludeVouchers?: string[]
     grossMarginTarget?:       number

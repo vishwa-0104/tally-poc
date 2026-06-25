@@ -571,8 +571,7 @@ export default function Dashboard() {
     }
     const { from, to } = getFilterDates(preset, cfrom, cto)
 
-    // Sales filter settings are preset-specific: ytd uses its own saved config, everything else uses today's.
-    const salesSettings: SalesFilterSettings | undefined = preset === 'ytd' ? settings.ytd : settings.today
+    const salesSettings = settings.today
 
     setLoading(true)
     setError(null)
