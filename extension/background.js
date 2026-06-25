@@ -1421,7 +1421,8 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
 // so this is just 2 rows — much faster than querying individual ledger balances.
 // Same SVTODATE limitation as TBSCashBankBalances: always returns current date's value.
 
-async function fetchStockSummaryTotal(tallyUrl, tallyCompany, asOfDate) {
+async function fetchStockSummaryTotal(tallyUrl, tallyCompany, asOfDate, fromDate = null) {
+  const fromLine = fromDate ? `\n          <SVFROMDATE>${fromDate}</SVFROMDATE>` : ''
   const xml = `<ENVELOPE>
   <HEADER>
     <TALLYREQUEST>Export Data</TALLYREQUEST>
@@ -1431,7 +1432,7 @@ async function fetchStockSummaryTotal(tallyUrl, tallyCompany, asOfDate) {
       <REQUESTDESC>
         <REPORTNAME>Stock Summary</REPORTNAME>
         <STATICVARIABLES>
-          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${fromLine}
           <SVTODATE>${asOfDate}</SVTODATE>${companyVar(tallyCompany)}
         </STATICVARIABLES>
       </REQUESTDESC>
@@ -1453,57 +1454,24 @@ async function fetchStockSummaryTotal(tallyUrl, tallyCompany, asOfDate) {
     if (!raw) continue
     total += -(parseFloat(raw.replace(/,/g, '')) || 0)
   }
-  console.log(`[StockSummary] asOfDate=${asOfDate} | entries=${matches.length} | total=${total}`)
-  return total
-}
-
-async function fetchOpeningStockTotal(tallyUrl, tallyCompany, onDate) {
-  // Read DSPOPAMTA (opening amount) by requesting a single-day range where fromDate = toDate.
-  // Tally's Stock Summary then shows the period's Opening Stock separately from that day's
-  // transactions — no need to go back to the day before (which fails when company has no
-  // prior-year Tally data, e.g. March 31 returns 0 even though April 1 has opening stock).
-  const xml = `<ENVELOPE>
-  <HEADER>
-    <TALLYREQUEST>Export Data</TALLYREQUEST>
-  </HEADER>
-  <BODY>
-    <EXPORTDATA>
-      <REQUESTDESC>
-        <REPORTNAME>Stock Summary</REPORTNAME>
-        <STATICVARIABLES>
-          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-          <SVFROMDATE>${onDate}</SVFROMDATE>
-          <SVTODATE>${onDate}</SVTODATE>${companyVar(tallyCompany)}
-        </STATICVARIABLES>
-      </REQUESTDESC>
-    </EXPORTDATA>
-  </BODY>
-</ENVELOPE>`
-
-  const responseText = await postToTally(xml, tallyUrl)
-
-  // DSPOPAMTA = Display Opening Amount. Same sign convention as DSPCLAMTA.
-  const matches = [...responseText.matchAll(/<DSPOPAMTA[^>]*>([\s\S]*?)<\/DSPOPAMTA>/gi)]
-  let total = 0
-  for (const m of matches) {
-    const raw = m[1].trim()
-    if (!raw) continue
-    total += -(parseFloat(raw.replace(/,/g, '')) || 0)
-  }
-  console.log(`[StockSummary/Opening] onDate=${onDate} | entries=${matches.length} | total=${total}`)
+  console.log(`[StockSummary] ${fromDate ? `fromDate=${fromDate} ` : ''}asOfDate=${asOfDate} | entries=${matches.length} | total=${total}`)
   return total
 }
 
 async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate) {
-  // Opening stock: read DSPOPAMTA (opening balance) from Stock Summary at fromDate.
-  // This correctly returns the FY's opening stock even when there is no prior-year data
-  // in Tally (the old approach of querying fromDate-1 returned 0 in that case).
+  // Opening stock = closing stock at end of the day BEFORE fromDate (i.e. 31-Mar for YTD).
+  // Using fromDate itself would include that day's transactions and give the wrong value.
+  const d = new Date(`${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`)
+  d.setDate(d.getDate() - 1)
+  const openingDate = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+
+  const openingDisplayDate = toTallyDisplayDate(openingDate)
   const [closingStock, openingStock] = await Promise.all([
     fetchStockSummaryTotal(tallyUrl, tallyCompany, toTallyDisplayDate(toDate)),
-    fetchOpeningStockTotal(tallyUrl, tallyCompany, toTallyDisplayDate(fromDate)),
+    fetchStockSummaryTotal(tallyUrl, tallyCompany, openingDisplayDate, openingDisplayDate),
   ])
 
-  console.log(`[StockValue] Opening (${fromDate}): ${openingStock} | Closing (${toDate}): ${closingStock}`)
+  console.log(`[StockValue] Opening (${openingDate}): ${openingStock} | Closing (${toDate}): ${closingStock}`)
   return { openingStock, closingStock }
 }
 
