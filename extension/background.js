@@ -1440,16 +1440,20 @@ async function fetchStockSummaryTotal(tallyUrl, tallyCompany, asOfDate) {
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log(`[StockSummary] asOfDate=${asOfDate} raw XML (first 2000):`, responseText.slice(0, 2000))
 
-  // Sum all CLOSINGVALUE fields — covers both group-level and item-level entries.
-  // We only count top-level stock groups to avoid double-counting sub-groups.
-  // If the response structure is unclear, the raw XML above will show us.
-  const matches = [...responseText.matchAll(/<CLOSINGVALUE[^>]*>([\s\S]*?)<\/CLOSINGVALUE>/gi)]
+  // DSPCLAMTA = Display Closing Amount. Values use Tally's Cr/Dr sign:
+  // negative = positive stock (asset/Cr), positive = deficit stock (Dr).
+  // Negating and summing all entries gives the correct total stock value.
+  // No double-counting: top-level stock groups aggregate their child items;
+  // individual items shown separately are those not in any named group.
+  const matches = [...responseText.matchAll(/<DSPCLAMTA[^>]*>([\s\S]*?)<\/DSPCLAMTA>/gi)]
   let total = 0
   for (const m of matches) {
-    total += Math.abs(parseTallyBalance(m[1].trim()))
+    const raw = m[1].trim()
+    if (!raw) continue
+    total += -(parseFloat(raw.replace(/,/g, '')) || 0)
   }
+  console.log(`[StockSummary] asOfDate=${asOfDate} | entries=${matches.length} | total=${total}`)
   return total
 }
 
