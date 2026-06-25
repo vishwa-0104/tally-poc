@@ -573,6 +573,9 @@ function parseSalesRegisterSummary(xml, fromDate) {
 async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
   // TDL Collection with hardcoded date values in the formula so Tally actually filters.
   // $$SVFromDate/$$SVToDate do not resolve inside FILTER formulae — pass dates directly.
+  // $$StrToDate expects DD-MMM-YYYY format, same as toTallyDisplayDate produces.
+  const from = toTallyDisplayDate(fromDate)
+  const to   = toTallyDisplayDate(toDate)
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -593,7 +596,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
             <FILTER>IsSalesAndInRange</FILTER>
           </COLLECTION>
           <SYSTEM TYPE="Formulae" NAME="IsSalesAndInRange">
-            $$Contains:VoucherTypeName:"Sales" AND $$IsInRange:Date:$$StrToDate:"${fromDate}":$$StrToDate:"${toDate}"
+            $$Contains:VoucherTypeName:"Sales" AND $$IsInRange:Date:$$StrToDate:"${from}":$$StrToDate:"${to}"
           </SYSTEM>
         </TDLMESSAGE>
       </TDL>
