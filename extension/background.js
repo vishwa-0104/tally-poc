@@ -1425,10 +1425,9 @@ async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate) {
   const from = toTallyDisplayDate(fromDate)
   const to   = toTallyDisplayDate(toDate)
 
-  // StockGroup.$OpeningBalance returns quantities, not rupee values.
-  // StockItem.$OpeningValue / $ClosingValue give the actual rupee amounts
-  // (same fields Tally's own Stock Summary report uses), so we sum across
-  // all items — no group filter needed and no double-counting.
+  // OpeningValue/ClosingValue are native StockItem methods — the same ones
+  // Tally's Stock Summary report uses. They respect SVFROMDATE/SVTODATE and
+  // handle any valuation method (FIFO, weighted average, etc.) automatically.
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -1447,8 +1446,7 @@ async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate) {
         <TDLMESSAGE>
           <COLLECTION NAME="TBSStockValue" ISMODIFY="No">
             <TYPE>StockItem</TYPE>
-            <COMPUTE>OV : $$String:$OpeningValue</COMPUTE>
-            <COMPUTE>CV : $$String:$ClosingValue</COMPUTE>
+            <NATIVEMETHOD>Name, OpeningValue, ClosingValue</NATIVEMETHOD>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -1457,17 +1455,19 @@ async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate) {
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
+  console.log('[StockValue] Raw XML:', responseText.slice(0, 2000))
+
   const blocks = [...responseText.matchAll(/<STOCKITEM\b[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)]
 
   let openingStock = 0
   let closingStock = 0
 
   for (const match of blocks) {
-    const inner = match[1]
-    const ov = inner.match(/<OV[^>]*>([\s\S]*?)<\/OV>/i)?.[1]?.trim() ?? '0'
-    const cv = inner.match(/<CV[^>]*>([\s\S]*?)<\/CV>/i)?.[1]?.trim() ?? '0'
-    openingStock += Math.abs(parseFloat(ov.replace(/,/g, '')) || 0)
-    closingStock += Math.abs(parseFloat(cv.replace(/,/g, '')) || 0)
+    const inner      = match[1]
+    const openingRaw = inner.match(/<OPENINGVALUE[^>]*>([\s\S]*?)<\/OPENINGVALUE>/i)?.[1]?.trim() ?? '0'
+    const closingRaw = inner.match(/<CLOSINGVALUE[^>]*>([\s\S]*?)<\/CLOSINGVALUE>/i)?.[1]?.trim() ?? '0'
+    openingStock += Math.abs(parseTallyBalance(openingRaw))
+    closingStock += Math.abs(parseTallyBalance(closingRaw))
   }
 
   console.log(`[StockValue] Items parsed: ${blocks.length} | Opening: ${openingStock} | Closing: ${closingStock}`)
