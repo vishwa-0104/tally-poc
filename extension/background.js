@@ -1421,56 +1421,48 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
 // so this is just 2 rows — much faster than querying individual ledger balances.
 // Same SVTODATE limitation as TBSCashBankBalances: always returns current date's value.
 
-async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate) {
-  const from = toTallyDisplayDate(fromDate)
-  const to   = toTallyDisplayDate(toDate)
-
-  // OpeningValue/ClosingValue are native StockItem methods — the same ones
-  // Tally's Stock Summary report uses. They respect SVFROMDATE/SVTODATE and
-  // handle any valuation method (FIFO, weighted average, etc.) automatically.
+async function fetchStockSummaryTotal(tallyUrl, tallyCompany, asOfDate) {
   const xml = `<ENVELOPE>
   <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>TBSStockValue</ID>
+    <TALLYREQUEST>Export Data</TALLYREQUEST>
   </HEADER>
   <BODY>
-    <DESC>
-      <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        <SVFROMDATE>${from}</SVFROMDATE>
-        <SVTODATE>${to}</SVTODATE>${companyVar(tallyCompany)}
-      </STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="TBSStockValue" ISMODIFY="No">
-            <TYPE>StockItem</TYPE>
-            <NATIVEMETHOD>Name, OpeningValue, ClosingValue</NATIVEMETHOD>
-          </COLLECTION>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
+    <EXPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Stock Summary</REPORTNAME>
+        <STATICVARIABLES>
+          <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+          <SVTODATE>${asOfDate}</SVTODATE>${companyVar(tallyCompany)}
+        </STATICVARIABLES>
+      </REQUESTDESC>
+    </EXPORTDATA>
   </BODY>
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  console.log('[StockValue] Raw XML:', responseText.slice(0, 2000))
+  console.log(`[StockSummary] asOfDate=${asOfDate} raw XML (first 2000):`, responseText.slice(0, 2000))
 
-  const blocks = [...responseText.matchAll(/<STOCKITEM\b[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)]
-
-  let openingStock = 0
-  let closingStock = 0
-
-  for (const match of blocks) {
-    const inner      = match[1]
-    const openingRaw = inner.match(/<OPENINGVALUE[^>]*>([\s\S]*?)<\/OPENINGVALUE>/i)?.[1]?.trim() ?? '0'
-    const closingRaw = inner.match(/<CLOSINGVALUE[^>]*>([\s\S]*?)<\/CLOSINGVALUE>/i)?.[1]?.trim() ?? '0'
-    openingStock += Math.abs(parseTallyBalance(openingRaw))
-    closingStock += Math.abs(parseTallyBalance(closingRaw))
+  // Sum all CLOSINGVALUE fields — covers both group-level and item-level entries.
+  // We only count top-level stock groups to avoid double-counting sub-groups.
+  // If the response structure is unclear, the raw XML above will show us.
+  const matches = [...responseText.matchAll(/<CLOSINGVALUE[^>]*>([\s\S]*?)<\/CLOSINGVALUE>/gi)]
+  let total = 0
+  for (const m of matches) {
+    total += Math.abs(parseTallyBalance(m[1].trim()))
   }
+  return total
+}
 
-  console.log(`[StockValue] Items parsed: ${blocks.length} | Opening: ${openingStock} | Closing: ${closingStock}`)
+async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate) {
+  // fromDate = April 1 (FY start) for YTD. Opening stock = stock as of that date.
+  // toDate   = today. Closing stock = stock as of today.
+  // Two calls to Stock Summary report (Tally's own engine, same as what the UI shows).
+  const [closingStock, openingStock] = await Promise.all([
+    fetchStockSummaryTotal(tallyUrl, tallyCompany, toTallyDisplayDate(toDate)),
+    fetchStockSummaryTotal(tallyUrl, tallyCompany, toTallyDisplayDate(fromDate)),
+  ])
+
+  console.log(`[StockValue] Opening (${fromDate}): ${openingStock} | Closing (${toDate}): ${closingStock}`)
   return { openingStock, closingStock }
 }
 
