@@ -704,7 +704,7 @@ export default function Dashboard() {
         fetchSlowMovingStock(tallyUrl, tallyCompany),
         fetchSalesPartyData(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany),
         preset === 'ytd'
-          ? fetchStockValue(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.stockGroups)
+          ? fetchStockValue(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
           : Promise.resolve(null),
         preset === 'ytd'
           ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.directExpenseLedgers)

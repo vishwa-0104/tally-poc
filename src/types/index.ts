@@ -107,7 +107,6 @@ export interface DashboardSettings {
     purchaseIncludeVouchers?: string[]
     purchaseExcludeVouchers?: string[]
     directExpenseLedgers?:    string[]
-    stockGroups?:             string[]
     grossMarginTarget?:       number
   }
 }

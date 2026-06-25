@@ -133,7 +133,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true
 
     case 'FETCH_STOCK_VALUE':
-      handleFetchStockValue(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate, payload.stockGroups)
+      handleFetchStockValue(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate)
         .then(sendResponse)
         .catch((err) => sendResponse({ openingStock: 0, closingStock: 0, error: err.message }))
       return true
@@ -1421,14 +1421,13 @@ function buildStockItemXml({ name, group, unit, description, gstApplicable, taxa
 // so this is just 2 rows — much faster than querying individual ledger balances.
 // Same SVTODATE limitation as TBSCashBankBalances: always returns current date's value.
 
-async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate, stockGroups = []) {
+async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate) {
   const from = toTallyDisplayDate(fromDate)
   const to   = toTallyDisplayDate(toDate)
 
-  const filter = stockGroups.length > 0
-    ? stockGroups.map(g => `$Name = "${g}"`).join(' OR ')
-    : '$$Contains:$Name:"Stock"'
-
+  // Query StockGroup type filtered to $Parent = "Primary" (top-level groups only).
+  // Tally aggregates all child stock groups into the parent's OpeningBalance/ClosingBalance,
+  // so summing these gives total opening and closing stock for the period.
   const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -1446,12 +1445,12 @@ async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate, s
       <TDL>
         <TDLMESSAGE>
           <COLLECTION NAME="TBSStockValue" ISMODIFY="No">
-            <TYPE>Group</TYPE>
+            <TYPE>StockGroup</TYPE>
             <NATIVEMETHOD>Name, OpeningBalance, ClosingBalance</NATIVEMETHOD>
-            <FILTER>IsTargetStockGroup</FILTER>
+            <FILTER>IsPrimaryStockGroup</FILTER>
           </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="IsTargetStockGroup">
-            ${filter}
+          <SYSTEM TYPE="Formulae" NAME="IsPrimaryStockGroup">
+            $Parent = "Primary"
           </SYSTEM>
         </TDLMESSAGE>
       </TDL>
@@ -1460,13 +1459,13 @@ async function handleFetchStockValue(tallyUrl, tallyCompany, fromDate, toDate, s
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  const blocks = [...responseText.matchAll(/<GROUP\b[^>]*>([\s\S]*?)<\/GROUP>/gi)]
+  const blocks = [...responseText.matchAll(/<STOCKGROUP\b[^>]*>([\s\S]*?)<\/STOCKGROUP>/gi)]
 
   let openingStock = 0
   let closingStock = 0
 
   for (const match of blocks) {
-    const inner = match[1]
+    const inner      = match[1]
     const openingRaw = inner.match(/<OPENINGBALANCE[^>]*>([\s\S]*?)<\/OPENINGBALANCE>/i)?.[1] ?? '0'
     const closingRaw = inner.match(/<CLOSINGBALANCE[^>]*>([\s\S]*?)<\/CLOSINGBALANCE>/i)?.[1] ?? '0'
     openingStock += Math.abs(parseTallyBalance(openingRaw.trim()))

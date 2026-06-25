@@ -178,11 +178,10 @@ export async function fetchStockValue(
   toDate:      string,
   tallyUrl:    string,
   tallyCompany?: string,
-  stockGroups?:  string[],
 ): Promise<{ openingStock: number; closingStock: number }> {
   const result = await sendToExtension<{ openingStock: number; closingStock: number }>(
     'FETCH_STOCK_VALUE',
-    { fromDate, toDate, tallyUrl, tallyCompany, stockGroups },
+    { fromDate, toDate, tallyUrl, tallyCompany },
   )
   return result
 }

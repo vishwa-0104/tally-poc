@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { fetchSalesTargets, saveSalesTargets, fetchDashboardSettings, saveDashboardSettings } from '@/lib/api'
-import { fetchTallyVoucherTypes, fetchTallyLedgers, fetchTallyStockGroups } from '@/services/tallyService'
+import { fetchTallyVoucherTypes, fetchTallyLedgers } from '@/services/tallyService'
 import type { DashboardSettings } from '@/types'
 
 const FY_MONTHS = [
@@ -157,7 +157,6 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [ytdPurchaseIncludeVouchers, setYtdPurchaseIncludeVouchers] = useState<string[]>([])
   const [ytdPurchaseExcludeVouchers, setYtdPurchaseExcludeVouchers] = useState<string[]>([])
   const [ytdDirectExpenseLedgers,    setYtdDirectExpenseLedgers]    = useState<string[]>([])
-  const [ytdStockGroups,             setYtdStockGroups]             = useState<string[]>([])
   const [ytdGrossMarginTarget,       setYtdGrossMarginTarget]       = useState<string>('')
   // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
@@ -168,7 +167,6 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [voucherTypeOpts, setVoucherTypeOpts] = useState<string[]>([])
   const [cashLedgerOpts,  setCashLedgerOpts]  = useState<string[]>([])
   const [bankLedgerOpts,  setBankLedgerOpts]  = useState<string[]>([])
-  const [stockGroupOpts,  setStockGroupOpts]  = useState<string[]>([])
   const [loadingOpts,     setLoadingOpts]     = useState(false)
 
   const [saving, setSaving] = useState(false)
@@ -198,7 +196,6 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setYtdPurchaseIncludeVouchers(s.ytd?.purchaseIncludeVouchers ?? [])
         setYtdPurchaseExcludeVouchers(s.ytd?.purchaseExcludeVouchers ?? [])
         setYtdDirectExpenseLedgers(s.ytd?.directExpenseLedgers ?? [])
-        setYtdStockGroups(s.ytd?.stockGroups ?? [])
         setYtdGrossMarginTarget(s.ytd?.grossMarginTarget != null ? String(s.ytd.grossMarginTarget) : '')
       })
       .catch(() => { /* settings optional */ })
@@ -208,8 +205,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
     Promise.allSettled([
       fetchTallyVoucherTypes(tallyUrl, tallyCompany),
       fetchTallyLedgers(tallyUrl, tallyCompany),
-      fetchTallyStockGroups(tallyUrl, tallyCompany),
-    ]).then(([vtRes, ledRes, sgRes]) => {
+    ]).then(([vtRes, ledRes]) => {
       if (vtRes.status === 'fulfilled') setVoucherTypeOpts(vtRes.value.sort())
       if (ledRes.status === 'fulfilled') {
         const all  = ledRes.value.map(l => l.name).sort()
@@ -219,7 +215,6 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setCashLedgerOpts(cash)
         setBankLedgerOpts(bank)
       }
-      if (sgRes.status === 'fulfilled') setStockGroupOpts(sgRes.value.map(g => g.name).sort())
     }).finally(() => setLoadingOpts(false))
   }, [open, companyId, fyYear, tallyUrl, tallyCompany])
 
@@ -241,7 +236,6 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         purchaseIncludeVouchers: ytdPurchaseIncludeVouchers.length > 0 ? ytdPurchaseIncludeVouchers : undefined,
         purchaseExcludeVouchers: ytdPurchaseExcludeVouchers.length > 0 ? ytdPurchaseExcludeVouchers : undefined,
         directExpenseLedgers:    ytdDirectExpenseLedgers.length    > 0 ? ytdDirectExpenseLedgers    : undefined,
-        stockGroups:             ytdStockGroups.length             > 0 ? ytdStockGroups             : undefined,
         grossMarginTarget:       ytdGrossMarginTarget ? (parseFloat(ytdGrossMarginTarget) || undefined) : undefined,
       },
     }
@@ -432,18 +426,6 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
               selected={ytdDirectExpenseLedgers}
               onChange={setYtdDirectExpenseLedgers}
               loading={loadingOpts}
-            />
-          </div>
-
-          <div className="border-t border-gray-100 pt-5">
-            <SearchCheckList
-              label="Stock Groups (Opening & Closing Stock)"
-              hint="Default: all groups whose name contains 'Stock'"
-              options={stockGroupOpts}
-              selected={ytdStockGroups}
-              onChange={setYtdStockGroups}
-              loading={loadingOpts}
-              showSelectAll
             />
           </div>
 
