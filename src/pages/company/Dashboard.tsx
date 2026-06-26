@@ -558,7 +558,7 @@ export default function Dashboard() {
   const [total,             setTotal]             = useState(0)
   const [prevDaySales,      setPrevDaySales]      = useState<number | null>(null)
   const [slowStock,         setSlowStock]         = useState<SlowStockItem[]>([])
-  const [purchaseVouchers,  setPurchaseVouchers]  = useState<TallyVoucher[]>([])
+  const [purchaseVouchers,  setPurchaseVouchers]  = useState<(TallyVoucher & { role: 'Included' | 'Excluded' })[]>([])
   const [loading,       setLoading]       = useState(false)
   const [fetched,       setFetched]       = useState(false)
   const [error,         setError]         = useState<string | null>(null)
@@ -610,11 +610,18 @@ export default function Dashboard() {
       console.groupEnd()
 
       const pf = settings.ytd as PurchaseFilterSettings | undefined
-      setPurchaseVouchers(all.filter(v => {
-        if (pf?.purchaseIncludeVouchers?.length)
-          return pf.purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
-        return /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type)
-      }))
+      const { purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
+      const pvIncluded = all
+        .filter(v => purchaseIncludeVouchers?.length
+          ? purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type))
+        .map(v => ({ ...v, role: 'Included' as const }))
+      const pvExcluded = all
+        .filter(v => purchaseExcludeVouchers?.length
+          ? purchaseExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /debit\s*note/i.test(v.type))
+        .map(v => ({ ...v, role: 'Excluded' as const }))
+      setPurchaseVouchers([...pvIncluded, ...pvExcluded].sort((a, b) => a.date.localeCompare(b.date)))
 
       const todaySalesTotal = computeSalesTotal(all, salesSettings)
       setTotal(todaySalesTotal)
@@ -791,18 +798,19 @@ export default function Dashboard() {
     if (purchaseVouchers.length === 0) { toast.error('No purchase vouchers to export'); return }
 
     const rows = [
-      ['Date', 'Voucher No', 'Voucher Type', 'Party', 'Total Amount (with GST)', 'Taxable Amount', 'GST Amount'],
+      ['Date', 'Voucher No', 'Voucher Type', 'Party', 'Role', 'Total Amount (with GST)', 'Taxable Amount', 'GST Amount'],
       ...purchaseVouchers.map(v => [
         v.date,
         v.voucherNo,
         v.type,
         v.party,
+        v.role,
         v.amount.toFixed(2),
         v.taxableAmount.toFixed(2),
         (v.amount - v.taxableAmount).toFixed(2),
       ]),
       [],
-      ['', '', '', 'TOTAL',
+      ['', '', '', '', 'TOTAL',
         purchaseVouchers.reduce((s, v) => s + v.amount, 0).toFixed(2),
         purchaseVouchers.reduce((s, v) => s + v.taxableAmount, 0).toFixed(2),
         purchaseVouchers.reduce((s, v) => s + (v.amount - v.taxableAmount), 0).toFixed(2),
@@ -815,7 +823,7 @@ export default function Dashboard() {
     const a    = document.createElement('a')
     const period = activePeriod ? `${activePeriod.from}_${activePeriod.to}` : 'export'
     a.href     = url
-    a.download = `purchases_${period}.xls`
+    a.download = `vouchers_${period}.xls`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -927,11 +935,11 @@ export default function Dashboard() {
               {fetched && purchaseVouchers.length > 0 && (
                 <button
                   onClick={exportPurchasesToXls}
-                  title={`Export ${purchaseVouchers.length} purchase vouchers to XLS`}
+                  title={`Export ${purchaseVouchers.length} vouchers to XLS`}
                   className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700"
                 >
                   <Download className="w-3 h-3" />
-                  Purchases ({purchaseVouchers.length})
+                  Export ({purchaseVouchers.length})
                 </button>
               )}
 

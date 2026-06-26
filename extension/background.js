@@ -928,9 +928,34 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
 
     // Skip pushing to vouchers array if no party amount found — these entries still
     // contributed to cashFlow/bankFlow above so they are not lost.
-    if (amount === 0) continue
+    if (amount === 0) {
+      if (/purchase|debit\s*note/i.test(type)) {
+        const ledgerSummary = flowEntries.map(m => {
+          const n = decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '?')
+          const a = decode(m[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+          const p = /ISPARTYLEDGER[^>]*>Yes/i.test(m[0]) ? '[PARTY]' : ''
+          return `${p}"${n}"=${a}`
+        }).join(' | ')
+        console.warn(`[PurchaseDebug] ⚠️ SKIPPED amount=0 | date=${date} type="${type}" voucherNo="${voucherNo}" party="${party}" | ledgers: ${ledgerSummary}`)
+      }
+      continue
+    }
 
     const taxableAmount = Math.max(0, amount - gstTotal)
+
+    if (/purchase|debit\s*note/i.test(type)) {
+      const gstLedgers = flowEntries
+        .filter(m => {
+          const n = decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
+          return !/ISPARTYLEDGER[^>]*>Yes/i.test(m[0]) && GST_RE.test(n)
+        })
+        .map(m => {
+          const n = decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '')
+          const a = decode(m[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+          return `"${n}"=${a}`
+        }).join(', ')
+      console.log(`[PurchaseDebug] date=${date} type="${type}" voucherNo="${voucherNo}" party="${party}" | amount=${amount.toFixed(2)} gstTotal=${gstTotal.toFixed(2)} taxable=${taxableAmount.toFixed(2)}${gstLedgers ? ` | GST: [${gstLedgers}]` : ' | ⚠️ NO GST LEDGERS FOUND'}`)
+    }
 
     vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, hasSalesLedger })
 
