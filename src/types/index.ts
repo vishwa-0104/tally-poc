@@ -104,13 +104,15 @@ export interface DashboardSettings {
     bankLedgers?:          string[]
   }
   ytd?: {
-    purchaseAccounts?:         string[]
-    purchaseIncludeVouchers?:  string[]
-    purchaseExcludeVouchers?:  string[]
-    directExpenseLedgers?:     string[]
-    indirectExpenseLedgers?:   string[]
-    indirectIncomeLedgers?:    string[]
-    grossMarginTarget?:        number
+    purchaseAccounts?:          string[]
+    purchaseIncludeVouchers?:   string[]
+    purchaseExcludeVouchers?:   string[]
+    directExpenseLedgers?:      string[]
+    indirectExpenseLedgers?:    string[]
+    indirectExpenseVouchers?:   string[]
+    indirectIncomeLedgers?:     string[]
+    indirectIncomeVouchers?:    string[]
+    grossMarginTarget?:         number
   }
 }
 

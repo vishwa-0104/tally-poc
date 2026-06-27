@@ -178,7 +178,9 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [ytdPurchaseExcludeVouchers, setYtdPurchaseExcludeVouchers] = useState<string[]>([])
   const [ytdDirectExpenseLedgers,    setYtdDirectExpenseLedgers]    = useState<string[]>([])
   const [ytdIndirectExpenseLedgers, setYtdIndirectExpenseLedgers] = useState<string[]>([])
+  const [ytdIndirectExpenseVouchers, setYtdIndirectExpenseVouchers] = useState<string[]>([])
   const [ytdIndirectIncomeLedgers,  setYtdIndirectIncomeLedgers]  = useState<string[]>([])
+  const [ytdIndirectIncomeVouchers,  setYtdIndirectIncomeVouchers]  = useState<string[]>([])
   const [ytdGrossMarginTarget,       setYtdGrossMarginTarget]       = useState<string>('')
   // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
@@ -220,7 +222,9 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setYtdPurchaseExcludeVouchers(s.ytd?.purchaseExcludeVouchers ?? [])
         setYtdDirectExpenseLedgers(s.ytd?.directExpenseLedgers ?? [])
         setYtdIndirectExpenseLedgers(s.ytd?.indirectExpenseLedgers ?? [])
+        setYtdIndirectExpenseVouchers(s.ytd?.indirectExpenseVouchers ?? [])
         setYtdIndirectIncomeLedgers(s.ytd?.indirectIncomeLedgers ?? [])
+        setYtdIndirectIncomeVouchers(s.ytd?.indirectIncomeVouchers ?? [])
         setYtdGrossMarginTarget(s.ytd?.grossMarginTarget != null ? String(s.ytd.grossMarginTarget) : '')
       })
       .catch(() => { /* settings optional */ })
@@ -262,8 +266,10 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         purchaseIncludeVouchers: ytdPurchaseIncludeVouchers.length > 0 ? ytdPurchaseIncludeVouchers : undefined,
         purchaseExcludeVouchers: ytdPurchaseExcludeVouchers.length > 0 ? ytdPurchaseExcludeVouchers : undefined,
         directExpenseLedgers:    ytdDirectExpenseLedgers.length    > 0 ? ytdDirectExpenseLedgers    : undefined,
-        indirectExpenseLedgers:  ytdIndirectExpenseLedgers.length  > 0 ? ytdIndirectExpenseLedgers  : undefined,
-        indirectIncomeLedgers:   ytdIndirectIncomeLedgers.length   > 0 ? ytdIndirectIncomeLedgers   : undefined,
+        indirectExpenseLedgers:  ytdIndirectExpenseLedgers.length   > 0 ? ytdIndirectExpenseLedgers   : undefined,
+        indirectExpenseVouchers: ytdIndirectExpenseVouchers.length  > 0 ? ytdIndirectExpenseVouchers  : undefined,
+        indirectIncomeLedgers:   ytdIndirectIncomeLedgers.length    > 0 ? ytdIndirectIncomeLedgers    : undefined,
+        indirectIncomeVouchers:  ytdIndirectIncomeVouchers.length   > 0 ? ytdIndirectIncomeVouchers   : undefined,
         grossMarginTarget:       ytdGrossMarginTarget ? (parseFloat(ytdGrossMarginTarget) || undefined) : undefined,
       },
     }
@@ -469,26 +475,45 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
             />
           </div>
 
-          <div className="border-t border-gray-100 pt-5">
-            <SearchCheckList
-              label="Indirect Expense Ledgers"
-              hint="e.g. Rent, Salaries, Admin costs — used for Net Profit calculation"
-              options={allLedgerOpts}
-              selected={ytdIndirectExpenseLedgers}
-              onChange={setYtdIndirectExpenseLedgers}
-              loading={loadingOpts}
-            />
-          </div>
-
-          <div className="border-t border-gray-100 pt-5">
-            <SearchCheckList
-              label="Indirect Income Ledgers"
-              hint="e.g. Interest Received, Commission Income — used for Net Profit calculation"
-              options={allLedgerOpts}
-              selected={ytdIndirectIncomeLedgers}
-              onChange={setYtdIndirectIncomeLedgers}
-              loading={loadingOpts}
-            />
+          {/* ── EBITDA Section ── */}
+          <div className="border-t-2 border-blue-100 pt-5">
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-4">EBITDA</p>
+            <div className="space-y-5">
+              <SearchCheckList
+                label="Indirect Expense Ledgers"
+                hint="e.g. Rent, Salaries, Admin costs"
+                options={allLedgerOpts}
+                selected={ytdIndirectExpenseLedgers}
+                onChange={setYtdIndirectExpenseLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Indirect Expense Vouchers"
+                hint="Only count above ledgers from these voucher types (default: all)"
+                options={voucherTypeOpts}
+                selected={ytdIndirectExpenseVouchers}
+                onChange={setYtdIndirectExpenseVouchers}
+                loading={loadingOpts}
+              />
+              <SearchCheckList
+                label="Indirect Income Ledgers"
+                hint="e.g. Interest Received, Commission Income"
+                options={allLedgerOpts}
+                selected={ytdIndirectIncomeLedgers}
+                onChange={setYtdIndirectIncomeLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Indirect Income Vouchers"
+                hint="Only count above ledgers from these voucher types (default: all)"
+                options={voucherTypeOpts}
+                selected={ytdIndirectIncomeVouchers}
+                onChange={setYtdIndirectIncomeVouchers}
+                loading={loadingOpts}
+              />
+            </div>
           </div>
 
           <div className="border-t border-gray-100 pt-5">

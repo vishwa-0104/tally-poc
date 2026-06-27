@@ -628,7 +628,9 @@ export default function Dashboard() {
           bankLedgers:             settings.today?.bankLedgers,
           purchaseAccounts:        settings.ytd?.purchaseAccounts,
           indirectExpenseLedgers:  settings.ytd?.indirectExpenseLedgers,
+          indirectExpenseVouchers: settings.ytd?.indirectExpenseVouchers,
           indirectIncomeLedgers:   settings.ytd?.indirectIncomeLedgers,
+          indirectIncomeVouchers:  settings.ytd?.indirectIncomeVouchers,
         },
       )
       setTopItems(fetchedTopItems ?? [])

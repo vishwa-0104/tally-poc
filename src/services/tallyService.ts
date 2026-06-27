@@ -230,7 +230,9 @@ export interface DaybookOptions {
   bankLedgers?:             string[]
   purchaseAccounts?:        string[]
   indirectExpenseLedgers?:  string[]
+  indirectExpenseVouchers?: string[]
   indirectIncomeLedgers?:   string[]
+  indirectIncomeVouchers?:  string[]
 }
 
 export async function fetchDaybook(
@@ -249,7 +251,9 @@ export async function fetchDaybook(
     bankLedgers:             options.bankLedgers             ?? [],
     purchaseAccounts:        options.purchaseAccounts        ?? [],
     indirectExpenseLedgers:  options.indirectExpenseLedgers  ?? [],
+    indirectExpenseVouchers: options.indirectExpenseVouchers ?? [],
     indirectIncomeLedgers:   options.indirectIncomeLedgers   ?? [],
+    indirectIncomeVouchers:  options.indirectIncomeVouchers  ?? [],
   })
   return result
 }
