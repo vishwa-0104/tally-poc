@@ -770,8 +770,8 @@ export default function Dashboard() {
           const cashLedgers = rawLedgers.filter(l => l.group.toLowerCase().includes('cash'))
           const bankLedgers = rawLedgers.filter(l => l.group.toLowerCase().includes('bank'))
           if (rawLedgers.length > 0) {
-            const cashInHand = cashLedgers.reduce((s, l) => s + l.balance, 0)
-            const bankBal    = bankLedgers.reduce((s, l) => s + l.balance, 0)
+            const cashInHand = -cashLedgers.reduce((s, l) => s + l.balance, 0)
+            const bankBal    = -bankLedgers.reduce((s, l) => s + l.balance, 0)
             console.log('[Balances] cashInHand:', cashInHand, '| bankBalance:', bankBal)
             setCashInHand(cashInHand)
             setBankBalance(bankBal)
