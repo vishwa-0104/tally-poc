@@ -807,7 +807,7 @@ export default function Dashboard() {
       }
 
       // 5. Non-critical fetches in parallel — none block the main KPIs.
-      const [slowResult, stockResult, directExpResult, indirectExpResult, indirectIncResult] = await Promise.allSettled([
+      const [slowResult, stockResult, directExpResult] = await Promise.allSettled([
         fetchSlowMovingStock(tallyUrl, tallyCompany),
         preset === 'ytd'
           ? fetchStockValue(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
@@ -815,19 +815,23 @@ export default function Dashboard() {
         preset === 'ytd'
           ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.directExpenseLedgers)
           : Promise.resolve(0),
-        preset === 'ytd'
-          ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.indirectExpenseLedgers)
-          : Promise.resolve(0),
-        preset === 'ytd'
-          ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.indirectIncomeLedgers)
-          : Promise.resolve(0),
       ])
       if (slowResult.status === 'fulfilled') setSlowStock(slowResult.value.items)
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         const { openingStock, closingStock } = stockResult.value
-        const directExpenses   = directExpResult.status   === 'fulfilled' ? (directExpResult.value   ?? 0) : 0
-        const indirectExpenses = indirectExpResult.status === 'fulfilled' ? (indirectExpResult.value ?? 0) : 0
-        const indirectIncome   = indirectIncResult.status === 'fulfilled' ? (indirectIncResult.value ?? 0) : 0
+        const directExpenses = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
+
+        // Compute indirect expenses/income from daybook vouchers — match v.party against
+        // configured ledger names (in Tally, PARTYLEDGERNAME = the expense/income ledger
+        // for payment/receipt vouchers).
+        const indExpSet = new Set((settings.ytd?.indirectExpenseLedgers ?? []).map(n => n.toLowerCase()))
+        const indIncSet = new Set((settings.ytd?.indirectIncomeLedgers  ?? []).map(n => n.toLowerCase()))
+        const indirectExpenses = indExpSet.size > 0
+          ? all.filter(v => indExpSet.has(v.party.toLowerCase())).reduce((s, v) => s + v.taxableAmount, 0)
+          : 0
+        const indirectIncome = indIncSet.size > 0
+          ? all.filter(v => indIncSet.has(v.party.toLowerCase())).reduce((s, v) => s + v.taxableAmount, 0)
+          : 0
 
         const gm    = (todaySalesTotal + closingStock) - (openingStock + purchaseTotal + directExpenses)
         const gmPct = todaySalesTotal > 0 ? (gm / todaySalesTotal) * 100 : 0
@@ -838,9 +842,6 @@ export default function Dashboard() {
         console.log('Config — directExpLedgers   :', settings.ytd?.directExpenseLedgers ?? [])
         console.log('Config — indirectExpLedgers :', settings.ytd?.indirectExpenseLedgers ?? [])
         console.log('Config — indirectIncLedgers :', settings.ytd?.indirectIncomeLedgers ?? [])
-        console.log('Fetch  — directExpResult    :', directExpResult.status, directExpResult.status === 'fulfilled' ? directExpResult.value : directExpResult.reason)
-        console.log('Fetch  — indirectExpResult  :', indirectExpResult.status, indirectExpResult.status === 'fulfilled' ? indirectExpResult.value : indirectExpResult.reason)
-        console.log('Fetch  — indirectIncResult  :', indirectIncResult.status, indirectIncResult.status === 'fulfilled' ? indirectIncResult.value : indirectIncResult.reason)
         console.log('─────────────────────────────────────────')
         console.log('Sales              :', todaySalesTotal.toFixed(2))
         console.log('Opening Stock      :', openingStock.toFixed(2))
