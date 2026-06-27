@@ -11,7 +11,7 @@ import {
   Users, Store, Download,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, fetchPLReport, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -458,6 +458,35 @@ function GrossMarginCard({ value, pct, targetPct }: {
   )
 }
 
+function NetProfitCard({ value, pct }: { value: number | null; pct: number | null }) {
+  const color = value === null ? 'text-gray-300' : value >= 0 ? 'text-gray-900' : 'text-red-600'
+  const Icon  = value === null || value >= 0 ? TrendingUp : TrendingDown
+  const iconBg    = value === null ? 'bg-purple-50' : value >= 0 ? 'bg-green-50' : 'bg-red-50'
+  const iconColor = value === null ? 'text-purple-500' : value >= 0 ? 'text-green-600' : 'text-red-500'
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className={`p-2 ${iconBg} rounded-lg`}>
+          <Icon className={`w-4 h-4 ${iconColor}`} />
+        </div>
+      </div>
+      <p className={`text-lg font-bold tracking-tight mb-0.5 ${color}`}>
+        {value !== null ? formatCurrency(value) : '—'}
+      </p>
+      <p className="text-[11px] font-semibold text-gray-600">Net Profit</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Gross Margin − Indirect Exp + Indirect Inc</p>
+      {pct !== null && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          <div className="flex justify-between text-[11px]">
+            <span className="text-gray-500">Net Margin %</span>
+            <span className={`font-semibold ${pct >= 0 ? 'text-gray-700' : 'text-red-500'}`}>{pct.toFixed(1)}%</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DataTableCard({
   title,
   columns,
@@ -557,8 +586,10 @@ export default function Dashboard() {
   const [payables,    setPayables]    = useState<number | null>(null)
   const [topItems,      setTopItems]      = useState<TopItem[]>([])
   const [topDebtors,    setTopDebtors]    = useState<SalesPartyRow[]>([])
-  const [grossMargin,   setGrossMargin]   = useState<number | null>(null)
+  const [grossMargin,    setGrossMargin]    = useState<number | null>(null)
   const [grossMarginPct, setGrossMarginPct] = useState<number | null>(null)
+  const [netProfit,      setNetProfit]      = useState<number | null>(null)
+  const [netProfitPct,   setNetProfitPct]   = useState<number | null>(null)
 
   const [total,             setTotal]             = useState(0)
   const [prevDaySales,      setPrevDaySales]      = useState<number | null>(null)
@@ -584,6 +615,8 @@ export default function Dashboard() {
     setTopDebtors([])
     setGrossMargin(null)
     setGrossMarginPct(null)
+    setNetProfit(null)
+    setNetProfitPct(null)
     try {
       const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow, topItems: fetchedTopItems } = await fetchDaybook(
         toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany,
@@ -773,13 +806,8 @@ export default function Dashboard() {
         setTopDebtors(debtors)
       }
 
-      // P&L debug — log raw XML from Tally for the current date range
-      fetchPLReport(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
-        .then(r => console.log('[PL Report] raw XML:', r.rawXml))
-        .catch(err => console.warn('[PL Report] error:', err.message))
-
       // 5. Non-critical fetches in parallel — none block the main KPIs.
-      const [slowResult, stockResult, directExpResult] = await Promise.allSettled([
+      const [slowResult, stockResult, directExpResult, indirectExpResult, indirectIncResult] = await Promise.allSettled([
         fetchSlowMovingStock(tallyUrl, tallyCompany),
         preset === 'ytd'
           ? fetchStockValue(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
@@ -787,33 +815,43 @@ export default function Dashboard() {
         preset === 'ytd'
           ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.directExpenseLedgers)
           : Promise.resolve(0),
+        preset === 'ytd'
+          ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.indirectExpenseLedgers)
+          : Promise.resolve(0),
+        preset === 'ytd'
+          ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.indirectIncomeLedgers)
+          : Promise.resolve(0),
       ])
       if (slowResult.status === 'fulfilled') setSlowStock(slowResult.value.items)
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         const { openingStock, closingStock } = stockResult.value
-        const directExpenses = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
+        const directExpenses   = directExpResult.status   === 'fulfilled' ? (directExpResult.value   ?? 0) : 0
+        const indirectExpenses = indirectExpResult.status === 'fulfilled' ? (indirectExpResult.value ?? 0) : 0
+        const indirectIncome   = indirectIncResult.status === 'fulfilled' ? (indirectIncResult.value ?? 0) : 0
+
         const gm    = (todaySalesTotal + closingStock) - (openingStock + purchaseTotal + directExpenses)
         const gmPct = todaySalesTotal > 0 ? (gm / todaySalesTotal) * 100 : 0
+        const np    = gm - indirectExpenses + indirectIncome
+        const npPct = todaySalesTotal > 0 ? (np / todaySalesTotal) * 100 : 0
 
-        console.group('[Gross Margin] YTD breakdown')
-        console.log('Sales            :', todaySalesTotal.toFixed(2))
-        console.log('Opening Stock    :', openingStock.toFixed(2))
-        console.log('Closing Stock    :', closingStock.toFixed(2))
-        console.log('Purchases        :', purchaseTotal.toFixed(2))
-        console.log('Direct Expenses  :', directExpenses.toFixed(2))
+        console.group('[P&L] YTD breakdown')
+        console.log('Sales              :', todaySalesTotal.toFixed(2))
+        console.log('Opening Stock      :', openingStock.toFixed(2))
+        console.log('Closing Stock      :', closingStock.toFixed(2))
+        console.log('Purchases          :', purchaseTotal.toFixed(2))
+        console.log('Direct Expenses    :', directExpenses.toFixed(2))
         console.log('─────────────────────────────────────────')
-        console.log('Formula          : (Sales + Closing) - (Opening + Purchases + DirectExp)')
-        console.log('                 :', `(${todaySalesTotal.toFixed(2)} + ${closingStock.toFixed(2)}) - (${openingStock.toFixed(2)} + ${purchaseTotal.toFixed(2)} + ${directExpenses.toFixed(2)})`)
-        console.log('Gross Margin     :', gm.toFixed(2))
-        console.log('Gross Margin %   :', gmPct.toFixed(2) + '%')
-        if (stockResult.value && (openingStock === 0 && closingStock === 0))
-          console.warn('[Gross Margin] Stock values are both 0 — check stock group settings or Tally connection')
-        if (directExpResult.status === 'rejected')
-          console.warn('[Gross Margin] Direct expenses fetch failed:', directExpResult.reason)
+        console.log('Gross Profit       :', gm.toFixed(2), `(${gmPct.toFixed(2)}%)`)
+        console.log('Indirect Expenses  :', indirectExpenses.toFixed(2))
+        console.log('Indirect Income    :', indirectIncome.toFixed(2))
+        console.log('─────────────────────────────────────────')
+        console.log('Net Profit         :', np.toFixed(2), `(${npPct.toFixed(2)}%)`)
         console.groupEnd()
 
         setGrossMargin(gm)
         setGrossMarginPct(gmPct)
+        setNetProfit(np)
+        setNetProfitPct(npPct)
       }
     } catch (err) {
       console.error('[Dashboard] fetchData failed:', err)
@@ -1041,6 +1079,12 @@ export default function Dashboard() {
                   value={fetched ? grossMargin : null}
                   pct={fetched ? grossMarginPct : null}
                   targetPct={dashboardSettings.ytd?.grossMarginTarget ?? null}
+                />
+              )}
+              {filterPreset === 'ytd' && (dashboardSettings.ytd?.indirectExpenseLedgers?.length || dashboardSettings.ytd?.indirectIncomeLedgers?.length) && (
+                <NetProfitCard
+                  value={fetched ? netProfit : null}
+                  pct={fetched ? netProfitPct : null}
                 />
               )}
               <CashCard

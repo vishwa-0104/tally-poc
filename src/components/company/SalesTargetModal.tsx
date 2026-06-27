@@ -158,6 +158,8 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [ytdPurchaseIncludeVouchers, setYtdPurchaseIncludeVouchers] = useState<string[]>([])
   const [ytdPurchaseExcludeVouchers, setYtdPurchaseExcludeVouchers] = useState<string[]>([])
   const [ytdDirectExpenseLedgers,    setYtdDirectExpenseLedgers]    = useState<string[]>([])
+  const [ytdIndirectExpenseLedgers, setYtdIndirectExpenseLedgers] = useState<string[]>([])
+  const [ytdIndirectIncomeLedgers,  setYtdIndirectIncomeLedgers]  = useState<string[]>([])
   const [ytdGrossMarginTarget,       setYtdGrossMarginTarget]       = useState<string>('')
   // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
@@ -198,6 +200,8 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setYtdPurchaseIncludeVouchers(s.ytd?.purchaseIncludeVouchers ?? [])
         setYtdPurchaseExcludeVouchers(s.ytd?.purchaseExcludeVouchers ?? [])
         setYtdDirectExpenseLedgers(s.ytd?.directExpenseLedgers ?? [])
+        setYtdIndirectExpenseLedgers(s.ytd?.indirectExpenseLedgers ?? [])
+        setYtdIndirectIncomeLedgers(s.ytd?.indirectIncomeLedgers ?? [])
         setYtdGrossMarginTarget(s.ytd?.grossMarginTarget != null ? String(s.ytd.grossMarginTarget) : '')
       })
       .catch(() => { /* settings optional */ })
@@ -239,6 +243,8 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         purchaseIncludeVouchers: ytdPurchaseIncludeVouchers.length > 0 ? ytdPurchaseIncludeVouchers : undefined,
         purchaseExcludeVouchers: ytdPurchaseExcludeVouchers.length > 0 ? ytdPurchaseExcludeVouchers : undefined,
         directExpenseLedgers:    ytdDirectExpenseLedgers.length    > 0 ? ytdDirectExpenseLedgers    : undefined,
+        indirectExpenseLedgers:  ytdIndirectExpenseLedgers.length  > 0 ? ytdIndirectExpenseLedgers  : undefined,
+        indirectIncomeLedgers:   ytdIndirectIncomeLedgers.length   > 0 ? ytdIndirectIncomeLedgers   : undefined,
         grossMarginTarget:       ytdGrossMarginTarget ? (parseFloat(ytdGrossMarginTarget) || undefined) : undefined,
       },
     }
@@ -440,6 +446,28 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
               options={allLedgerOpts}
               selected={ytdDirectExpenseLedgers}
               onChange={setYtdDirectExpenseLedgers}
+              loading={loadingOpts}
+            />
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <SearchCheckList
+              label="Indirect Expense Ledgers"
+              hint="e.g. Rent, Salaries, Admin costs — used for Net Profit calculation"
+              options={allLedgerOpts}
+              selected={ytdIndirectExpenseLedgers}
+              onChange={setYtdIndirectExpenseLedgers}
+              loading={loadingOpts}
+            />
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <SearchCheckList
+              label="Indirect Income Ledgers"
+              hint="e.g. Interest Received, Commission Income — used for Net Profit calculation"
+              options={allLedgerOpts}
+              selected={ytdIndirectIncomeLedgers}
+              onChange={setYtdIndirectIncomeLedgers}
               loading={loadingOpts}
             />
           </div>

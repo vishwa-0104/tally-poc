@@ -289,14 +289,6 @@ export async function fetchGroupBalances(
   })
 }
 
-export async function fetchPLReport(
-  fromDate: string,
-  toDate: string,
-  tallyUrl: string,
-  tallyCompany?: string,
-): Promise<{ rawXml: string }> {
-  return sendToExtension<{ rawXml: string }>('FETCH_PL', { fromDate, toDate, tallyUrl, tallyCompany })
-}
 
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
   console.group('[Sync] Tally XML Payload')
