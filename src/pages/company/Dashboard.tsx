@@ -835,6 +835,13 @@ export default function Dashboard() {
         const npPct = todaySalesTotal > 0 ? (np / todaySalesTotal) * 100 : 0
 
         console.group('[P&L] YTD breakdown')
+        console.log('Config — directExpLedgers   :', settings.ytd?.directExpenseLedgers ?? [])
+        console.log('Config — indirectExpLedgers :', settings.ytd?.indirectExpenseLedgers ?? [])
+        console.log('Config — indirectIncLedgers :', settings.ytd?.indirectIncomeLedgers ?? [])
+        console.log('Fetch  — directExpResult    :', directExpResult.status, directExpResult.status === 'fulfilled' ? directExpResult.value : directExpResult.reason)
+        console.log('Fetch  — indirectExpResult  :', indirectExpResult.status, indirectExpResult.status === 'fulfilled' ? indirectExpResult.value : indirectExpResult.reason)
+        console.log('Fetch  — indirectIncResult  :', indirectIncResult.status, indirectIncResult.status === 'fulfilled' ? indirectIncResult.value : indirectIncResult.reason)
+        console.log('─────────────────────────────────────────')
         console.log('Sales              :', todaySalesTotal.toFixed(2))
         console.log('Opening Stock      :', openingStock.toFixed(2))
         console.log('Closing Stock      :', closingStock.toFixed(2))
