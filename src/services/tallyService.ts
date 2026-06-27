@@ -126,6 +126,7 @@ export interface TallyVoucher {
   taxableAmount:    number  // amount minus CGST/SGST/IGST/Cess
   voucherNo:        string
   hasSalesLedger?:  boolean // true when a configured sales account ledger appears in this voucher
+  salesLedger?:     string  // matched sales account ledger name (set when salesAccounts is configured)
   purchaseLedger?:  string  // matched purchase account ledger name (set when purchaseAccounts is configured)
 }
 

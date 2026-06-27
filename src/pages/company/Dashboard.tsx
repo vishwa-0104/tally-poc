@@ -680,9 +680,9 @@ export default function Dashboard() {
       console.log('[BankFlow from Tally] inflow:', daybookBankFlow.inflow, '| outflow:', daybookBankFlow.outflow)
 
       // ── XLS-ready voucher dump ──
-      const vTsvHeader = 'Date\tVoucher No\tType\tParty\tAmount\tTaxable Amount'
+      const vTsvHeader = 'Date\tVoucher No\tType\tParty\tAmount\tTaxable Amount\tLedger'
       const vTsvRows = all.map(v =>
-        `${v.date}\t${v.voucherNo}\t${v.type}\t${v.party}\t${v.amount.toFixed(2)}\t${v.taxableAmount.toFixed(2)}`
+        `${v.date}\t${v.voucherNo}\t${v.type}\t${v.party}\t${v.amount.toFixed(2)}\t${v.taxableAmount.toFixed(2)}\t${v.salesLedger ?? v.purchaseLedger ?? ''}`
       )
       console.log('%c[Vouchers XLS] Copy the block below → paste into Excel', 'font-weight:bold;color:#0d9488')
       console.log([vTsvHeader, ...vTsvRows].join('\n'))

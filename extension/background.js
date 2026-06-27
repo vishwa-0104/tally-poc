@@ -830,6 +830,7 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
     // but still move real money through bank/cash ledgers.
     let gstTotal       = 0
     let hasSalesLedger = false
+    let salesLedger    = ''  // first matched sales account ledger name
     let purchaseLedger = ''  // first matched purchase account ledger name
 
     // Collect ledger entries from ALLLEDGERENTRIES.LIST / ALLLEDGERENTRIES first,
@@ -898,7 +899,7 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
         gstTotal += Math.abs(leAmt)
       }
 
-      if (salesAccountSet    && salesAccountSet.has(ledgerLower))                      hasSalesLedger = true
+      if (salesAccountSet    && salesAccountSet.has(ledgerLower))                      { hasSalesLedger = true; if (!salesLedger) salesLedger = ledgerName }
       if (purchaseAccountSet && purchaseAccountSet.has(ledgerLower) && !purchaseLedger) purchaseLedger = ledgerName
 
       // Determine if this ledger counts as cash inflow/outflow or bank inflow/outflow
@@ -965,7 +966,7 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
       console.log(`[PurchaseDebug] date=${date} type="${type}" voucherNo="${voucherNo}" party="${party}" | amount=${amount.toFixed(2)} gstTotal=${gstTotal.toFixed(2)} taxable=${taxableAmount.toFixed(2)}${gstLedgers ? ` | GST: [${gstLedgers}]` : ' | ⚠️ NO GST LEDGERS FOUND'}`)
     }
 
-    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, hasSalesLedger, purchaseLedger: purchaseLedger || undefined })
+    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, hasSalesLedger, salesLedger: salesLedger || undefined, purchaseLedger: purchaseLedger || undefined })
 
     // ── Item aggregation for Top Performing Items ──────────────────────────
     // Only count inventory entries from sales vouchers within the date range.
