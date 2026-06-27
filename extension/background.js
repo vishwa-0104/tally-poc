@@ -928,17 +928,17 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
         purchaseLedgerTotal += Math.abs(leAmt)
       }
 
-      if (indExpSet && indExpSet.has(ledgerLower) && leAmt > 0) {
+      if (indExpSet && indExpSet.has(ledgerLower) && leAmt < 0) {
         const typeLower = type.toLowerCase()
         const passesInc = !indExpIncVoucherSet || indExpIncVoucherSet.has(typeLower)
         const passesExc = !indExpExcVoucherSet || !indExpExcVoucherSet.has(typeLower)
-        if (passesInc && passesExc) indExpTotal += leAmt
+        if (passesInc && passesExc) indExpTotal += Math.abs(leAmt)
       }
-      if (indIncSet && indIncSet.has(ledgerLower) && leAmt < 0) {
+      if (indIncSet && indIncSet.has(ledgerLower) && leAmt > 0) {
         const typeLower = type.toLowerCase()
         const passesInc = !indIncIncVoucherSet || indIncIncVoucherSet.has(typeLower)
         const passesExc = !indIncExcVoucherSet || !indIncExcVoucherSet.has(typeLower)
-        if (passesInc && passesExc) indIncTotal += Math.abs(leAmt)
+        if (passesInc && passesExc) indIncTotal += leAmt
       }
 
       // Determine if this ledger counts as cash inflow/outflow or bank inflow/outflow
