@@ -928,13 +928,13 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
         purchaseLedgerTotal += Math.abs(leAmt)
       }
 
-      if (indExpSet && indExpSet.has(ledgerLower)) {
+      if (indExpSet && indExpSet.has(ledgerLower) && leAmt > 0) {
         const typeLower = type.toLowerCase()
         const passesInc = !indExpIncVoucherSet || indExpIncVoucherSet.has(typeLower)
         const passesExc = !indExpExcVoucherSet || !indExpExcVoucherSet.has(typeLower)
-        if (passesInc && passesExc) indExpTotal += Math.abs(leAmt)
+        if (passesInc && passesExc) indExpTotal += leAmt
       }
-      if (indIncSet && indIncSet.has(ledgerLower)) {
+      if (indIncSet && indIncSet.has(ledgerLower) && leAmt < 0) {
         const typeLower = type.toLowerCase()
         const passesInc = !indIncIncVoucherSet || indIncIncVoucherSet.has(typeLower)
         const passesExc = !indIncExcVoucherSet || !indIncExcVoucherSet.has(typeLower)
