@@ -828,10 +828,12 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
     // Cash/bank flow is computed here for ALL vouchers — BEFORE the amount===0 guard —
     // because Contra/Journal/transfer entries often have no parseable party ledger amount
     // but still move real money through bank/cash ledgers.
-    let gstTotal       = 0
-    let hasSalesLedger = false
-    let salesLedger    = ''  // first matched sales account ledger name
-    let purchaseLedger = ''  // first matched purchase account ledger name
+    let gstTotal            = 0
+    let hasSalesLedger      = false
+    let salesLedger         = ''  // first matched sales account ledger name
+    let salesLedgerTotal    = 0   // sum of all matched sales account ledger amounts
+    let purchaseLedger      = ''  // first matched purchase account ledger name
+    let purchaseLedgerTotal = 0   // sum of all matched purchase account ledger amounts
 
     // Collect ledger entries from ALLLEDGERENTRIES.LIST / ALLLEDGERENTRIES first,
     // then add LEDGERENTRIES.LIST entries only when the same ledger+amount doesn't
@@ -899,16 +901,16 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
         gstTotal += Math.abs(leAmt)
       }
 
-      // Round-off adjustment: use raw signed leAmt (not Math.abs) so both
-      // rounding directions cancel correctly from taxable amount.
-      // Cr round-off (leAmt < 0): gstTotal increases → taxable decreases
-      // Dr round-off (leAmt > 0): gstTotal decreases → taxable increases
-      if (!isParty && /round\s*off/i.test(ledgerName)) {
-        gstTotal -= leAmt
-      }
 
-      if (salesAccountSet    && salesAccountSet.has(ledgerLower))                      { hasSalesLedger = true; if (!salesLedger) salesLedger = ledgerName }
-      if (purchaseAccountSet && purchaseAccountSet.has(ledgerLower) && !purchaseLedger) purchaseLedger = ledgerName
+      if (salesAccountSet && salesAccountSet.has(ledgerLower)) {
+        hasSalesLedger = true
+        if (!salesLedger) salesLedger = ledgerName
+        salesLedgerTotal += Math.abs(leAmt)
+      }
+      if (purchaseAccountSet && purchaseAccountSet.has(ledgerLower)) {
+        if (!purchaseLedger) purchaseLedger = ledgerName
+        purchaseLedgerTotal += Math.abs(leAmt)
+      }
 
       // Determine if this ledger counts as cash inflow/outflow or bank inflow/outflow
       const isInflowLedger  = inflowSet ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
@@ -958,7 +960,12 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
       continue
     }
 
-    const taxableAmount = Math.max(0, amount - gstTotal)
+    // Use configured ledger amounts directly (no GST subtraction needed — avoids
+    // round-off and other non-GST ledger contamination). Fall back to party-minus-GST
+    // for vouchers where no configured account ledger was matched.
+    const taxableAmount = salesLedgerTotal    > 0 ? salesLedgerTotal
+                        : purchaseLedgerTotal > 0 ? purchaseLedgerTotal
+                        : Math.max(0, amount - gstTotal)
 
     if (/purchase|debit\s*note/i.test(type)) {
       const gstLedgers = flowEntries
