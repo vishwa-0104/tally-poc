@@ -1133,7 +1133,7 @@ export default function Dashboard() {
                   pct={fetched ? ebitdaPct : null}
                 />
               )}
-              {filterPreset === 'ytd' && (dashboardSettings.ytd?.indirectExpenseLedgers?.length || dashboardSettings.ytd?.indirectIncomeLedgers?.length) && (
+              {filterPreset === 'ytd' && (
                 <NetProfitCard
                   value={fetched ? netProfit : null}
                   pct={fetched ? netProfitPct : null}
