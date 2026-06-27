@@ -154,6 +154,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [salesExcludeVouchers, setSalesExcludeVouchers] = useState<string[]>([])
 
   // YTD settings
+  const [ytdPurchaseAccounts,        setYtdPurchaseAccounts]        = useState<string[]>([])
   const [ytdPurchaseIncludeVouchers, setYtdPurchaseIncludeVouchers] = useState<string[]>([])
   const [ytdPurchaseExcludeVouchers, setYtdPurchaseExcludeVouchers] = useState<string[]>([])
   const [ytdDirectExpenseLedgers,    setYtdDirectExpenseLedgers]    = useState<string[]>([])
@@ -193,6 +194,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setSalesExcludeVouchers(s.today?.salesExcludeVouchers ?? [])
         setInflowLedgers(s.today?.cashInflowLedgers ?? [])
         setBankLedgers(s.today?.bankLedgers ?? [])
+        setYtdPurchaseAccounts(s.ytd?.purchaseAccounts ?? [])
         setYtdPurchaseIncludeVouchers(s.ytd?.purchaseIncludeVouchers ?? [])
         setYtdPurchaseExcludeVouchers(s.ytd?.purchaseExcludeVouchers ?? [])
         setYtdDirectExpenseLedgers(s.ytd?.directExpenseLedgers ?? [])
@@ -233,6 +235,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         bankLedgers:          bankLedgers.length          > 0 ? bankLedgers          : undefined,
       },
       ytd: {
+        purchaseAccounts:        ytdPurchaseAccounts.length        > 0 ? ytdPurchaseAccounts        : undefined,
         purchaseIncludeVouchers: ytdPurchaseIncludeVouchers.length > 0 ? ytdPurchaseIncludeVouchers : undefined,
         purchaseExcludeVouchers: ytdPurchaseExcludeVouchers.length > 0 ? ytdPurchaseExcludeVouchers : undefined,
         directExpenseLedgers:    ytdDirectExpenseLedgers.length    > 0 ? ytdDirectExpenseLedgers    : undefined,
@@ -399,7 +402,19 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
       {activeTab === 'ytd' && (
         <div className="space-y-6">
 
-          <div className="grid grid-cols-2 gap-5">
+          {/* Purchase Accounts — mirrors Sales Accounts in Today tab */}
+          <div>
+            <SearchCheckList
+              label="Purchase Accounts"
+              hint="Default: all vouchers matching voucher type filter below"
+              options={allLedgerOpts}
+              selected={ytdPurchaseAccounts}
+              onChange={setYtdPurchaseAccounts}
+              loading={loadingOpts}
+            />
+          </div>
+
+          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
             <SearchCheckList
               label="Purchase — Include Vouchers"
               hint="Default: voucher types containing 'purchase'"

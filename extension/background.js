@@ -109,6 +109,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         payload.salesExcludeVouchers || [],
         payload.cashInflowLedgers    || [],
         payload.bankLedgers          || [],
+        payload.purchaseAccounts     || [],
       )
         .then(sendResponse)
         .catch((err) => sendResponse({ vouchers: [], rawXml: '', cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
@@ -642,7 +643,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 // SVFROMDATE/SVTODATE tell Tally which period to scope to.
 // JS date filter applied after parsing as a safety net.
 
-async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], bankLedgers = []) {
+async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], bankLedgers = [], purchaseAccounts = []) {
   console.log('[BankDebug] handleFetchDaybook received bankLedgers:', bankLedgers)
   const from = toTallyDisplayDate(fromDate)
   const to   = toTallyDisplayDate(toDate)
@@ -671,7 +672,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, sale
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
 
-  const { vouchers: allVouchers, cashFlow, bankFlow, topItems } = parseVouchers(responseText, salesAccounts, salesIncludeVouchers, salesExcludeVouchers, cashInflowLedgers, fromISO, toISO, bankLedgers)
+  const { vouchers: allVouchers, cashFlow, bankFlow, topItems } = parseVouchers(responseText, salesAccounts, salesIncludeVouchers, salesExcludeVouchers, cashInflowLedgers, fromISO, toISO, bankLedgers, purchaseAccounts)
 
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
@@ -749,13 +750,14 @@ function matchAllLedgerEntries(block) {
   return [...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi)]
 }
 
-function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = []) {
+function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = [], purchaseAccounts = []) {
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
   const itemMap  = new Map() // name → { qty, unit, amount }
 
-  const salesAccountSet = salesAccounts.length ? new Set(salesAccounts.map(n => n.toLowerCase())) : null
+  const salesAccountSet    = salesAccounts.length    ? new Set(salesAccounts.map(n => n.toLowerCase()))    : null
+  const purchaseAccountSet = purchaseAccounts.length ? new Set(purchaseAccounts.map(n => n.toLowerCase())) : null
   // Cash inflow and outflow share the same ledger names — one configured list covers both
   const inflowSet  = cashInflowLedgers.length ? new Set(cashInflowLedgers.map(n => n.toLowerCase())) : null
   const outflowSet = inflowSet
@@ -826,8 +828,9 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
     // Cash/bank flow is computed here for ALL vouchers — BEFORE the amount===0 guard —
     // because Contra/Journal/transfer entries often have no parseable party ledger amount
     // but still move real money through bank/cash ledgers.
-    let gstTotal = 0
+    let gstTotal       = 0
     let hasSalesLedger = false
+    let purchaseLedger = ''  // first matched purchase account ledger name
 
     // Collect ledger entries from ALLLEDGERENTRIES.LIST / ALLLEDGERENTRIES first,
     // then add LEDGERENTRIES.LIST entries only when the same ledger+amount doesn't
@@ -891,7 +894,8 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
 
       const ledgerLower = ledgerName.toLowerCase()
 
-      if (salesAccountSet && salesAccountSet.has(ledgerLower)) hasSalesLedger = true
+      if (salesAccountSet    && salesAccountSet.has(ledgerLower))                      hasSalesLedger = true
+      if (purchaseAccountSet && purchaseAccountSet.has(ledgerLower) && !purchaseLedger) purchaseLedger = ledgerName
 
       // Determine if this ledger counts as cash inflow/outflow or bank inflow/outflow
       const isInflowLedger  = inflowSet ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
@@ -957,7 +961,7 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
       console.log(`[PurchaseDebug] date=${date} type="${type}" voucherNo="${voucherNo}" party="${party}" | amount=${amount.toFixed(2)} gstTotal=${gstTotal.toFixed(2)} taxable=${taxableAmount.toFixed(2)}${gstLedgers ? ` | GST: [${gstLedgers}]` : ' | ⚠️ NO GST LEDGERS FOUND'}`)
     }
 
-    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, hasSalesLedger })
+    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, hasSalesLedger, purchaseLedger: purchaseLedger || undefined })
 
     // ── Item aggregation for Top Performing Items ──────────────────────────
     // Only count inventory entries from sales vouchers within the date range.

@@ -60,20 +60,25 @@ type SalesFilterSettings = {
 }
 
 type PurchaseFilterSettings = {
+  purchaseAccounts?:        string[]
   purchaseIncludeVouchers?: string[]
   purchaseExcludeVouchers?: string[]
 }
 
 function computePurchaseTotal(vouchers: TallyVoucher[], pf: PurchaseFilterSettings | undefined): number {
-  const { purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
+  const { purchaseAccounts, purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
 
-  const included = vouchers.filter(v => {
+  // Mirror sales logic: if purchaseAccounts configured, first narrow to vouchers
+  // that contain a matching ledger (hasPurchaseLedger set by extension).
+  const base = purchaseAccounts?.length ? vouchers.filter(v => !!v.purchaseLedger) : vouchers
+
+  const included = base.filter(v => {
     if (purchaseIncludeVouchers?.length)
       return purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
     return /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type)
   })
 
-  const excluded = vouchers.filter(v => {
+  const excluded = base.filter(v => {
     if (purchaseExcludeVouchers?.length)
       return purchaseExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
     return /debit\s*note/i.test(v.type)
@@ -588,29 +593,15 @@ export default function Dashboard() {
           salesExcludeVouchers: salesSettings?.salesExcludeVouchers,
           cashInflowLedgers:    settings.today?.cashInflowLedgers,
           bankLedgers:          settings.today?.bankLedgers,
+          purchaseAccounts:     settings.ytd?.purchaseAccounts,
         },
       )
       setTopItems(fetchedTopItems ?? [])
 
-      // Group all vouchers by type — helps verify which types to use for cash/bank
-      const byType: Record<string, { total: number; taxable: number; count: number; vouchers: { party: string; amount: number; taxable: number; date: string }[] }> = {}
-      for (const v of all) {
-        if (!byType[v.type]) byType[v.type] = { total: 0, taxable: 0, count: 0, vouchers: [] }
-        byType[v.type].total   += v.amount
-        byType[v.type].taxable += v.taxableAmount
-        byType[v.type].count   += 1
-        byType[v.type].vouchers.push({ party: v.party, amount: v.amount, taxable: v.taxableAmount, date: v.date })
-      }
-      console.group('[All Vouchers grouped by Type]')
-      for (const [type, data] of Object.entries(byType)) {
-        console.group(`${type}  (count: ${data.count}  |  total: ${data.total.toFixed(2)}  |  taxable: ${data.taxable.toFixed(2)})`)
-        console.table(data.vouchers)
-        console.groupEnd()
-      }
-      console.groupEnd()
-
       const pf = settings.ytd as PurchaseFilterSettings | undefined
-      const { purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
+      const { purchaseAccounts, purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
+
+      // XLS export — all purchase-type vouchers by type (no ledger filter)
       const pvIncluded = all
         .filter(v => purchaseIncludeVouchers?.length
           ? purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
@@ -628,6 +619,45 @@ export default function Dashboard() {
       setActivePeriod({ from, to })
 
       const purchaseTotal = preset === 'ytd' ? computePurchaseTotal(all, settings.ytd) : 0
+
+      // ── Purchase summary (flat console.log — visible in extension service worker) ──
+      if (preset === 'ytd') {
+        const typeCount: Record<string, number> = {}
+        for (const v of all) typeCount[v.type] = (typeCount[v.type] ?? 0) + 1
+        const typeStr = Object.entries(typeCount).map(([t, n]) => `${t}(${n})`).join(', ') || 'NONE'
+
+        // Gross margin set = type-filtered AND ledger-filtered (mirrors computePurchaseTotal)
+        const base       = purchaseAccounts?.length ? all.filter(v => !!v.purchaseLedger) : all
+        const gmIncluded = base.filter(v => purchaseIncludeVouchers?.length
+          ? purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type))
+        const gmExcluded = base.filter(v => purchaseExcludeVouchers?.length
+          ? purchaseExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /debit\s*note/i.test(v.type))
+
+        const gmTotal    = gmIncluded.reduce((s, v) => s + v.taxableAmount, 0)
+        const debitTotal = gmExcluded.reduce((s, v) => s + v.taxableAmount, 0)
+
+        console.log('=== PURCHASE SUMMARY ===')
+        console.log('Voucher types:', typeStr)
+        console.log(`Purchase by type  (before ledger filter) : ${pvIncluded.length} vouchers | taxable : ${pvIncluded.reduce((s, v) => s + v.taxableAmount, 0).toFixed(2)}`)
+        console.log(`Purchase by ledger (for gross margin)    : ${gmIncluded.length} vouchers | taxable : ${gmTotal.toFixed(2)}${purchaseAccounts?.length ? '' : ' (no Purchase Accounts configured — all used)'}`)
+        console.log(`Debit notes                              : ${gmExcluded.length} vouchers | taxable : ${debitTotal.toFixed(2)}`)
+        console.log(`Net purchase (gross margin)              : ${purchaseTotal.toFixed(2)}`)
+        console.log('--- By purchase ledger ---')
+        const byLedger: Record<string, number> = {}
+        for (const v of gmIncluded)
+          byLedger[v.purchaseLedger ?? '(all)'] = (byLedger[v.purchaseLedger ?? '(all)'] ?? 0) + v.taxableAmount
+        if (Object.keys(byLedger).length === 0)
+          console.log('  (no purchase vouchers)')
+        for (const [ledger, amt] of Object.entries(byLedger).sort(([, a], [, b]) => b - a))
+          console.log(`  ${ledger} : ${amt.toFixed(2)}`)
+        console.log('--- Debit notes ---')
+        if (gmExcluded.length === 0) console.log('  (none)')
+        for (const v of gmExcluded)
+          console.log(`  ${v.date} | ${v.voucherNo} | ${v.party} : ${v.taxableAmount.toFixed(2)}`)
+        console.log('========================')
+      }
 
       console.log('[Sales] Total:', todaySalesTotal, '| preset:', preset, '| from:', from, '| to:', to)
 

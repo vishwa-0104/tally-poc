@@ -104,6 +104,7 @@ export interface DashboardSettings {
     bankLedgers?:          string[]
   }
   ytd?: {
+    purchaseAccounts?:        string[]
     purchaseIncludeVouchers?: string[]
     purchaseExcludeVouchers?: string[]
     directExpenseLedgers?:    string[]
