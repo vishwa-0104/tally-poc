@@ -91,15 +91,26 @@ function SearchCheckList({
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <p className="text-xs font-semibold text-gray-700">{label}</p>
-        {showSelectAll && !loading && options.length > 0 && (
-          <button
-            type="button"
-            onClick={() => onChange(allSelected ? [] : options)}
-            className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
-          >
-            {allSelected ? 'Clear All' : 'Select All'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="text-[11px] font-medium text-red-500 hover:text-red-600"
+            >
+              Clear
+            </button>
+          )}
+          {showSelectAll && !loading && options.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange(allSelected ? [] : options)}
+              className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
+            >
+              {allSelected ? 'Clear All' : 'Select All'}
+            </button>
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
@@ -132,7 +143,15 @@ function SearchCheckList({
       {selected.length === 0 && !loading && options.length > 0 && (
         <p className="text-[11px] text-gray-400 italic mt-1">{hint}</p>
       )}
-      {selected.length > 0 && <p className="text-[11px] text-blue-600 mt-1">{selected.length} selected</p>}
+      {selected.length > 0 && (
+        <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+          <span className="font-medium">{label}:</span>{' '}
+          <span className="text-blue-600">
+            {selected.slice(0, 3).join(', ')}
+            {selected.length > 3 && ` +${selected.length - 3} more`}
+          </span>
+        </p>
+      )}
     </div>
   )
 }
