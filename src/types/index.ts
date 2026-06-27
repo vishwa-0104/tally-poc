@@ -108,10 +108,12 @@ export interface DashboardSettings {
     purchaseIncludeVouchers?:   string[]
     purchaseExcludeVouchers?:   string[]
     directExpenseLedgers?:      string[]
-    indirectExpenseLedgers?:    string[]
-    indirectExpenseVouchers?:   string[]
-    indirectIncomeLedgers?:     string[]
-    indirectIncomeVouchers?:    string[]
+    indirectExpenseLedgers?:         string[]
+    indirectExpenseIncludeVouchers?: string[]
+    indirectExpenseExcludeVouchers?: string[]
+    indirectIncomeLedgers?:          string[]
+    indirectIncomeIncludeVouchers?:  string[]
+    indirectIncomeExcludeVouchers?:  string[]
     grossMarginTarget?:         number
   }
 }

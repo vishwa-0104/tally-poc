@@ -177,10 +177,12 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [ytdPurchaseIncludeVouchers, setYtdPurchaseIncludeVouchers] = useState<string[]>([])
   const [ytdPurchaseExcludeVouchers, setYtdPurchaseExcludeVouchers] = useState<string[]>([])
   const [ytdDirectExpenseLedgers,    setYtdDirectExpenseLedgers]    = useState<string[]>([])
-  const [ytdIndirectExpenseLedgers, setYtdIndirectExpenseLedgers] = useState<string[]>([])
-  const [ytdIndirectExpenseVouchers, setYtdIndirectExpenseVouchers] = useState<string[]>([])
-  const [ytdIndirectIncomeLedgers,  setYtdIndirectIncomeLedgers]  = useState<string[]>([])
-  const [ytdIndirectIncomeVouchers,  setYtdIndirectIncomeVouchers]  = useState<string[]>([])
+  const [ytdIndirectExpenseLedgers,         setYtdIndirectExpenseLedgers]         = useState<string[]>([])
+  const [ytdIndirectExpenseIncludeVouchers, setYtdIndirectExpenseIncludeVouchers] = useState<string[]>([])
+  const [ytdIndirectExpenseExcludeVouchers, setYtdIndirectExpenseExcludeVouchers] = useState<string[]>([])
+  const [ytdIndirectIncomeLedgers,          setYtdIndirectIncomeLedgers]          = useState<string[]>([])
+  const [ytdIndirectIncomeIncludeVouchers,  setYtdIndirectIncomeIncludeVouchers]  = useState<string[]>([])
+  const [ytdIndirectIncomeExcludeVouchers,  setYtdIndirectIncomeExcludeVouchers]  = useState<string[]>([])
   const [ytdGrossMarginTarget,       setYtdGrossMarginTarget]       = useState<string>('')
   // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
@@ -222,9 +224,11 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setYtdPurchaseExcludeVouchers(s.ytd?.purchaseExcludeVouchers ?? [])
         setYtdDirectExpenseLedgers(s.ytd?.directExpenseLedgers ?? [])
         setYtdIndirectExpenseLedgers(s.ytd?.indirectExpenseLedgers ?? [])
-        setYtdIndirectExpenseVouchers(s.ytd?.indirectExpenseVouchers ?? [])
+        setYtdIndirectExpenseIncludeVouchers(s.ytd?.indirectExpenseIncludeVouchers ?? [])
+        setYtdIndirectExpenseExcludeVouchers(s.ytd?.indirectExpenseExcludeVouchers ?? [])
         setYtdIndirectIncomeLedgers(s.ytd?.indirectIncomeLedgers ?? [])
-        setYtdIndirectIncomeVouchers(s.ytd?.indirectIncomeVouchers ?? [])
+        setYtdIndirectIncomeIncludeVouchers(s.ytd?.indirectIncomeIncludeVouchers ?? [])
+        setYtdIndirectIncomeExcludeVouchers(s.ytd?.indirectIncomeExcludeVouchers ?? [])
         setYtdGrossMarginTarget(s.ytd?.grossMarginTarget != null ? String(s.ytd.grossMarginTarget) : '')
       })
       .catch(() => { /* settings optional */ })
@@ -266,10 +270,12 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         purchaseIncludeVouchers: ytdPurchaseIncludeVouchers.length > 0 ? ytdPurchaseIncludeVouchers : undefined,
         purchaseExcludeVouchers: ytdPurchaseExcludeVouchers.length > 0 ? ytdPurchaseExcludeVouchers : undefined,
         directExpenseLedgers:    ytdDirectExpenseLedgers.length    > 0 ? ytdDirectExpenseLedgers    : undefined,
-        indirectExpenseLedgers:  ytdIndirectExpenseLedgers.length   > 0 ? ytdIndirectExpenseLedgers   : undefined,
-        indirectExpenseVouchers: ytdIndirectExpenseVouchers.length  > 0 ? ytdIndirectExpenseVouchers  : undefined,
-        indirectIncomeLedgers:   ytdIndirectIncomeLedgers.length    > 0 ? ytdIndirectIncomeLedgers    : undefined,
-        indirectIncomeVouchers:  ytdIndirectIncomeVouchers.length   > 0 ? ytdIndirectIncomeVouchers   : undefined,
+        indirectExpenseLedgers:         ytdIndirectExpenseLedgers.length         > 0 ? ytdIndirectExpenseLedgers         : undefined,
+        indirectExpenseIncludeVouchers: ytdIndirectExpenseIncludeVouchers.length > 0 ? ytdIndirectExpenseIncludeVouchers : undefined,
+        indirectExpenseExcludeVouchers: ytdIndirectExpenseExcludeVouchers.length > 0 ? ytdIndirectExpenseExcludeVouchers : undefined,
+        indirectIncomeLedgers:          ytdIndirectIncomeLedgers.length          > 0 ? ytdIndirectIncomeLedgers          : undefined,
+        indirectIncomeIncludeVouchers:  ytdIndirectIncomeIncludeVouchers.length  > 0 ? ytdIndirectIncomeIncludeVouchers  : undefined,
+        indirectIncomeExcludeVouchers:  ytdIndirectIncomeExcludeVouchers.length  > 0 ? ytdIndirectIncomeExcludeVouchers  : undefined,
         grossMarginTarget:       ytdGrossMarginTarget ? (parseFloat(ytdGrossMarginTarget) || undefined) : undefined,
       },
     }
@@ -488,14 +494,24 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
                 loading={loadingOpts}
                 showSelectAll
               />
-              <SearchCheckList
-                label="Indirect Expense Vouchers"
-                hint="Only count above ledgers from these voucher types (default: all)"
-                options={voucherTypeOpts}
-                selected={ytdIndirectExpenseVouchers}
-                onChange={setYtdIndirectExpenseVouchers}
-                loading={loadingOpts}
-              />
+              <div className="grid grid-cols-2 gap-5">
+                <SearchCheckList
+                  label="Expense Vouchers — Include"
+                  hint="Default: all voucher types"
+                  options={voucherTypeOpts}
+                  selected={ytdIndirectExpenseIncludeVouchers}
+                  onChange={setYtdIndirectExpenseIncludeVouchers}
+                  loading={loadingOpts}
+                />
+                <SearchCheckList
+                  label="Expense Vouchers — Exclude"
+                  hint="Default: none excluded"
+                  options={voucherTypeOpts}
+                  selected={ytdIndirectExpenseExcludeVouchers}
+                  onChange={setYtdIndirectExpenseExcludeVouchers}
+                  loading={loadingOpts}
+                />
+              </div>
               <SearchCheckList
                 label="Indirect Income Ledgers"
                 hint="e.g. Interest Received, Commission Income"
@@ -505,14 +521,24 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
                 loading={loadingOpts}
                 showSelectAll
               />
-              <SearchCheckList
-                label="Indirect Income Vouchers"
-                hint="Only count above ledgers from these voucher types (default: all)"
-                options={voucherTypeOpts}
-                selected={ytdIndirectIncomeVouchers}
-                onChange={setYtdIndirectIncomeVouchers}
-                loading={loadingOpts}
-              />
+              <div className="grid grid-cols-2 gap-5">
+                <SearchCheckList
+                  label="Income Vouchers — Include"
+                  hint="Default: all voucher types"
+                  options={voucherTypeOpts}
+                  selected={ytdIndirectIncomeIncludeVouchers}
+                  onChange={setYtdIndirectIncomeIncludeVouchers}
+                  loading={loadingOpts}
+                />
+                <SearchCheckList
+                  label="Income Vouchers — Exclude"
+                  hint="Default: none excluded"
+                  options={voucherTypeOpts}
+                  selected={ytdIndirectIncomeExcludeVouchers}
+                  onChange={setYtdIndirectIncomeExcludeVouchers}
+                  loading={loadingOpts}
+                />
+              </div>
             </div>
           </div>
 

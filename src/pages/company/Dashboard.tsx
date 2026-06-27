@@ -627,10 +627,12 @@ export default function Dashboard() {
           cashInflowLedgers:       settings.today?.cashInflowLedgers,
           bankLedgers:             settings.today?.bankLedgers,
           purchaseAccounts:        settings.ytd?.purchaseAccounts,
-          indirectExpenseLedgers:  settings.ytd?.indirectExpenseLedgers,
-          indirectExpenseVouchers: settings.ytd?.indirectExpenseVouchers,
-          indirectIncomeLedgers:   settings.ytd?.indirectIncomeLedgers,
-          indirectIncomeVouchers:  settings.ytd?.indirectIncomeVouchers,
+          indirectExpenseLedgers:         settings.ytd?.indirectExpenseLedgers,
+          indirectExpenseIncludeVouchers: settings.ytd?.indirectExpenseIncludeVouchers,
+          indirectExpenseExcludeVouchers: settings.ytd?.indirectExpenseExcludeVouchers,
+          indirectIncomeLedgers:          settings.ytd?.indirectIncomeLedgers,
+          indirectIncomeIncludeVouchers:  settings.ytd?.indirectIncomeIncludeVouchers,
+          indirectIncomeExcludeVouchers:  settings.ytd?.indirectIncomeExcludeVouchers,
         },
       )
       setTopItems(fetchedTopItems ?? [])

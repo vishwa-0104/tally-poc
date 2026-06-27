@@ -110,10 +110,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         payload.cashInflowLedgers        || [],
         payload.bankLedgers              || [],
         payload.purchaseAccounts         || [],
-        payload.indirectExpenseLedgers   || [],
-        payload.indirectIncomeLedgers    || [],
-        payload.indirectExpenseVouchers  || [],
-        payload.indirectIncomeVouchers   || [],
+        payload.indirectExpenseLedgers         || [],
+        payload.indirectIncomeLedgers          || [],
+        payload.indirectExpenseIncludeVouchers || [],
+        payload.indirectExpenseExcludeVouchers || [],
+        payload.indirectIncomeIncludeVouchers  || [],
+        payload.indirectIncomeExcludeVouchers  || [],
       )
         .then(sendResponse)
         .catch((err) => sendResponse({ vouchers: [], rawXml: '', cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
@@ -648,7 +650,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 // SVFROMDATE/SVTODATE tell Tally which period to scope to.
 // JS date filter applied after parsing as a safety net.
 
-async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], bankLedgers = [], purchaseAccounts = [], indirectExpenseLedgers = [], indirectIncomeLedgers = [], indirectExpenseVouchers = [], indirectIncomeVouchers = []) {
+async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], bankLedgers = [], purchaseAccounts = [], indirectExpenseLedgers = [], indirectIncomeLedgers = [], indirectExpenseIncludeVouchers = [], indirectExpenseExcludeVouchers = [], indirectIncomeIncludeVouchers = [], indirectIncomeExcludeVouchers = []) {
   console.log('[BankDebug] handleFetchDaybook received bankLedgers:', bankLedgers)
   const from = toTallyDisplayDate(fromDate)
   const to   = toTallyDisplayDate(toDate)
@@ -677,7 +679,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, sale
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
 
-  const { vouchers: allVouchers, cashFlow, bankFlow, topItems, indExpTotal, indIncTotal } = parseVouchers(responseText, salesAccounts, salesIncludeVouchers, salesExcludeVouchers, cashInflowLedgers, fromISO, toISO, bankLedgers, purchaseAccounts, indirectExpenseLedgers, indirectIncomeLedgers, indirectExpenseVouchers, indirectIncomeVouchers)
+  const { vouchers: allVouchers, cashFlow, bankFlow, topItems, indExpTotal, indIncTotal } = parseVouchers(responseText, salesAccounts, salesIncludeVouchers, salesExcludeVouchers, cashInflowLedgers, fromISO, toISO, bankLedgers, purchaseAccounts, indirectExpenseLedgers, indirectIncomeLedgers, indirectExpenseIncludeVouchers, indirectExpenseExcludeVouchers, indirectIncomeIncludeVouchers, indirectIncomeExcludeVouchers)
 
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
@@ -755,7 +757,7 @@ function matchAllLedgerEntries(block) {
   return [...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi)]
 }
 
-function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = [], purchaseAccounts = [], indirectExpenseLedgers = [], indirectIncomeLedgers = [], indirectExpenseVouchers = [], indirectIncomeVouchers = []) {
+function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = [], purchaseAccounts = [], indirectExpenseLedgers = [], indirectIncomeLedgers = [], indirectExpenseIncludeVouchers = [], indirectExpenseExcludeVouchers = [], indirectIncomeIncludeVouchers = [], indirectIncomeExcludeVouchers = []) {
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
@@ -767,10 +769,12 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
   const inflowSet  = cashInflowLedgers.length ? new Set(cashInflowLedgers.map(n => n.toLowerCase())) : null
   const outflowSet = inflowSet
   const bankSet    = bankLedgers.length       ? new Set(bankLedgers.map(n => n.toLowerCase()))       : null
-  const indExpSet        = indirectExpenseLedgers.length  ? new Set(indirectExpenseLedgers.map(n => n.toLowerCase()))  : null
-  const indIncSet        = indirectIncomeLedgers.length   ? new Set(indirectIncomeLedgers.map(n => n.toLowerCase()))   : null
-  const indExpVoucherSet = indirectExpenseVouchers.length ? new Set(indirectExpenseVouchers.map(n => n.toLowerCase())) : null
-  const indIncVoucherSet = indirectIncomeVouchers.length  ? new Set(indirectIncomeVouchers.map(n => n.toLowerCase()))  : null
+  const indExpSet              = indirectExpenseLedgers.length          ? new Set(indirectExpenseLedgers.map(n => n.toLowerCase()))          : null
+  const indIncSet              = indirectIncomeLedgers.length           ? new Set(indirectIncomeLedgers.map(n => n.toLowerCase()))           : null
+  const indExpIncVoucherSet    = indirectExpenseIncludeVouchers.length  ? new Set(indirectExpenseIncludeVouchers.map(n => n.toLowerCase()))  : null
+  const indExpExcVoucherSet    = indirectExpenseExcludeVouchers.length  ? new Set(indirectExpenseExcludeVouchers.map(n => n.toLowerCase()))  : null
+  const indIncIncVoucherSet    = indirectIncomeIncludeVouchers.length   ? new Set(indirectIncomeIncludeVouchers.map(n => n.toLowerCase()))   : null
+  const indIncExcVoucherSet    = indirectIncomeExcludeVouchers.length   ? new Set(indirectIncomeExcludeVouchers.map(n => n.toLowerCase()))   : null
 
   let indExpTotal = 0
   let indIncTotal = 0
@@ -924,8 +928,18 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
         purchaseLedgerTotal += Math.abs(leAmt)
       }
 
-      if (indExpSet && indExpSet.has(ledgerLower) && (!indExpVoucherSet || indExpVoucherSet.has(type.toLowerCase()))) indExpTotal += Math.abs(leAmt)
-      if (indIncSet && indIncSet.has(ledgerLower) && (!indIncVoucherSet || indIncVoucherSet.has(type.toLowerCase()))) indIncTotal += Math.abs(leAmt)
+      if (indExpSet && indExpSet.has(ledgerLower)) {
+        const typeLower = type.toLowerCase()
+        const passesInc = !indExpIncVoucherSet || indExpIncVoucherSet.has(typeLower)
+        const passesExc = !indExpExcVoucherSet || !indExpExcVoucherSet.has(typeLower)
+        if (passesInc && passesExc) indExpTotal += Math.abs(leAmt)
+      }
+      if (indIncSet && indIncSet.has(ledgerLower)) {
+        const typeLower = type.toLowerCase()
+        const passesInc = !indIncIncVoucherSet || indIncIncVoucherSet.has(typeLower)
+        const passesExc = !indIncExcVoucherSet || !indIncExcVoucherSet.has(typeLower)
+        if (passesInc && passesExc) indIncTotal += Math.abs(leAmt)
+      }
 
       // Determine if this ledger counts as cash inflow/outflow or bank inflow/outflow
       const isInflowLedger  = inflowSet ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
