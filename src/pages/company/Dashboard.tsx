@@ -11,7 +11,7 @@ import {
   Users, Store, Download,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, fetchPLReport, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -772,6 +772,11 @@ export default function Dashboard() {
           .map(([name, amount]) => ({ name, amount }))
         setTopDebtors(debtors)
       }
+
+      // P&L debug — log raw XML from Tally for the current date range
+      fetchPLReport(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
+        .then(r => console.log('[PL Report] raw XML:', r.rawXml))
+        .catch(err => console.warn('[PL Report] error:', err.message))
 
       // 5. Non-critical fetches in parallel — none block the main KPIs.
       const [slowResult, stockResult, directExpResult] = await Promise.allSettled([
