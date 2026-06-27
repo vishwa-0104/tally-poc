@@ -763,9 +763,9 @@ export default function Dashboard() {
           : /credit\s*note/i.test(v.type))
         const partyMap = new Map<string, number>()
         for (const v of salesVouchers)
-          partyMap.set(v.party, (partyMap.get(v.party) ?? 0) + v.taxableAmount)
+          partyMap.set(v.party, (partyMap.get(v.party) ?? 0) + v.amount)
         for (const v of creditNotes)
-          partyMap.set(v.party, (partyMap.get(v.party) ?? 0) - v.taxableAmount)
+          partyMap.set(v.party, (partyMap.get(v.party) ?? 0) - v.amount)
         const debtors = [...partyMap.entries()]
           .filter(([, amt]) => amt > 0)
           .sort(([, a], [, b]) => b - a)
