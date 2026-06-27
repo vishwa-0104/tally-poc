@@ -624,7 +624,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 
   console.log('[TopDebtors] raw response length:', responseText.length)
   console.log('[TopDebtors] voucher blocks found:', blocks.length)
-  if (blocks.length === 0) console.log('[TopDebtors] raw XML (first 2000 chars):', responseText.slice(0, 2000))
+  console.log('[TopDebtors] raw XML:', responseText)
 
   for (const match of blocks) {
     const block  = match[0]
