@@ -223,12 +223,14 @@ export interface TopItem {
 }
 
 export interface DaybookOptions {
-  salesAccounts?:        string[]
-  salesIncludeVouchers?: string[]
-  salesExcludeVouchers?: string[]
-  cashInflowLedgers?:    string[]
-  bankLedgers?:          string[]
-  purchaseAccounts?:     string[]
+  salesAccounts?:           string[]
+  salesIncludeVouchers?:    string[]
+  salesExcludeVouchers?:    string[]
+  cashInflowLedgers?:       string[]
+  bankLedgers?:             string[]
+  purchaseAccounts?:        string[]
+  indirectExpenseLedgers?:  string[]
+  indirectIncomeLedgers?:   string[]
 }
 
 export async function fetchDaybook(
@@ -237,15 +239,17 @@ export async function fetchDaybook(
   tallyUrl: string,
   tallyCompany?: string,
   options: DaybookOptions = {},
-): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[] }> {
-  const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[] }>('FETCH_DAYBOOK', {
+): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[]; indExpTotal: number; indIncTotal: number }> {
+  const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[]; indExpTotal: number; indIncTotal: number }>('FETCH_DAYBOOK', {
     fromDate, toDate, tallyUrl, tallyCompany,
-    salesAccounts:        options.salesAccounts        ?? [],
-    salesIncludeVouchers: options.salesIncludeVouchers ?? [],
-    salesExcludeVouchers: options.salesExcludeVouchers ?? [],
-    cashInflowLedgers:    options.cashInflowLedgers    ?? [],
-    bankLedgers:          options.bankLedgers          ?? [],
-    purchaseAccounts:     options.purchaseAccounts     ?? [],
+    salesAccounts:           options.salesAccounts           ?? [],
+    salesIncludeVouchers:    options.salesIncludeVouchers    ?? [],
+    salesExcludeVouchers:    options.salesExcludeVouchers    ?? [],
+    cashInflowLedgers:       options.cashInflowLedgers       ?? [],
+    bankLedgers:             options.bankLedgers             ?? [],
+    purchaseAccounts:        options.purchaseAccounts        ?? [],
+    indirectExpenseLedgers:  options.indirectExpenseLedgers  ?? [],
+    indirectIncomeLedgers:   options.indirectIncomeLedgers   ?? [],
   })
   return result
 }

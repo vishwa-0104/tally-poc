@@ -618,15 +618,17 @@ export default function Dashboard() {
     setNetProfit(null)
     setNetProfitPct(null)
     try {
-      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow, topItems: fetchedTopItems } = await fetchDaybook(
+      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow, topItems: fetchedTopItems, indExpTotal, indIncTotal } = await fetchDaybook(
         toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany,
         {
-          salesAccounts:        salesSettings?.salesAccounts,
-          salesIncludeVouchers: salesSettings?.salesIncludeVouchers,
-          salesExcludeVouchers: salesSettings?.salesExcludeVouchers,
-          cashInflowLedgers:    settings.today?.cashInflowLedgers,
-          bankLedgers:          settings.today?.bankLedgers,
-          purchaseAccounts:     settings.ytd?.purchaseAccounts,
+          salesAccounts:           salesSettings?.salesAccounts,
+          salesIncludeVouchers:    salesSettings?.salesIncludeVouchers,
+          salesExcludeVouchers:    salesSettings?.salesExcludeVouchers,
+          cashInflowLedgers:       settings.today?.cashInflowLedgers,
+          bankLedgers:             settings.today?.bankLedgers,
+          purchaseAccounts:        settings.ytd?.purchaseAccounts,
+          indirectExpenseLedgers:  settings.ytd?.indirectExpenseLedgers,
+          indirectIncomeLedgers:   settings.ytd?.indirectIncomeLedgers,
         },
       )
       setTopItems(fetchedTopItems ?? [])
@@ -821,30 +823,13 @@ export default function Dashboard() {
         const { openingStock, closingStock } = stockResult.value
         const directExpenses = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
 
-        // Compute indirect expenses/income from daybook vouchers — match v.party against
-        // configured ledger names (in Tally, PARTYLEDGERNAME = the expense/income ledger
-        // for payment/receipt vouchers).
-        const indExpSet = new Set((settings.ytd?.indirectExpenseLedgers ?? []).map(n => n.toLowerCase()))
-        const indIncSet = new Set((settings.ytd?.indirectIncomeLedgers  ?? []).map(n => n.toLowerCase()))
-        const indirectExpenses = indExpSet.size > 0
-          ? all.filter(v => indExpSet.has(v.party.toLowerCase())).reduce((s, v) => s + v.taxableAmount, 0)
-          : 0
-        const indirectIncome = indIncSet.size > 0
-          ? all.filter(v => indIncSet.has(v.party.toLowerCase())).reduce((s, v) => s + v.taxableAmount, 0)
-          : 0
+        const indirectExpenses = indExpTotal
+        const indirectIncome   = indIncTotal
 
         const gm    = (todaySalesTotal + closingStock) - (openingStock + purchaseTotal + directExpenses)
         const gmPct = todaySalesTotal > 0 ? (gm / todaySalesTotal) * 100 : 0
         const np    = gm - indirectExpenses + indirectIncome
         const npPct = todaySalesTotal > 0 ? (np / todaySalesTotal) * 100 : 0
-
-        // Debug: show all unique (type, party) pairs for non-sales/non-purchase vouchers
-        const nonTradeVouchers = all.filter(v => !/sales|purchase/i.test(v.type))
-        const uniqueParties = [...new Map(nonTradeVouchers.map(v => [`${v.type}|${v.party}`, { type: v.type, party: v.party, amount: v.taxableAmount }])).values()]
-        console.log('[Indirect debug] Non-trade vouchers (type|party|amount):', uniqueParties)
-        console.log('[Indirect debug] indExpSet:', [...indExpSet])
-        const matched = nonTradeVouchers.filter(v => indExpSet.has(v.party.toLowerCase()))
-        console.log('[Indirect debug] matched expense vouchers:', matched)
 
         console.group('[P&L] YTD breakdown')
         console.log('Config — directExpLedgers   :', settings.ytd?.directExpenseLedgers ?? [])
