@@ -145,6 +145,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ total: 0, error: err.message }))
       return true
 
+    case 'FETCH_PL':
+      handleFetchPL(payload.tallyUrl, payload.tallyCompany, payload.fromDate, payload.toDate)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ rawXml: '', error: err.message }))
+      return true
+
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
   }
@@ -1577,6 +1583,32 @@ async function handleFetchLedgerAmounts(tallyUrl, tallyCompany, fromDate, toDate
   }
 
   return { total }
+}
+
+async function handleFetchPL(tallyUrl, tallyCompany, fromDate, toDate) {
+  const from = toTallyDisplayDate(fromDate)
+  const to   = toTallyDisplayDate(toDate)
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Object</TYPE>
+    <ID>Profit and Loss</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        <SVFROMDATE>${from}</SVFROMDATE>
+        <SVTODATE>${to}</SVTODATE>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const rawXml = await postToTally(xml, tallyUrl)
+  console.log('[PL] raw XML response:', rawXml)
+  return { rawXml }
 }
 
 async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
