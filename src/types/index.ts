@@ -114,7 +114,10 @@ export interface DashboardSettings {
     indirectIncomeLedgers?:          string[]
     indirectIncomeIncludeVouchers?:  string[]
     indirectIncomeExcludeVouchers?:  string[]
-    grossMarginTarget?:         number
+    ebitdaLedgers?:                  string[]
+    ebitdaIncludeVouchers?:          string[]
+    ebitdaExcludeVouchers?:          string[]
+    grossMarginTarget?:              number
   }
 }
 

@@ -235,6 +235,9 @@ export interface DaybookOptions {
   indirectIncomeLedgers?:          string[]
   indirectIncomeIncludeVouchers?:  string[]
   indirectIncomeExcludeVouchers?:  string[]
+  ebitdaLedgers?:                  string[]
+  ebitdaIncludeVouchers?:          string[]
+  ebitdaExcludeVouchers?:          string[]
 }
 
 export async function fetchDaybook(
@@ -243,8 +246,8 @@ export async function fetchDaybook(
   tallyUrl: string,
   tallyCompany?: string,
   options: DaybookOptions = {},
-): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[]; indExpTotal: number; indIncTotal: number }> {
-  const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[]; indExpTotal: number; indIncTotal: number }>('FETCH_DAYBOOK', {
+): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[]; indExpTotal: number; indIncTotal: number; ebitdaAddback: number }> {
+  const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[]; indExpTotal: number; indIncTotal: number; ebitdaAddback: number }>('FETCH_DAYBOOK', {
     fromDate, toDate, tallyUrl, tallyCompany,
     salesAccounts:           options.salesAccounts           ?? [],
     salesIncludeVouchers:    options.salesIncludeVouchers    ?? [],
@@ -258,6 +261,9 @@ export async function fetchDaybook(
     indirectIncomeLedgers:          options.indirectIncomeLedgers          ?? [],
     indirectIncomeIncludeVouchers:  options.indirectIncomeIncludeVouchers  ?? [],
     indirectIncomeExcludeVouchers:  options.indirectIncomeExcludeVouchers  ?? [],
+    ebitdaLedgers:                  options.ebitdaLedgers                  ?? [],
+    ebitdaIncludeVouchers:          options.ebitdaIncludeVouchers          ?? [],
+    ebitdaExcludeVouchers:          options.ebitdaExcludeVouchers          ?? [],
   })
   return result
 }

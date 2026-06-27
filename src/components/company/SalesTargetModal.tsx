@@ -183,6 +183,9 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [ytdIndirectIncomeLedgers,          setYtdIndirectIncomeLedgers]          = useState<string[]>([])
   const [ytdIndirectIncomeIncludeVouchers,  setYtdIndirectIncomeIncludeVouchers]  = useState<string[]>([])
   const [ytdIndirectIncomeExcludeVouchers,  setYtdIndirectIncomeExcludeVouchers]  = useState<string[]>([])
+  const [ytdEbitdaLedgers,         setYtdEbitdaLedgers]         = useState<string[]>([])
+  const [ytdEbitdaIncludeVouchers, setYtdEbitdaIncludeVouchers] = useState<string[]>([])
+  const [ytdEbitdaExcludeVouchers, setYtdEbitdaExcludeVouchers] = useState<string[]>([])
   const [ytdGrossMarginTarget,       setYtdGrossMarginTarget]       = useState<string>('')
   // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
@@ -229,6 +232,9 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setYtdIndirectIncomeLedgers(s.ytd?.indirectIncomeLedgers ?? [])
         setYtdIndirectIncomeIncludeVouchers(s.ytd?.indirectIncomeIncludeVouchers ?? [])
         setYtdIndirectIncomeExcludeVouchers(s.ytd?.indirectIncomeExcludeVouchers ?? [])
+        setYtdEbitdaLedgers(s.ytd?.ebitdaLedgers ?? [])
+        setYtdEbitdaIncludeVouchers(s.ytd?.ebitdaIncludeVouchers ?? [])
+        setYtdEbitdaExcludeVouchers(s.ytd?.ebitdaExcludeVouchers ?? [])
         setYtdGrossMarginTarget(s.ytd?.grossMarginTarget != null ? String(s.ytd.grossMarginTarget) : '')
       })
       .catch(() => { /* settings optional */ })
@@ -276,6 +282,9 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         indirectIncomeLedgers:          ytdIndirectIncomeLedgers.length          > 0 ? ytdIndirectIncomeLedgers          : undefined,
         indirectIncomeIncludeVouchers:  ytdIndirectIncomeIncludeVouchers.length  > 0 ? ytdIndirectIncomeIncludeVouchers  : undefined,
         indirectIncomeExcludeVouchers:  ytdIndirectIncomeExcludeVouchers.length  > 0 ? ytdIndirectIncomeExcludeVouchers  : undefined,
+        ebitdaLedgers:                  ytdEbitdaLedgers.length                  > 0 ? ytdEbitdaLedgers                  : undefined,
+        ebitdaIncludeVouchers:          ytdEbitdaIncludeVouchers.length          > 0 ? ytdEbitdaIncludeVouchers          : undefined,
+        ebitdaExcludeVouchers:          ytdEbitdaExcludeVouchers.length          > 0 ? ytdEbitdaExcludeVouchers          : undefined,
         grossMarginTarget:       ytdGrossMarginTarget ? (parseFloat(ytdGrossMarginTarget) || undefined) : undefined,
       },
     }
@@ -483,7 +492,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
 
           {/* ── EBITDA Section ── */}
           <div className="border-t-2 border-blue-100 pt-5">
-            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-4">EBITDA</p>
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-4">Net Profit</p>
             <div className="space-y-5">
               <SearchCheckList
                 label="Indirect Expense Ledgers"
@@ -538,6 +547,41 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
                   onChange={setYtdIndirectIncomeExcludeVouchers}
                   loading={loadingOpts}
                 />
+              </div>
+
+              {/* EBITDA addback ledgers */}
+              <div className="border-t border-blue-100 pt-4">
+                <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-3">EBITDA Addback Ledgers</p>
+                <p className="text-[10px] text-gray-400 italic mb-3">Depreciation, Tax, Interest etc. — added back to Net Profit → EBITDA</p>
+                <div className="space-y-3">
+                  <SearchCheckList
+                    label="EBITDA Ledgers"
+                    hint="e.g. Depreciation, Income Tax, Interest Paid"
+                    options={allLedgerOpts}
+                    selected={ytdEbitdaLedgers}
+                    onChange={setYtdEbitdaLedgers}
+                    loading={loadingOpts}
+                    showSelectAll
+                  />
+                  <div className="grid grid-cols-2 gap-5">
+                    <SearchCheckList
+                      label="EBITDA Vouchers — Include"
+                      hint="Default: all voucher types"
+                      options={voucherTypeOpts}
+                      selected={ytdEbitdaIncludeVouchers}
+                      onChange={setYtdEbitdaIncludeVouchers}
+                      loading={loadingOpts}
+                    />
+                    <SearchCheckList
+                      label="EBITDA Vouchers — Exclude"
+                      hint="Default: none excluded"
+                      options={voucherTypeOpts}
+                      selected={ytdEbitdaExcludeVouchers}
+                      onChange={setYtdEbitdaExcludeVouchers}
+                      loading={loadingOpts}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

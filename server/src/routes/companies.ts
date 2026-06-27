@@ -602,7 +602,10 @@ companiesRouter.put('/companies/:id/dashboard-settings', async (req, res) => {
       indirectIncomeLedgers:          z.array(z.string()).optional(),
       indirectIncomeIncludeVouchers:  z.array(z.string()).optional(),
       indirectIncomeExcludeVouchers:  z.array(z.string()).optional(),
-      grossMarginTarget:       z.number().optional(),
+      ebitdaLedgers:                  z.array(z.string()).optional(),
+      ebitdaIncludeVouchers:          z.array(z.string()).optional(),
+      ebitdaExcludeVouchers:          z.array(z.string()).optional(),
+      grossMarginTarget:              z.number().optional(),
     }).optional(),
   })
   const result = schema.safeParse(req.body)

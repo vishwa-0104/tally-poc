@@ -487,6 +487,35 @@ function NetProfitCard({ value, pct }: { value: number | null; pct: number | nul
   )
 }
 
+function EbitdaCard({ value, pct }: { value: number | null; pct: number | null }) {
+  const color     = value === null ? 'text-gray-300' : value >= 0 ? 'text-gray-900' : 'text-red-600'
+  const Icon      = value === null || value >= 0 ? TrendingUp : TrendingDown
+  const iconBg    = value === null ? 'bg-indigo-50' : value >= 0 ? 'bg-indigo-50' : 'bg-red-50'
+  const iconColor = value === null ? 'text-indigo-400' : value >= 0 ? 'text-indigo-600' : 'text-red-500'
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className={`p-2 ${iconBg} rounded-lg`}>
+          <Icon className={`w-4 h-4 ${iconColor}`} />
+        </div>
+      </div>
+      <p className={`text-lg font-bold tracking-tight mb-0.5 ${color}`}>
+        {value !== null ? formatCurrency(value) : '—'}
+      </p>
+      <p className="text-[11px] font-semibold text-gray-600">EBITDA</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Earnings before interest, tax, depreciation</p>
+      {pct !== null && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          <div className="flex justify-between text-[11px]">
+            <span className="text-gray-500">EBITDA Margin %</span>
+            <span className={`font-semibold ${pct >= 0 ? 'text-gray-700' : 'text-red-500'}`}>{pct.toFixed(1)}%</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DataTableCard({
   title,
   columns,
@@ -588,6 +617,8 @@ export default function Dashboard() {
   const [topDebtors,    setTopDebtors]    = useState<SalesPartyRow[]>([])
   const [grossMargin,    setGrossMargin]    = useState<number | null>(null)
   const [grossMarginPct, setGrossMarginPct] = useState<number | null>(null)
+  const [ebitda,         setEbitda]         = useState<number | null>(null)
+  const [ebitdaPct,      setEbitdaPct]      = useState<number | null>(null)
   const [netProfit,      setNetProfit]      = useState<number | null>(null)
   const [netProfitPct,   setNetProfitPct]   = useState<number | null>(null)
 
@@ -615,10 +646,12 @@ export default function Dashboard() {
     setTopDebtors([])
     setGrossMargin(null)
     setGrossMarginPct(null)
+    setEbitda(null)
+    setEbitdaPct(null)
     setNetProfit(null)
     setNetProfitPct(null)
     try {
-      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow, topItems: fetchedTopItems, indExpTotal, indIncTotal } = await fetchDaybook(
+      const { vouchers: all, cashFlow: daybookCashFlow, bankFlow: daybookBankFlow, topItems: fetchedTopItems, indExpTotal, indIncTotal, ebitdaAddback } = await fetchDaybook(
         toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany,
         {
           salesAccounts:           salesSettings?.salesAccounts,
@@ -633,6 +666,9 @@ export default function Dashboard() {
           indirectIncomeLedgers:          settings.ytd?.indirectIncomeLedgers,
           indirectIncomeIncludeVouchers:  settings.ytd?.indirectIncomeIncludeVouchers,
           indirectIncomeExcludeVouchers:  settings.ytd?.indirectIncomeExcludeVouchers,
+          ebitdaLedgers:                  settings.ytd?.ebitdaLedgers,
+          ebitdaIncludeVouchers:          settings.ytd?.ebitdaIncludeVouchers,
+          ebitdaExcludeVouchers:          settings.ytd?.ebitdaExcludeVouchers,
         },
       )
       setTopItems(fetchedTopItems ?? [])
@@ -853,8 +889,13 @@ export default function Dashboard() {
         console.log('Net Profit         :', np.toFixed(2), `(${npPct.toFixed(2)}%)`)
         console.groupEnd()
 
+        const eb    = np + ebitdaAddback
+        const ebPct = todaySalesTotal > 0 ? (eb / todaySalesTotal) * 100 : 0
+
         setGrossMargin(gm)
         setGrossMarginPct(gmPct)
+        setEbitda(eb)
+        setEbitdaPct(ebPct)
         setNetProfit(np)
         setNetProfitPct(npPct)
       }
@@ -1084,6 +1125,12 @@ export default function Dashboard() {
                   value={fetched ? grossMargin : null}
                   pct={fetched ? grossMarginPct : null}
                   targetPct={dashboardSettings.ytd?.grossMarginTarget ?? null}
+                />
+              )}
+              {filterPreset === 'ytd' && (
+                <EbitdaCard
+                  value={fetched ? ebitda : null}
+                  pct={fetched ? ebitdaPct : null}
                 />
               )}
               {filterPreset === 'ytd' && (dashboardSettings.ytd?.indirectExpenseLedgers?.length || dashboardSettings.ytd?.indirectIncomeLedgers?.length) && (
