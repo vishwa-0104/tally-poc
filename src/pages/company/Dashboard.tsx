@@ -11,7 +11,7 @@ import {
   Users, Store, Download,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchSalesPartyData, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -751,10 +751,31 @@ export default function Dashboard() {
         setPrevDaySales(null)
       }
 
+      // Top debtors — computed from already-fetched daybook data (same filter as computeSalesTotal)
+      {
+        const { salesAccounts, salesIncludeVouchers, salesExcludeVouchers } = salesSettings ?? {}
+        const base = salesAccounts?.length ? all.filter(v => v.hasSalesLedger) : all
+        const salesVouchers = base.filter(v => salesIncludeVouchers?.length
+          ? salesIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /sales/i.test(v.type) && !/credit\s*note/i.test(v.type))
+        const creditNotes = base.filter(v => salesExcludeVouchers?.length
+          ? salesExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /credit\s*note/i.test(v.type))
+        const partyMap = new Map<string, number>()
+        for (const v of salesVouchers)
+          partyMap.set(v.party, (partyMap.get(v.party) ?? 0) + v.taxableAmount)
+        for (const v of creditNotes)
+          partyMap.set(v.party, (partyMap.get(v.party) ?? 0) - v.taxableAmount)
+        const debtors = [...partyMap.entries()]
+          .filter(([, amt]) => amt > 0)
+          .sort(([, a], [, b]) => b - a)
+          .map(([name, amount]) => ({ name, amount }))
+        setTopDebtors(debtors)
+      }
+
       // 5. Non-critical fetches in parallel — none block the main KPIs.
-      const [slowResult, debtorResult, stockResult, directExpResult] = await Promise.allSettled([
+      const [slowResult, stockResult, directExpResult] = await Promise.allSettled([
         fetchSlowMovingStock(tallyUrl, tallyCompany),
-        fetchSalesPartyData(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany),
         preset === 'ytd'
           ? fetchStockValue(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany)
           : Promise.resolve(null),
@@ -762,8 +783,7 @@ export default function Dashboard() {
           ? fetchLedgerAmounts(toTallyDate(from), toTallyDate(to), tallyUrl, tallyCompany, settings.ytd?.directExpenseLedgers)
           : Promise.resolve(0),
       ])
-      if (slowResult.status === 'fulfilled')   setSlowStock(slowResult.value.items)
-      if (debtorResult.status === 'fulfilled') setTopDebtors(debtorResult.value)
+      if (slowResult.status === 'fulfilled') setSlowStock(slowResult.value.items)
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         const { openingStock, closingStock } = stockResult.value
         const directExpenses = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
