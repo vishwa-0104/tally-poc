@@ -27,7 +27,7 @@ type FilterPreset  = 'today' | 'quarter' | 'ytd' | 'custom'
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 function toTallyDate(iso: string) { return iso.replace(/-/g, '') }
-const fmt = (d: Date) => d.toISOString().slice(0, 10)
+const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const todayStr = () => fmt(new Date())
 
 function getFilterDates(preset: FilterPreset, cfrom: string, cto: string) {
