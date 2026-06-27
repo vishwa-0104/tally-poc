@@ -645,13 +645,20 @@ export default function Dashboard() {
         console.log(`Debit notes                              : ${gmExcluded.length} vouchers | taxable : ${debitTotal.toFixed(2)}`)
         console.log(`Net purchase (gross margin)              : ${purchaseTotal.toFixed(2)}`)
         console.log('--- By purchase ledger ---')
-        const byLedger: Record<string, number> = {}
-        for (const v of gmIncluded)
-          byLedger[v.purchaseLedger ?? '(all)'] = (byLedger[v.purchaseLedger ?? '(all)'] ?? 0) + v.taxableAmount
-        if (Object.keys(byLedger).length === 0)
+        const byLedger: Record<string, typeof gmIncluded> = {}
+        for (const v of gmIncluded) {
+          const key = v.purchaseLedger ?? '(all)'
+          ;(byLedger[key] ??= []).push(v)
+        }
+        if (Object.keys(byLedger).length === 0) {
           console.log('  (no purchase vouchers)')
-        for (const [ledger, amt] of Object.entries(byLedger).sort(([, a], [, b]) => b - a))
-          console.log(`  ${ledger} : ${amt.toFixed(2)}`)
+        }
+        for (const [ledger, vs] of Object.entries(byLedger)) {
+          const total = vs.reduce((s, v) => s + v.taxableAmount, 0)
+          console.log(`  [${ledger}]  total: ${total.toFixed(2)}`)
+          for (const v of vs.sort((a, b) => a.date.localeCompare(b.date)))
+            console.log(`    ${v.date} | ${v.voucherNo} | ${v.party} : ${v.taxableAmount.toFixed(2)}`)
+        }
         console.log('--- Debit notes ---')
         if (gmExcluded.length === 0) console.log('  (none)')
         for (const v of gmExcluded)

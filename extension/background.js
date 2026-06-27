@@ -888,11 +888,15 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
       const leAmtRaw   = decode(leBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
       const leAmt      = parseFloat(leAmtRaw.replace(/,/g, '')) || 0
 
-      if (!isParty && GST_RE.test(ledgerName)) {
+      const ledgerLower = ledgerName.toLowerCase()
+
+      // Never count a configured purchase/sales account as GST even if its name
+      // contains "igst"/"cgst" etc. (e.g. "Credit Note 18% IGST" is a purchase ledger).
+      const isConfiguredAccount = (purchaseAccountSet && purchaseAccountSet.has(ledgerLower))
+                                || (salesAccountSet   && salesAccountSet.has(ledgerLower))
+      if (!isParty && !isConfiguredAccount && GST_RE.test(ledgerName)) {
         gstTotal += Math.abs(leAmt)
       }
-
-      const ledgerLower = ledgerName.toLowerCase()
 
       if (salesAccountSet    && salesAccountSet.has(ledgerLower))                      hasSalesLedger = true
       if (purchaseAccountSet && purchaseAccountSet.has(ledgerLower) && !purchaseLedger) purchaseLedger = ledgerName
