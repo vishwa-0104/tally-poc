@@ -1593,7 +1593,7 @@ async function handleFetchPL(tallyUrl, tallyCompany, fromDate, toDate) {
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
     <TYPE>Object</TYPE>
-    <ID>Profit and Loss</ID>
+    <ID>Profit and Loss A/c</ID>
   </HEADER>
   <BODY>
     <DESC>
