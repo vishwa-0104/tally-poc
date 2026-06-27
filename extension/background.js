@@ -899,6 +899,14 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
         gstTotal += Math.abs(leAmt)
       }
 
+      // Round-off adjustment: use raw signed leAmt (not Math.abs) so both
+      // rounding directions cancel correctly from taxable amount.
+      // Cr round-off (leAmt < 0): gstTotal increases → taxable decreases
+      // Dr round-off (leAmt > 0): gstTotal decreases → taxable increases
+      if (!isParty && /round\s*off/i.test(ledgerName)) {
+        gstTotal -= leAmt
+      }
+
       if (salesAccountSet    && salesAccountSet.has(ledgerLower))                      { hasSalesLedger = true; if (!salesLedger) salesLedger = ledgerName }
       if (purchaseAccountSet && purchaseAccountSet.has(ledgerLower) && !purchaseLedger) purchaseLedger = ledgerName
 
