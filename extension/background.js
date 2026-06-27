@@ -622,11 +622,16 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
   const blocks  = [...responseText.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const map     = new Map()
 
+  console.log('[TopDebtors] raw response length:', responseText.length)
+  console.log('[TopDebtors] voucher blocks found:', blocks.length)
+  if (blocks.length === 0) console.log('[TopDebtors] raw XML (first 2000 chars):', responseText.slice(0, 2000))
+
   for (const match of blocks) {
     const block  = match[0]
     const party  = decode(block.match(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/i)?.[1] ?? '')
     const amtRaw = decode(block.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
     const amount = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
+    console.log(`[TopDebtors] block: party="${party}" amtRaw="${amtRaw}" amount=${amount}`)
     if (!party || amount === 0) continue
     map.set(party, (map.get(party) ?? 0) + amount)
   }
@@ -635,6 +640,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
     .sort(([, a], [, b]) => b - a)
     .map(([name, amount]) => ({ name, amount }))
 
+  console.log('[TopDebtors] result:', parties.length, 'parties')
   return { parties }
 }
 
