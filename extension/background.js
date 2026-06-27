@@ -1592,8 +1592,8 @@ async function handleFetchPL(tallyUrl, tallyCompany, fromDate, toDate) {
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Object</TYPE>
-    <ID>Profit and Loss A/c</ID>
+    <TYPE>Collection</TYPE>
+    <ID>Group</ID>
   </HEADER>
   <BODY>
     <DESC>
@@ -1602,6 +1602,12 @@ async function handleFetchPL(tallyUrl, tallyCompany, fromDate, toDate) {
         <SVFROMDATE>${from}</SVFROMDATE>
         <SVTODATE>${to}</SVTODATE>${companyVar(tallyCompany)}
       </STATICVARIABLES>
+      <FETCHLIST>
+        <FETCH>NAME</FETCH>
+        <FETCH>PARENT</FETCH>
+        <FETCH>CLOSINGBALANCE</FETCH>
+        <FETCH>ISDEEMEDPOSITIVE</FETCH>
+      </FETCHLIST>
     </DESC>
   </BODY>
 </ENVELOPE>`
