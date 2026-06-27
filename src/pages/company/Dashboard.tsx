@@ -838,6 +838,14 @@ export default function Dashboard() {
         const np    = gm - indirectExpenses + indirectIncome
         const npPct = todaySalesTotal > 0 ? (np / todaySalesTotal) * 100 : 0
 
+        // Debug: show all unique (type, party) pairs for non-sales/non-purchase vouchers
+        const nonTradeVouchers = all.filter(v => !/sales|purchase/i.test(v.type))
+        const uniqueParties = [...new Map(nonTradeVouchers.map(v => [`${v.type}|${v.party}`, { type: v.type, party: v.party, amount: v.taxableAmount }])).values()]
+        console.log('[Indirect debug] Non-trade vouchers (type|party|amount):', uniqueParties)
+        console.log('[Indirect debug] indExpSet:', [...indExpSet])
+        const matched = nonTradeVouchers.filter(v => indExpSet.has(v.party.toLowerCase()))
+        console.log('[Indirect debug] matched expense vouchers:', matched)
+
         console.group('[P&L] YTD breakdown')
         console.log('Config — directExpLedgers   :', settings.ytd?.directExpenseLedgers ?? [])
         console.log('Config — indirectExpLedgers :', settings.ytd?.indirectExpenseLedgers ?? [])
