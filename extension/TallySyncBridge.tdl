@@ -77,7 +77,7 @@
 ; ── Config variables — set these before loading ───────────────────────────────
 [Variable: TBSSyncURL]
     Type    : String
-    Default : "https://YOUR-SERVER.com/api/tally-hook"
+    Default : "http://localhost:3001/api/tally-hook"
 
 [Variable: TBSSyncToken]
     Type    : String

@@ -6,6 +6,7 @@ import { companiesRouter } from './routes/companies'
 import { billsRouter } from './routes/bills'
 import { usersRouter } from './routes/users'
 import { leadsRouter } from './routes/leads'
+import { tallyHookRouter } from './routes/tallyHook'
 
 export const app = express()
 
@@ -20,3 +21,4 @@ app.use('/api', leadsRouter)
 app.use('/api', companiesRouter)
 app.use('/api', billsRouter)
 app.use('/api', usersRouter)
+app.use('/api', tallyHookRouter)
