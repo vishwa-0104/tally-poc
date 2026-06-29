@@ -22,7 +22,7 @@
 
 [Collection: TBSVouchers]
     Type        : Voucher
-    Fetch       : Date, VoucherTypeName, PartyLedgerName, VoucherNumber, Amount
+    Fetch       : AlterID, Date, VoucherTypeName, PartyLedgerName, VoucherNumber, Amount
     Fetch       : LedgerEntries.IsPartyLedger, LedgerEntries.Amount
     Fetch       : AllLedgerEntries.LedgerName, AllLedgerEntries.IsPartyLedger, AllLedgerEntries.Amount
 
