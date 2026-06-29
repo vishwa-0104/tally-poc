@@ -805,6 +805,12 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
     const party     = decode(block.match(/<PARTYLEDGERNAME[^>]*>([^<]+)<\/PARTYLEDGERNAME>/i)?.[1] ?? '')
     const voucherNo = decode(block.match(/<VOUCHERNUMBER[^>]*>([^<]+)<\/VOUCHERNUMBER>/i)?.[1] ?? '')
 
+    // TEST: try to extract GUID and AlterID — will be empty if TDL Fetch doesn't include them yet
+    const guid    = block.match(/<VOUCHER\s[^>]*GUID="([^"]+)"/i)?.[1]
+                 ?? decode(block.match(/<GUID[^>]*>([^<]+)<\/GUID>/i)?.[1] ?? '')
+    const alterId = decode(block.match(/<ALTERID[^>]*>([^<]+)<\/ALTERID>/i)?.[1] ?? '')
+    console.log(`[AlterID Test] voucherNo="${voucherNo}" date="${rawDate}" guid="${guid}" alterId="${alterId}"`)
+
     if (!rawDate) continue
 
     // Tally date format: YYYYMMDD → YYYY-MM-DD
