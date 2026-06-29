@@ -12,12 +12,22 @@
 ;   In "List of TDL Files" add the full path to this file.
 ;
 ; Restart Tally after loading.
-; The TBSVouchers collection will then be available via the HTTP port.
 ;
 ; ─── WHAT IT DOES ───────────────────────────────────────────────────────────
 ;
-; Exposes a collection named TBSVouchers that the TallyBillSync Chrome
-; extension queries via HTTP to build the sales dashboard.
+; 1. Exposes collections (TBSVouchers etc.) the Chrome extension queries via
+;    HTTP to build the sales dashboard.
+;
+; 2. On every voucher Save/Delete, pushes that voucher's data directly to
+;    the TallyBillSync server so the dashboard stays current even when the
+;    browser / extension is not open.
+;    Requires TallyPrime (HTTPPOST not available in Tally ERP 9).
+;
+; ─── CONFIG — edit before loading ───────────────────────────────────────────
+;
+;   TBSSyncURL   : your server endpoint
+;   TBSSyncToken : device token generated from TallyBillSync admin panel
+;
 ; ────────────────────────────────────────────────────────────────────────────
 
 [Collection: TBSVouchers]
@@ -58,3 +68,84 @@
     Type        : Voucher
     Fetch       : Date, VoucherTypeName
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
+
+; ═════════════════════════════════════════════════════════════════════════════
+; ON-SAVE PUSH  (TallyPrime only)
+; Pushes each voucher to TallyBillSync server the moment it is saved or deleted.
+; ═════════════════════════════════════════════════════════════════════════════
+
+; ── Config variables — set these before loading ───────────────────────────────
+[Variable: TBSSyncURL]
+    Type    : String
+    Default : "https://YOUR-SERVER.com/api/tally-hook"
+
+[Variable: TBSSyncToken]
+    Type    : String
+    Default : "REPLACE_WITH_DEVICE_TOKEN"
+
+; ── Hook into Voucher form ────────────────────────────────────────────────────
+; On : Accept fires after the accountant saves (Alt+A) the voucher.
+; On : Delete fires after the accountant deletes (Alt+D) the voucher.
+[#Form: Voucher]
+    On : Accept : Always : Call : TBSPushVoucher
+    On : Delete : Always : Call : TBSDeleteVoucher
+
+; ── Save handler ─────────────────────────────────────────────────────────────
+[Function: TBSPushVoucher]
+    Variable : TBSPayload  : String
+    Variable : TBSResponse : String
+
+    001 : SET : TBSPayload  : $$TBSBuildPayload
+    002 : LOG : "[TBS] Pushing: " + ##TBSPayload
+    003 : HTTPPOST : ##TBSSyncURL : "application/json" : ##TBSPayload : TBSResponse
+    004 : LOG : "[TBS] Response: " + ##TBSResponse
+
+; ── Delete handler ───────────────────────────────────────────────────────────
+[Function: TBSDeleteVoucher]
+    Variable : TBSPayload  : String
+    Variable : TBSResponse : String
+    Variable : Q           : String
+
+    001 : SET : Q          : $$StringChar:34
+    002 : SET : TBSPayload : "{" + ##Q+"guid"   +##Q+":"+##Q+ $GUID          +##Q+"," +
+                                   ##Q+"deleted"+##Q+":true,"                          +
+                                   ##Q+"token"  +##Q+":"+##Q+ ##TBSSyncToken +##Q+"}"
+    003 : LOG : "[TBS] Deleting: " + ##TBSPayload
+    004 : HTTPPOST : ##TBSSyncURL : "application/json" : ##TBSPayload : TBSResponse
+    005 : LOG : "[TBS] Response: " + ##TBSResponse
+
+; ── Build JSON payload for one voucher ───────────────────────────────────────
+; Uses $$StringChar:34 for the double-quote character to avoid TDL string
+; escaping issues.  All numeric fields are written without quotes.
+[Function: TBSBuildPayload]
+    Returns  : String
+    Variable : Q   : String  ; double-quote char
+    Variable : G   : String  ; guid
+    Variable : AID : String  ; alterId
+    Variable : DT  : String  ; date YYYYMMDD
+    Variable : TY  : String  ; voucherType
+    Variable : PT  : String  ; party
+    Variable : VN  : String  ; voucherNo
+    Variable : AMT : String  ; amount (absolute)
+    Variable : J   : String  ; assembled JSON
+
+    001 : SET : Q   : $$StringChar:34
+    002 : SET : G   : $GUID
+    003 : SET : AID : $$String:$AlterID
+    004 : SET : DT  : $$DatetoStr:$Date:"%YYYY%MM%DD%"
+    005 : SET : TY  : $VoucherTypeName
+    006 : SET : PT  : $PartyLedgerName
+    007 : SET : VN  : $VoucherNumber
+    008 : SET : AMT : $$String:$$Abs:$Amount
+
+    009 : SET : J   : "{"                                  +
+                      ##Q+"guid"      +##Q+":"+##Q+##G  +##Q+"," +
+                      ##Q+"alterId"   +##Q+":"+   ##AID      +"," +
+                      ##Q+"date"      +##Q+":"+##Q+##DT +##Q+"," +
+                      ##Q+"type"      +##Q+":"+##Q+##TY +##Q+"," +
+                      ##Q+"party"     +##Q+":"+##Q+##PT +##Q+"," +
+                      ##Q+"voucherNo" +##Q+":"+##Q+##VN +##Q+"," +
+                      ##Q+"amount"    +##Q+":"+   ##AMT      +"," +
+                      ##Q+"token"     +##Q+":"+##Q+##TBSSyncToken+##Q+
+                      "}"
+    010 : RETURN : ##J
