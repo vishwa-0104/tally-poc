@@ -89,8 +89,8 @@
 ; If clicking it hits the server, HTTPPOST works.
 [#Form: Voucher]
     Add    : Button     : TBSSyncBtn
-    On     : Accept     : Always : Call : TBSPushVoucher
-    On     : Delete     : Always : Call : TBSDeleteVoucher
+    On     : Accept     : Yes    : Call : TBSPushVoucher
+    On     : Delete     : Yes   : Call : TBSDeleteVoucher
 
 [Button: TBSSyncBtn]
     Title  : "Sync to TBS"
@@ -114,27 +114,23 @@
     Variable : Q           : String
 
     001 : SET : Q          : $$StringChar:34
-    002 : SET : TBSPayload : "{" + ##Q+"guid"   +##Q+":"+##Q+ $GUID          +##Q+"," +
-                                   ##Q+"deleted"+##Q+":true,"                          +
-                                   ##Q+"token"  +##Q+":"+##Q+ ##TBSSyncToken +##Q+"}"
+    002 : SET : TBSPayload : "{" + ##Q + "guid" + ##Q + ":" + ##Q + $GUID + ##Q + "," + ##Q + "deleted" + ##Q + ":true," + ##Q + "token" + ##Q + ":" + ##Q + ##TBSSyncToken + ##Q + "}"
     003 : LOG : "[TBS] Deleting: " + ##TBSPayload
     004 : HTTPPOST : ##TBSSyncURL : "application/json" : ##TBSPayload : TBSResponse
     005 : LOG : "[TBS] Response: " + ##TBSResponse
 
 ; ── Build JSON payload for one voucher ───────────────────────────────────────
-; Uses $$StringChar:34 for the double-quote character to avoid TDL string
-; escaping issues.  All numeric fields are written without quotes.
 [Function: TBSBuildPayload]
     Returns  : String
-    Variable : Q   : String  ; double-quote char
-    Variable : G   : String  ; guid
-    Variable : AID : String  ; alterId
-    Variable : DT  : String  ; date YYYYMMDD
-    Variable : TY  : String  ; voucherType
-    Variable : PT  : String  ; party
-    Variable : VN  : String  ; voucherNo
-    Variable : AMT : String  ; amount (absolute)
-    Variable : J   : String  ; assembled JSON
+    Variable : Q   : String
+    Variable : G   : String
+    Variable : AID : String
+    Variable : DT  : String
+    Variable : TY  : String
+    Variable : PT  : String
+    Variable : VN  : String
+    Variable : AMT : String
+    Variable : J   : String
 
     001 : SET : Q   : $$StringChar:34
     002 : SET : G   : $GUID
@@ -144,15 +140,5 @@
     006 : SET : PT  : $PartyLedgerName
     007 : SET : VN  : $VoucherNumber
     008 : SET : AMT : $$String:$$Abs:$Amount
-
-    009 : SET : J   : "{"                                  +
-                      ##Q+"guid"      +##Q+":"+##Q+##G  +##Q+"," +
-                      ##Q+"alterId"   +##Q+":"+   ##AID      +"," +
-                      ##Q+"date"      +##Q+":"+##Q+##DT +##Q+"," +
-                      ##Q+"type"      +##Q+":"+##Q+##TY +##Q+"," +
-                      ##Q+"party"     +##Q+":"+##Q+##PT +##Q+"," +
-                      ##Q+"voucherNo" +##Q+":"+##Q+##VN +##Q+"," +
-                      ##Q+"amount"    +##Q+":"+   ##AMT      +"," +
-                      ##Q+"token"     +##Q+":"+##Q+##TBSSyncToken+##Q+
-                      "}"
+    009 : SET : J   : "{" + ##Q + "guid" + ##Q + ":" + ##Q + ##G + ##Q + "," + ##Q + "alterId" + ##Q + ":" + ##AID + "," + ##Q + "date" + ##Q + ":" + ##Q + ##DT + ##Q + "," + ##Q + "type" + ##Q + ":" + ##Q + ##TY + ##Q + "," + ##Q + "party" + ##Q + ":" + ##Q + ##PT + ##Q + "," + ##Q + "voucherNo" + ##Q + ":" + ##Q + ##VN + ##Q + "," + ##Q + "amount" + ##Q + ":" + ##AMT + "," + ##Q + "token" + ##Q + ":" + ##Q + ##TBSSyncToken + ##Q + "}"
     010 : RETURN : ##J
