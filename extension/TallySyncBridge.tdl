@@ -45,3 +45,15 @@
     Type        : Voucher
     Fetch       : Date, VoucherTypeName
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
+
+[#Form: Voucher]
+    Add : Button : TBSSyncBtn
+
+[Button: TBSSyncBtn]
+    Title  : "TBS Sync"
+    Key    : Alt + Z
+    Action : Call : TBSTestPush
+
+[Function: TBSTestPush]
+    Variable : TBSResp : String
+    001 : HTTPPOST : "http://localhost:3001/api/tally-hook" : "application/json" : "{""test"":true,""guid"":""" + $GUID + """}" : TBSResp
