@@ -88,9 +88,8 @@
 ; If this button is visible, the TDL is loaded correctly.
 ; If clicking it hits the server, HTTPPOST works.
 [#Form: Voucher]
-    Add    : Button     : TBSSyncBtn
-    On     : Accept     : Yes    : Call : TBSPushVoucher
-    On     : Delete     : Yes   : Call : TBSDeleteVoucher
+    Add    : Button : TBSSyncBtn
+    On     : Accept : Yes : Call : TBSPushVoucher
 
 [Button: TBSSyncBtn]
     Title  : "Sync to TBS"
