@@ -87,8 +87,10 @@
 ; Button for manual testing — appears in voucher screen.
 ; If this button is visible, the TDL is loaded correctly.
 ; If clicking it hits the server, HTTPPOST works.
-[#Form: Voucher]
+[#Form: Gateway Of Tally]
     Add    : Button : TBSSyncBtn
+
+[#Form: Voucher]
     On     : Accept : Yes : Call : TBSPushVoucher
 
 [Button: TBSSyncBtn]
