@@ -84,11 +84,18 @@
     Default : "REPLACE_WITH_DEVICE_TOKEN"
 
 ; ── Hook into Voucher form ────────────────────────────────────────────────────
-; On : Accept fires after the accountant saves (Alt+A) the voucher.
-; On : Delete fires after the accountant deletes (Alt+D) the voucher.
+; Button for manual testing — appears in voucher screen.
+; If this button is visible, the TDL is loaded correctly.
+; If clicking it hits the server, HTTPPOST works.
 [#Form: Voucher]
-    On : Accept : Always : Call : TBSPushVoucher
-    On : Delete : Always : Call : TBSDeleteVoucher
+    Add    : Button     : TBSSyncBtn
+    On     : Accept     : Always : Call : TBSPushVoucher
+    On     : Delete     : Always : Call : TBSDeleteVoucher
+
+[Button: TBSSyncBtn]
+    Title  : "Sync to TBS"
+    Key    : Alt + Z
+    Action : Call : TBSPushVoucher
 
 ; ── Save handler ─────────────────────────────────────────────────────────────
 [Function: TBSPushVoucher]
