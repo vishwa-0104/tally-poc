@@ -13,21 +13,6 @@
 ;
 ; Restart Tally after loading.
 ;
-; ─── WHAT IT DOES ───────────────────────────────────────────────────────────
-;
-; 1. Exposes collections (TBSVouchers etc.) the Chrome extension queries via
-;    HTTP to build the sales dashboard.
-;
-; 2. On every voucher Save/Delete, pushes that voucher's data directly to
-;    the TallyBillSync server so the dashboard stays current even when the
-;    browser / extension is not open.
-;    Requires TallyPrime (HTTPPOST not available in Tally ERP 9).
-;
-; ─── CONFIG — edit before loading ───────────────────────────────────────────
-;
-;   TBSSyncURL   : your server endpoint
-;   TBSSyncToken : device token generated from TallyBillSync admin panel
-;
 ; ────────────────────────────────────────────────────────────────────────────
 
 [Collection: TBSVouchers]
@@ -36,9 +21,6 @@
     Fetch       : LedgerEntries.IsPartyLedger, LedgerEntries.Amount
     Fetch       : AllLedgerEntries.LedgerName, AllLedgerEntries.IsPartyLedger, AllLedgerEntries.Amount
 
-; Cash and Bank ledger balances only — filtered to Cash-in-Hand and Bank Accounts groups.
-; Fetching ClosingBalance for ALL ledgers is extremely slow (Tally recomputes every
-; transaction from FY start for each ledger). Filtering to 5-10 ledgers makes it instant.
 [Collection: TBSCashBankBalances]
     Type        : Ledger
     Filter      : TBSIsCashOrBank
@@ -47,9 +29,6 @@
 [System: Formula]
     TBSIsCashOrBank : $$IsEqual:$Parent:"Cash-in-Hand" OR $$IsEqual:$Parent:"Bank Accounts"
 
-; Sundry Debtors and Creditors aggregate closing balances (group-level, not per-ledger).
-; Querying at GROUP level means Tally returns just 2 records with the aggregated total —
-; compared to iterating every individual debtor/creditor ledger which is O(n×transactions).
 [Collection: TBSGroupBalances]
     Type   : Group
     Filter : TBSIsDebtorCreditor
@@ -58,88 +37,11 @@
 [System: Formula]
     TBSIsDebtorCreditor : $$IsEqual:$Name:"Sundry Debtors" OR $$IsEqual:$Name:"Sundry Creditors"
 
-; All stock items with current closing quantity and value
 [Collection: TBSStockBalance]
     Type        : StockItem
     Fetch       : Name, ClosingBalance, ClosingValue
 
-; All voucher inventory lines — used to detect stock movement in a period
 [Collection: TBSInventoryMovement]
     Type        : Voucher
     Fetch       : Date, VoucherTypeName
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
-
-; ═════════════════════════════════════════════════════════════════════════════
-; ON-SAVE PUSH  (TallyPrime only)
-; Pushes each voucher to TallyBillSync server the moment it is saved or deleted.
-; ═════════════════════════════════════════════════════════════════════════════
-
-; ── Config variables — set these before loading ───────────────────────────────
-[Variable: TBSSyncURL]
-    Type    : String
-    Default : "http://localhost:3001/api/tally-hook"
-
-[Variable: TBSSyncToken]
-    Type    : String
-    Default : "REPLACE_WITH_DEVICE_TOKEN"
-
-; ── Hook into Voucher form ────────────────────────────────────────────────────
-; Button for manual testing — appears in voucher screen.
-; If this button is visible, the TDL is loaded correctly.
-; If clicking it hits the server, HTTPPOST works.
-[#Form: Gateway Of Tally]
-    Add    : Button : TBSSyncBtn
-
-[#Form: Voucher]
-    On     : Accept : Yes : Call : TBSPushVoucher
-
-[Button: TBSSyncBtn]
-    Title  : "Sync to TBS"
-    Key    : Alt + Z
-    Action : Call : TBSPushVoucher
-
-; ── Save handler ─────────────────────────────────────────────────────────────
-[Function: TBSPushVoucher]
-    Variable : TBSPayload  : String
-    Variable : TBSResponse : String
-
-    001 : SET : TBSPayload  : $$TBSBuildPayload
-    002 : LOG : "[TBS] Pushing: " + ##TBSPayload
-    003 : HTTPPOST : ##TBSSyncURL : "application/json" : ##TBSPayload : TBSResponse
-    004 : LOG : "[TBS] Response: " + ##TBSResponse
-
-; ── Delete handler ───────────────────────────────────────────────────────────
-[Function: TBSDeleteVoucher]
-    Variable : TBSPayload  : String
-    Variable : TBSResponse : String
-    Variable : Q           : String
-
-    001 : SET : Q          : $$StringChar:34
-    002 : SET : TBSPayload : "{" + ##Q + "guid" + ##Q + ":" + ##Q + $GUID + ##Q + "," + ##Q + "deleted" + ##Q + ":true," + ##Q + "token" + ##Q + ":" + ##Q + ##TBSSyncToken + ##Q + "}"
-    003 : LOG : "[TBS] Deleting: " + ##TBSPayload
-    004 : HTTPPOST : ##TBSSyncURL : "application/json" : ##TBSPayload : TBSResponse
-    005 : LOG : "[TBS] Response: " + ##TBSResponse
-
-; ── Build JSON payload for one voucher ───────────────────────────────────────
-[Function: TBSBuildPayload]
-    Returns  : String
-    Variable : Q   : String
-    Variable : G   : String
-    Variable : AID : String
-    Variable : DT  : String
-    Variable : TY  : String
-    Variable : PT  : String
-    Variable : VN  : String
-    Variable : AMT : String
-    Variable : J   : String
-
-    001 : SET : Q   : $$StringChar:34
-    002 : SET : G   : $GUID
-    003 : SET : AID : $$String:$AlterID
-    004 : SET : DT  : $$DatetoStr:$Date:"%YYYY%MM%DD%"
-    005 : SET : TY  : $VoucherTypeName
-    006 : SET : PT  : $PartyLedgerName
-    007 : SET : VN  : $VoucherNumber
-    008 : SET : AMT : $$String:$$Abs:$Amount
-    009 : SET : J   : "{" + ##Q + "guid" + ##Q + ":" + ##Q + ##G + ##Q + "," + ##Q + "alterId" + ##Q + ":" + ##AID + "," + ##Q + "date" + ##Q + ":" + ##Q + ##DT + ##Q + "," + ##Q + "type" + ##Q + ":" + ##Q + ##TY + ##Q + "," + ##Q + "party" + ##Q + ":" + ##Q + ##PT + ##Q + "," + ##Q + "voucherNo" + ##Q + ":" + ##Q + ##VN + ##Q + "," + ##Q + "amount" + ##Q + ":" + ##AMT + "," + ##Q + "token" + ##Q + ":" + ##Q + ##TBSSyncToken + ##Q + "}"
-    010 : RETURN : ##J
