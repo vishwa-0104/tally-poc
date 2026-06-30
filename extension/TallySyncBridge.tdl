@@ -103,3 +103,66 @@
 [Field: TBSReqCompany]
     Set as  : ##SVCurrentCompany
     JSONTag : "company"
+
+; ═════════════════════════════════════════════════════════════════════════════
+; ON-SAVE PUSH  —  fires automatically when any voucher is saved in Tally
+; ─────────────────────────────────────────────────────────────────────────────
+; Hooks into the Voucher form's Accept event. Every time a voucher is saved,
+; TBSOnSavePush fires and POSTs the voucher details to TallyBillSync.
+; ═════════════════════════════════════════════════════════════════════════════
+
+[#Form: Voucher]
+    On : Accept : Yes : Call : TBSOnSavePush
+
+[Function: TBSOnSavePush]
+    Variable : TBSSaveGotResp : Logical
+    01 : Set  : TBSSaveGotResp : No
+    02 : Walk Collection : TBSVoucherPushResp
+    03 :     Set : TBSSaveGotResp : Yes
+    05 : End Walk
+
+; Voucher-context push collection — $GUID etc. resolve because we're inside Voucher form
+[Collection: TBSVoucherPushResp]
+    Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
+    RemoteRequest : TBSVoucherPushReq : UTF8
+
+[Report: TBSVoucherPushReq]
+    Form       : TBSVoucherPushReq
+    Plain JSON : Yes
+
+[Form: TBSVoucherPushReq]
+    Part : TBSVoucherPushReq
+
+[Part: TBSVoucherPushReq]
+    Line : TBSVoucherPushReq
+
+[Line: TBSVoucherPushReq]
+    Fields : TBSVGuid, TBSVDate, TBSVType, TBSVParty, TBSVNo, TBSVAmt, TBSVAlterID
+
+[Field: TBSVGuid]
+    Set as  : $GUID
+    JSONTag : "guid"
+
+[Field: TBSVDate]
+    Set as  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    JSONTag : "date"
+
+[Field: TBSVType]
+    Set as  : $VoucherTypeName
+    JSONTag : "type"
+
+[Field: TBSVParty]
+    Set as  : $PartyLedgerName
+    JSONTag : "party"
+
+[Field: TBSVNo]
+    Set as  : $VoucherNumber
+    JSONTag : "voucherNo"
+
+[Field: TBSVAmt]
+    Set as  : $$String:$Amount
+    JSONTag : "amount"
+
+[Field: TBSVAlterID]
+    Set as  : $$String:$AlterID
+    JSONTag : "alterId"

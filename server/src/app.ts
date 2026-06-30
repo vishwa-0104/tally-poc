@@ -16,9 +16,11 @@ app.use(express.json({ limit: '20mb' })) // bills can include base64 images
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
+// Must be before any auth'd router — Tally has no JWT token
+app.use('/api', tallyHookRouter)
+
 app.use('/api/auth', authRouter)
 app.use('/api', leadsRouter)
 app.use('/api', companiesRouter)
 app.use('/api', billsRouter)
 app.use('/api', usersRouter)
-app.use('/api', tallyHookRouter)
