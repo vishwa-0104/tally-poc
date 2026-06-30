@@ -79,7 +79,7 @@
 ; Walking this collection fires the HTTP POST. The request body is the rendered
 ; JSON of report TBSPushReq; the JSON response is parsed back into these rows.
 [Collection: TBSPushResp]
-    Data Source   : HTTP JSON : "http://localhost:3001/api/tally-hook"
+    Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
     RemoteRequest : TBSPushReq : UTF8
 
 ; Request payload → { "test": "true", "company": "<current company>" }
