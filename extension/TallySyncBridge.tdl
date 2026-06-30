@@ -156,8 +156,12 @@
     06 : SET : TBSVA  : $$String:$Amount
     07 : SET : TBSVAI : $$String:$AlterID
 
+; Object: Voucher tells TDL to inherit the calling Voucher form's object
+; context into the request report. Without this, the Report renders in
+; isolation — no object → Lines produce no output, even for static fields.
 [Report: TBSVoucherXMLReq]
-    Form : TBSVoucherXMLReq
+    Form   : TBSVoucherXMLReq
+    Object : Voucher
 
 [Form: TBSVoucherXMLReq]
     Part    : TBSVoucherXMLPart
@@ -166,16 +170,21 @@
 [Part: TBSVoucherXMLPart]
     Line : TBSVoucherXMLLine
 
-; No Repeat — Line should render once unconditionally.
-; Field has a hardcoded static value: if <PING>HELLO</PING> appears in the
-; server log, the Part/Line renders and the issue is purely variable/context.
-; If still empty, TDL suppresses fields with no object context even for statics.
 [Line: TBSVoucherXMLLine]
-    Fields : TBSXStatic
+    Fields : TBSXStatic, TBSXGuid
 
+; Two fields together: static + live GUID.
+; If server sees <PING>HELLO</PING> but empty <GUID> → context works
+;   but $GUID isn't in scope, need Variables.
+; If both have values → done.
+; If both empty → Object: Voucher didn't help, need a different fix.
 [Field: TBSXStatic]
     Set as  : "HELLO"
     XML Tag : "PING"
+
+[Field: TBSXGuid]
+    Set as  : $GUID
+    XML Tag : "GUID"
 
 [Report: TBSHTTPResp]
     Form : TBSHTTPResp
