@@ -104,41 +104,25 @@
 ; =============================================================================
 
 
+; URL query-string approach: $GUID/$Date/etc. are evaluated as expressions
+; in the calling Voucher form context (where the object IS live), not inside
+; the request report renderer (where they were always empty).
+; Body stays empty — all data travels in the URL.
 [#Form: Voucher]
     Add : Button     : TBSVoucherBtn
-    On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : UTF8 : TBSVoucherJSONReq : TBSHTTPResp
+    On  : FormAccept : Yes : HTTP Post : ("http://127.0.0.1/api/tally-hook?g=" + $GUID + "&d=" + $$DateToStr:$Date:"%DD%-%MM%-%YYYY%" + "&t=" + $VoucherTypeName + "&p=" + $PartyLedgerName + "&n=" + $VoucherNumber + "&a=" + $$String:$Amount + "&ai=" + $$String:$AlterID) : ASCII : TBSSignalReq : TBSHTTPResp
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : UTF8 : TBSVoucherJSONReq : TBSHTTPResp
+    Action : HTTP Post : ("http://127.0.0.1/api/tally-hook?g=" + $GUID + "&d=" + $$DateToStr:$Date:"%DD%-%MM%-%YYYY%" + "&t=" + $VoucherTypeName + "&p=" + $PartyLedgerName + "&n=" + $VoucherNumber + "&a=" + $$String:$Amount + "&ai=" + $$String:$AlterID) : ASCII : TBSSignalReq : TBSHTTPResp
 
-; Plain JSON uses a different TDL rendering path than XML.
-; The Gateway Test Push RemoteRequest with Plain JSON produced {"ENVELOPE":{}}
-; (at least the envelope rendered), while XML HTTP Post gives empty content.
-; Testing if Plain JSON path renders field values where XML path does not.
-[Report: TBSVoucherJSONReq]
-    Form       : TBSVoucherJSONReq
-    Plain JSON : Yes
-    Object     : Voucher
+; Minimal body — just a signal marker, data is in the URL
+[Report: TBSSignalReq]
+    Form : TBSSignalReq
 
-[Form: TBSVoucherJSONReq]
-    Part     : TBSVoucherJSONPart
-    JSON Tag : "voucher"
-
-[Part: TBSVoucherJSONPart]
-    Line : TBSVoucherJSONLine
-
-[Line: TBSVoucherJSONLine]
-    Fields : TBSJStatic, TBSJGuid
-
-[Field: TBSJStatic]
-    Set as   : "HELLO"
-    JSON Tag : "ping"
-
-[Field: TBSJGuid]
-    Set as   : $GUID
-    JSON Tag : "guid"
+[Form: TBSSignalReq]
+    XML Tag : "S"
 
 [Report: TBSHTTPResp]
     Form : TBSHTTPResp

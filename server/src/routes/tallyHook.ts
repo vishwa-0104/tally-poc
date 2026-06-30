@@ -43,11 +43,26 @@ function parseBody(req: Request): Record<string, any> {
 tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) => {
   console.log('='.repeat(60))
   console.log('[TallyHook] Content-Type :', req.headers['content-type'] ?? '(none)')
-  console.log('[TallyHook] body type    :', typeof req.body)
-  console.log('[TallyHook] RAW BODY >>>\n', req.body, '\n<<<')
-  console.log('='.repeat(60))
+  console.log('[TallyHook] RAW BODY     :', req.body)
 
-  const body = parseBody(req)
+  // Primary path: data in URL query string (TDL URL expression approach)
+  const q = req.query as Record<string, string>
+  if (q.g || q.d || q.t) {
+    console.log('[TallyHook] QUERY DATA >>>')
+    console.log('  guid      :', q.g  ?? '(empty)')
+    console.log('  date      :', q.d  ?? '(empty)')
+    console.log('  type      :', q.t  ?? '(empty)')
+    console.log('  party     :', q.p  ?? '(empty)')
+    console.log('  voucherNo :', q.n  ?? '(empty)')
+    console.log('  amount    :', q.a  ?? '(empty)')
+    console.log('  alterId   :', q.ai ?? '(empty)')
+    console.log('<<<')
+  } else {
+    // Fallback: try to parse body (XML or JSON)
+    const body = parseBody(req)
+    console.log('[TallyHook] BODY DATA >>>', body, '<<<')
+  }
+  console.log('='.repeat(60))
 
   // Walk Collection (Data Source:HTTP JSON) needs JSON back to parse rows.
   res.json([{ Status: '1', Message: 'Received by TallyBillSync' }])
