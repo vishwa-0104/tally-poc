@@ -109,19 +109,48 @@
 ; ─────────────────────────────────────────────────────────────────────────────
 ; Hooks into the Voucher form's Accept event. Every time a voucher is saved,
 ; TBSOnSavePush fires and POSTs the voucher details to TallyBillSync.
+;
+; WHY VARIABLES: The RemoteRequest report renders outside the voucher object
+; context, so $GUID/$Date/etc. are blank there. We capture them first inside
+; the function (which runs IN the voucher form context), store in global
+; Variables, then the report fields read those Variables.
 ; ═════════════════════════════════════════════════════════════════════════════
+
+[Variable: TBSVarGuid]
+    Type    : String
+
+[Variable: TBSVarDate]
+    Type    : String
+
+[Variable: TBSVarType]
+    Type    : String
+
+[Variable: TBSVarParty]
+    Type    : String
+
+[Variable: TBSVarNo]
+    Type    : String
+
+[Variable: TBSVarAmt]
+    Type    : String
+
+[Variable: TBSVarAlterID]
+    Type    : String
 
 [#Form: Voucher]
     On : Accept : Yes : Call : TBSOnSavePush
 
 [Function: TBSOnSavePush]
-    Variable : TBSSaveGotResp : Logical
-    01 : Set  : TBSSaveGotResp : No
-    02 : Walk Collection : TBSVoucherPushResp
-    03 :     Set : TBSSaveGotResp : Yes
-    05 : End Walk
+    01 : SET : TBSVarGuid    : $GUID
+    02 : SET : TBSVarDate    : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    03 : SET : TBSVarType    : $VoucherTypeName
+    04 : SET : TBSVarParty   : $PartyLedgerName
+    05 : SET : TBSVarNo      : $VoucherNumber
+    06 : SET : TBSVarAmt     : $$String:$Amount
+    07 : SET : TBSVarAlterID : $$String:$AlterID
+    08 : Walk Collection : TBSVoucherPushResp
+    09 : End Walk
 
-; Voucher-context push collection — $GUID etc. resolve because we're inside Voucher form
 [Collection: TBSVoucherPushResp]
     Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
     RemoteRequest : TBSVoucherPushReq : UTF8
@@ -140,29 +169,29 @@
     Fields : TBSVGuid, TBSVDate, TBSVType, TBSVParty, TBSVNo, TBSVAmt, TBSVAlterID
 
 [Field: TBSVGuid]
-    Set as  : $GUID
+    Set as  : ##TBSVarGuid
     JSONTag : "guid"
 
 [Field: TBSVDate]
-    Set as  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    Set as  : ##TBSVarDate
     JSONTag : "date"
 
 [Field: TBSVType]
-    Set as  : $VoucherTypeName
+    Set as  : ##TBSVarType
     JSONTag : "type"
 
 [Field: TBSVParty]
-    Set as  : $PartyLedgerName
+    Set as  : ##TBSVarParty
     JSONTag : "party"
 
 [Field: TBSVNo]
-    Set as  : $VoucherNumber
+    Set as  : ##TBSVarNo
     JSONTag : "voucherNo"
 
 [Field: TBSVAmt]
-    Set as  : $$String:$Amount
+    Set as  : ##TBSVarAmt
     JSONTag : "amount"
 
 [Field: TBSVAlterID]
-    Set as  : $$String:$AlterID
+    Set as  : ##TBSVarAlterID
     JSONTag : "alterId"
