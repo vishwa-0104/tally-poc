@@ -6,11 +6,6 @@
 ;   Gateway of Tally > F12 Configure > TDL & Add-on
 ;   Click "Add TDL File" and browse to this file.
 ;
-; Tally ERP 9:
-;   Gateway of Tally > F12 Configure > TDL Configuration
-;   Set "Load TDL files on startup" = Yes
-;   In "List of TDL Files" add the full path to this file.
-;
 ; Restart Tally after loading.
 
 [Collection: TBSVouchers]
@@ -45,9 +40,7 @@
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
 
 ; =============================================================================
-; GATEWAY TEST-PUSH
-; Adds "TBS Test Push" to Gateway of Tally menu (key: T).
-; Walk Collection fires the HTTP POST from Menu context (confirmed working).
+; GATEWAY TEST-PUSH — Walk Collection fires HTTP from Menu context (confirmed)
 ; =============================================================================
 
 [#Menu: Gateway of Tally]
@@ -90,23 +83,58 @@
     JSONTag : "company"
 
 ; =============================================================================
-; VOUCHER PUSH — fires on Alt+B button OR automatically on every voucher save
+; VOUCHER PUSH — button (Alt+B) on the Voucher form
 ;
-; WHY HTTP Post action (not Walk Collection):
-;   Walk Collection with Data Source:HTTP JSON works only in Menu context.
-;   From a Form button or On:Accept, the HTTP Post ACTION is the right primitive.
-;   The request report runs inside the Voucher form — $GUID/$Date/etc. resolve
-;   directly without needing Variables.
+; WHY this shape:
+;   HTTP Post action fires from Form context (confirmed working).
+;   BUT the request report renders outside the voucher object — so $GUID/$Date
+;   are empty. Fix: button calls a Function (which runs IN the voucher context),
+;   function captures fields into global Variables, then fires HTTP Post as a
+;   function step. Report reads the Variables instead of $GUID directly.
+;
+;   On:Accept auto-save is kept but TallyPrime may restrict that event —
+;   the button (Alt+B) is the reliable fallback.
 ; =============================================================================
+
+[Variable: TBSVG]
+    Type : String
+
+[Variable: TBSVD]
+    Type : String
+
+[Variable: TBSVT]
+    Type : String
+
+[Variable: TBSVP]
+    Type : String
+
+[Variable: TBSVN]
+    Type : String
+
+[Variable: TBSVA]
+    Type : String
+
+[Variable: TBSVAI]
+    Type : String
 
 [#Form: Voucher]
     Add : Button : TBSVoucherBtn
-    On  : Accept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq
+    On  : Accept : Yes : Call : TBSOnSavePush
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq
+    Action : Call : TBSOnSavePush
+
+[Function: TBSOnSavePush]
+    01 : SET : TBSVG  : $GUID
+    02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    03 : SET : TBSVT  : $VoucherTypeName
+    04 : SET : TBSVP  : $PartyLedgerName
+    05 : SET : TBSVN  : $VoucherNumber
+    06 : SET : TBSVA  : $$String:$Amount
+    07 : SET : TBSVAI : $$String:$AlterID
+    08 : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPErr : TBSHTTPOk
 
 [Report: TBSVoucherXMLReq]
     Form : TBSVoucherXMLReq
@@ -122,29 +150,51 @@
     Fields : TBSXGuid, TBSXDate, TBSXType, TBSXParty, TBSXNo, TBSXAmt, TBSXAlterID
 
 [Field: TBSXGuid]
-    Set as  : $GUID
+    Set as  : ##TBSVG
     XML Tag : "GUID"
 
 [Field: TBSXDate]
-    Set as  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    Set as  : ##TBSVD
     XML Tag : "DATE"
 
 [Field: TBSXType]
-    Set as  : $VoucherTypeName
+    Set as  : ##TBSVT
     XML Tag : "TYPE"
 
 [Field: TBSXParty]
-    Set as  : $PartyLedgerName
+    Set as  : ##TBSVP
     XML Tag : "PARTY"
 
 [Field: TBSXNo]
-    Set as  : $VoucherNumber
+    Set as  : ##TBSVN
     XML Tag : "VOUCHERNO"
 
 [Field: TBSXAmt]
-    Set as  : $$String:$Amount
+    Set as  : ##TBSVA
     XML Tag : "AMOUNT"
 
 [Field: TBSXAlterID]
-    Set as  : $$String:$AlterID
+    Set as  : ##TBSVAI
     XML Tag : "ALTERID"
+
+; Minimal success/error reports so Tally does not show "Invalid data" dialog
+[Report: TBSHTTPOk]
+    Form : TBSHTTPOk
+
+[Form: TBSHTTPOk]
+    Part : TBSHTTPPart
+
+[Part: TBSHTTPPart]
+    Line : TBSHTTPLine
+
+[Line: TBSHTTPLine]
+    Fields : TBSHTTPMsg
+
+[Field: TBSHTTPMsg]
+    Set as : "Synced"
+
+[Report: TBSHTTPErr]
+    Form : TBSHTTPErr
+
+[Form: TBSHTTPErr]
+    Part : TBSHTTPPart
