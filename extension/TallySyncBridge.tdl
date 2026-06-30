@@ -117,12 +117,23 @@
     Key    : Alt + B
     Action : HTTP Post : ("http://127.0.0.1/api/tally-hook?g=" + $GUID + "&d=" + $$DateToStr:$Date:"%DD%-%MM%-%YYYY%" + "&t=" + $VoucherTypeName + "&p=" + $PartyLedgerName + "&n=" + $VoucherNumber + "&a=" + $$String:$Amount + "&ai=" + $$String:$AlterID) : ASCII : TBSSignalReq : TBSHTTPResp
 
-; Minimal body — just a signal marker, data is in the URL
+; Minimal body — just a signal marker, data is in the URL query string
 [Report: TBSSignalReq]
     Form : TBSSignalReq
 
 [Form: TBSSignalReq]
+    Parts   : TBSSignalPart
     XML Tag : "S"
+
+[Part: TBSSignalPart]
+    Lines : TBSSignalLine
+
+[Line: TBSSignalLine]
+    Fields : TBSSignalField
+
+[Field: TBSSignalField]
+    Set as  : "1"
+    XML Tag : "P"
 
 [Report: TBSHTTPResp]
     Form : TBSHTTPResp
