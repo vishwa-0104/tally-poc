@@ -36,8 +36,7 @@
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
 
 ; =============================================================================
-; GATEWAY TEST-PUSH
-; Walk Collection works in Menu context (confirmed). Uses it to test the pipe.
+; GATEWAY TEST-PUSH (confirmed working via Walk Collection in Menu context)
 ; =============================================================================
 
 [#Menu: Gateway of Tally]
@@ -51,7 +50,7 @@
     04 :     Msg Box : "TallyBillSync" : "Status: " + $$String:$Status + "   Message: " + $$String:$Message
     05 : End Walk
     06 : If : Not ##TBSGotResp
-    07 :     Msg Box : "TallyBillSync" : "No response from server. Check backend is running."
+    07 :     Msg Box : "TallyBillSync" : "No response. Check backend is running."
     08 : End If
 
 [Collection: TBSPushResp]
@@ -82,73 +81,26 @@
 ; =============================================================================
 ; VOUCHER PUSH
 ;
-; Confirmed facts from testing:
-;   - HTTP Post as a button Action DOES fire the HTTP request.
-;   - HTTP Post as a Function step does NOT fire (button goes dead).
-;   - Walk Collection works in Menu context but NOT in Form button context.
-;   - $GUID/$Date etc. are empty in the request report because HTTP Post
-;     renders the report standalone, outside the Voucher object context.
+; SOURCE: TallyHelp action documentation confirms the correct event name is
+;   "FormAccept" not "Accept":
+;   "On : FormAccept : Yes : HTTPPost : @@URL : ASCII : RequestReport : RespReport"
 ;
-; Fix for empty fields: capture data into global Variables via a function
-; called from On:Load (when the voucher form opens). The button then fires
-; HTTP Post with a report that reads those Variables.
+; FormAccept fires when the user saves a voucher (Ctrl+A / A:Accept button).
+; HTTP Post is a valid action directly on this event — no intermediate function.
+; The request report renders in the FormAccept context where $GUID/$Date/etc.
+; should be accessible from the active voucher object.
 ;
-; On:Load is tried here alongside On:Accept. If On:Load fires, Variables
-; will be populated by the time the user clicks the button or saves.
+; Button (Alt+B) gives a manual fallback — confirmed to fire HTTP request.
 ; =============================================================================
-
-[Variable: TBSVG]
-    Type : String
-
-[Variable: TBSVD]
-    Type : String
-
-[Variable: TBSVT]
-    Type : String
-
-[Variable: TBSVP]
-    Type : String
-
-[Variable: TBSVN]
-    Type : String
-
-[Variable: TBSVA]
-    Type : String
-
-[Variable: TBSVAI]
-    Type : String
 
 [#Form: Voucher]
     Add : Button   : TBSVoucherBtn
-    On  : Load     : Yes : Call : TBSCaptureVoucher
-    On  : Accept   : Yes : Call : TBSCaptureAndPush
+    On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq
-
-; Capture voucher fields into global Variables (runs in voucher form context)
-[Function: TBSCaptureVoucher]
-    01 : SET : TBSVG  : $GUID
-    02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
-    03 : SET : TBSVT  : $VoucherTypeName
-    04 : SET : TBSVP  : $PartyLedgerName
-    05 : SET : TBSVN  : $VoucherNumber
-    06 : SET : TBSVA  : $$String:$Amount
-    07 : SET : TBSVAI : $$String:$AlterID
-
-; On save: capture latest data then push (Walk Collection works here if called
-; from a non-form context — but we try it anyway; worst case button covers it)
-[Function: TBSCaptureAndPush]
-    01 : SET : TBSVG  : $GUID
-    02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
-    03 : SET : TBSVT  : $VoucherTypeName
-    04 : SET : TBSVP  : $PartyLedgerName
-    05 : SET : TBSVN  : $VoucherNumber
-    06 : SET : TBSVA  : $$String:$Amount
-    07 : SET : TBSVAI : $$String:$AlterID
-    08 : Walk Collection : TBSPushResp
+    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
 
 [Report: TBSVoucherXMLReq]
     Form : TBSVoucherXMLReq
@@ -164,29 +116,46 @@
     Fields : TBSXGuid, TBSXDate, TBSXType, TBSXParty, TBSXNo, TBSXAmt, TBSXAlterID
 
 [Field: TBSXGuid]
-    Set as  : ##TBSVG
+    Set as  : $GUID
     XML Tag : "GUID"
 
 [Field: TBSXDate]
-    Set as  : ##TBSVD
+    Set as  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
     XML Tag : "DATE"
 
 [Field: TBSXType]
-    Set as  : ##TBSVT
+    Set as  : $VoucherTypeName
     XML Tag : "TYPE"
 
 [Field: TBSXParty]
-    Set as  : ##TBSVP
+    Set as  : $PartyLedgerName
     XML Tag : "PARTY"
 
 [Field: TBSXNo]
-    Set as  : ##TBSVN
+    Set as  : $VoucherNumber
     XML Tag : "VOUCHERNO"
 
 [Field: TBSXAmt]
-    Set as  : ##TBSVA
+    Set as  : $$String:$Amount
     XML Tag : "AMOUNT"
 
 [Field: TBSXAlterID]
-    Set as  : ##TBSVAI
+    Set as  : $$String:$AlterID
     XML Tag : "ALTERID"
+
+; Minimal response report — prevents "Invalid data" dialog since server returns XML
+[Report: TBSHTTPResp]
+    Form : TBSHTTPResp
+
+[Form: TBSHTTPResp]
+    Part : TBSHTTPRespPart
+
+[Part: TBSHTTPRespPart]
+    Line : TBSHTTPRespLine
+
+[Line: TBSHTTPRespLine]
+    Fields : TBSHTTPRespFld
+
+[Field: TBSHTTPRespFld]
+    Set as : $STATUS
+    XML Tag : "STATUS"
