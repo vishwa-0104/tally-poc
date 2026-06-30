@@ -168,35 +168,14 @@
     Repeat : TBSVoucherXMLLine : TBSSingleRow
 
 [Line: TBSVoucherXMLLine]
-    Fields : TBSXGuid, TBSXDate, TBSXType, TBSXParty, TBSXNo, TBSXAmt, TBSXAlterID
+    Fields : TBSXStatic
 
-[Field: TBSXGuid]
-    Set as  : ##TBSVG
-    XML Tag : "GUID"
-
-[Field: TBSXDate]
-    Set as  : ##TBSVD
-    XML Tag : "DATE"
-
-[Field: TBSXType]
-    Set as  : ##TBSVT
-    XML Tag : "TYPE"
-
-[Field: TBSXParty]
-    Set as  : ##TBSVP
-    XML Tag : "PARTY"
-
-[Field: TBSXNo]
-    Set as  : ##TBSVN
-    XML Tag : "VOUCHERNO"
-
-[Field: TBSXAmt]
-    Set as  : ##TBSVA
-    XML Tag : "AMOUNT"
-
-[Field: TBSXAlterID]
-    Set as  : ##TBSVAI
-    XML Tag : "ALTERID"
+; Static field test — if server sees <PING>HELLO_FROM_TDL</PING> inside
+; <TBSVOUCHER>, the Repeat is working and the problem is variable resolution.
+; If still empty, the Repeat itself is not producing rows.
+[Field: TBSXStatic]
+    Set as  : "HELLO_FROM_TDL"
+    XML Tag : "PING"
 
 [Report: TBSHTTPResp]
     Form : TBSHTTPResp
