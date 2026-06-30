@@ -137,8 +137,17 @@
 [Variable: TBSVarAlterID]
     Type    : String
 
+; Button gives a manual fallback AND confirms [#Form: Voucher] is hooked in.
+; If the button appears in the voucher screen, the form hook is working.
+; If pressing the button shows the MsgBox but On:Accept never does, the event name is wrong.
 [#Form: Voucher]
-    On : Accept : Yes : Call : TBSOnSavePush
+    Add : Button : TBSVoucherBtn
+    On  : Accept : Yes : Call : TBSOnSavePush
+
+[Button: TBSVoucherBtn]
+    Title  : "→TBS"
+    Key    : Alt + Z
+    Action : Call : TBSOnSavePush
 
 ; WHY XML NOT JSON: Plain JSON:Yes requires a Repeat over a collection to produce
 ; field output — standalone variables produce an empty ENVELOPE. XML is Tally's
