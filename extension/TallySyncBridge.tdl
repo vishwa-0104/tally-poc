@@ -145,8 +145,8 @@
     On  : Accept : Yes : Call : TBSOnSavePush
 
 [Button: TBSVoucherBtn]
-    Title  : "→TBS"
-    Key    : Alt + Z
+    Title  : "TBS Sync"
+    Key    : Alt + B
     Action : Call : TBSOnSavePush
 
 ; WHY XML NOT JSON: Plain JSON:Yes requires a Repeat over a collection to produce
@@ -155,7 +155,7 @@
 ; Server parses the XML with regex — no extra npm packages needed.
 
 [Function: TBSOnSavePush]
-    01 : Msg Box : "TBS Debug" : "OnSave fired! GUID=" + $GUID
+    01 : Msg Box : "TBS Debug" : "TBSOnSavePush called"
     02 : SET : TBSVarGuid    : $GUID
     03 : SET : TBSVarDate    : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
     04 : SET : TBSVarType    : $VoucherTypeName
