@@ -46,14 +46,60 @@
     Fetch       : Date, VoucherTypeName
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
 
-[#Form: Voucher]
-    Add : Button : TBSSyncBtn
+; ═════════════════════════════════════════════════════════════════════════════
+; GATEWAY TEST-PUSH  —  one-click "does the pipe to TallyBillSync work?"
+; ─────────────────────────────────────────────────────────────────────────────
+; Adds a "TBS Test Push" line to the Gateway of Tally menu (shortcut: T).
+; Selecting it POSTs a tiny JSON payload to the TallyBillSync server and shows
+; the server's reply in a message box.
+;
+; WHY THIS SHAPE (earlier attempts failed for two reasons):
+;   1. Gateway of Tally is a MENU, not a Form — so the entry must be a menu item
+;      (Add : Key Item), not a Form button. No Form named "Gateway of Tally"
+;      exists, which is why the button never appeared.
+;   2. There is no "HTTPPOST" function step in TDL. The supported way to send
+;      data out is a Collection with `Data Source : HTTP JSON`; walking that
+;      collection performs the POST and reads the response back.
+; ═════════════════════════════════════════════════════════════════════════════
 
-[Button: TBSSyncBtn]
-    Title  : "TBS Sync"
-    Key    : Alt + Z
-    Action : Call : TBSTestPush
+[#Menu: Gateway of Tally]
+    Add : Key Item : TBS Test Push : T : Call : TBSTestPush
 
 [Function: TBSTestPush]
-    Variable : TBSResp : String
-    001 : HTTPPOST : "http://localhost:3001/api/tally-hook" : "application/json" : "{""test"":true,""guid"":""" + $GUID + """}" : TBSResp
+    Variable : TBSGotResp : Logical
+    01 : Set  : TBSGotResp : No
+    02 : Walk Collection : TBSPushResp
+    03 :     Set : TBSGotResp : Yes
+    04 :     Msg Box : "TallyBillSync — Server Reply" : "Status: " + $$String:$Status + "   Message: " + $$String:$Message
+    05 : End Walk
+    06 : If : Not ##TBSGotResp
+    07 :     Msg Box : "TallyBillSync" : "Push fired but no rows parsed from the reply. Open the backend console and look for the [TallyHook] banner to confirm it arrived."
+    08 : End If
+
+; Walking this collection fires the HTTP POST. The request body is the rendered
+; JSON of report TBSPushReq; the JSON response is parsed back into these rows.
+[Collection: TBSPushResp]
+    Data Source   : HTTP JSON : "http://localhost:3001/api/tally-hook"
+    RemoteRequest : TBSPushReq : UTF8
+
+; Request payload → { "test": "true", "company": "<current company>" }
+[Report: TBSPushReq]
+    Form       : TBSPushReq
+    Plain JSON : Yes
+
+[Form: TBSPushReq]
+    Part : TBSPushReq
+
+[Part: TBSPushReq]
+    Line : TBSPushReq
+
+[Line: TBSPushReq]
+    Fields : TBSReqTest, TBSReqCompany
+
+[Field: TBSReqTest]
+    Set as  : "true"
+    JSONTag : "test"
+
+[Field: TBSReqCompany]
+    Set as  : ##SVCurrentCompany
+    JSONTag : "company"
