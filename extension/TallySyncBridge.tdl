@@ -36,7 +36,7 @@
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
 
 ; =============================================================================
-; GATEWAY TEST-PUSH (confirmed working via Walk Collection in Menu context)
+; GATEWAY TEST-PUSH
 ; =============================================================================
 
 [#Menu: Gateway of Tally]
@@ -81,26 +81,78 @@
 ; =============================================================================
 ; VOUCHER PUSH
 ;
-; SOURCE: TallyHelp action documentation confirms the correct event name is
-;   "FormAccept" not "Accept":
-;   "On : FormAccept : Yes : HTTPPost : @@URL : ASCII : RequestReport : RespReport"
+; The HTTP Post request report renders in a standalone context — $GUID/$Date/etc.
+; have no voucher object to resolve against, so they come back empty.
 ;
-; FormAccept fires when the user saves a voucher (Ctrl+A / A:Accept button).
-; HTTP Post is a valid action directly on this event — no intermediate function.
-; The request report renders in the FormAccept context where $GUID/$Date/etc.
-; should be accessible from the active voucher object.
+; Fix: declare two On:FormAccept handlers.
+;   1st: Call TBSCaptureVoucher — runs in FormAccept context where $GUID resolves,
+;        stores values into global Variables.
+;   2nd: HTTP Post — renders request report which reads those Variables (##TBSVG etc.)
 ;
-; Button (Alt+B) gives a manual fallback — confirmed to fire HTTP request.
+; Button (Alt+B) does the same: Call to capture, then HTTP Post via a separate
+; button that the user presses after Alt+B captures (or we rely on FormAccept
+; having already captured on last save).
 ; =============================================================================
 
+[Variable: TBSVG]
+    Type    : String
+    Default : ""
+
+[Variable: TBSVD]
+    Type    : String
+    Default : ""
+
+[Variable: TBSVT]
+    Type    : String
+    Default : ""
+
+[Variable: TBSVP]
+    Type    : String
+    Default : ""
+
+[Variable: TBSVN]
+    Type    : String
+    Default : ""
+
+[Variable: TBSVA]
+    Type    : String
+    Default : ""
+
+[Variable: TBSVAI]
+    Type    : String
+    Default : ""
+
 [#Form: Voucher]
-    Add : Button   : TBSVoucherBtn
+    Add : Button     : TBSVoucherBtn
+    On  : FormAccept : Yes : Call      : TBSCaptureVoucher
     On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
+    Action : Call : TBSCaptureAndHTTPPost
+
+; Captures voucher fields into global Variables while in FormAccept/button context
+[Function: TBSCaptureVoucher]
+    01 : SET : TBSVG  : $GUID
+    02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    03 : SET : TBSVT  : $VoucherTypeName
+    04 : SET : TBSVP  : $PartyLedgerName
+    05 : SET : TBSVN  : $VoucherNumber
+    06 : SET : TBSVA  : $$String:$Amount
+    07 : SET : TBSVAI : $$String:$AlterID
+
+; Button: capture variables first, then show result via Walk Collection (Menu-style)
+; If HTTP Post is needed from button, user can press Alt+B after saving (vars are set by FormAccept)
+[Function: TBSCaptureAndHTTPPost]
+    01 : SET : TBSVG  : $GUID
+    02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    03 : SET : TBSVT  : $VoucherTypeName
+    04 : SET : TBSVP  : $PartyLedgerName
+    05 : SET : TBSVN  : $VoucherNumber
+    06 : SET : TBSVA  : $$String:$Amount
+    07 : SET : TBSVAI : $$String:$AlterID
+    08 : Walk Collection : TBSPushResp
 
 [Report: TBSVoucherXMLReq]
     Form : TBSVoucherXMLReq
@@ -116,34 +168,33 @@
     Fields : TBSXGuid, TBSXDate, TBSXType, TBSXParty, TBSXNo, TBSXAmt, TBSXAlterID
 
 [Field: TBSXGuid]
-    Set as  : $GUID
+    Set as  : ##TBSVG
     XML Tag : "GUID"
 
 [Field: TBSXDate]
-    Set as  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    Set as  : ##TBSVD
     XML Tag : "DATE"
 
 [Field: TBSXType]
-    Set as  : $VoucherTypeName
+    Set as  : ##TBSVT
     XML Tag : "TYPE"
 
 [Field: TBSXParty]
-    Set as  : $PartyLedgerName
+    Set as  : ##TBSVP
     XML Tag : "PARTY"
 
 [Field: TBSXNo]
-    Set as  : $VoucherNumber
+    Set as  : ##TBSVN
     XML Tag : "VOUCHERNO"
 
 [Field: TBSXAmt]
-    Set as  : $$String:$Amount
+    Set as  : ##TBSVA
     XML Tag : "AMOUNT"
 
 [Field: TBSXAlterID]
-    Set as  : $$String:$AlterID
+    Set as  : ##TBSVAI
     XML Tag : "ALTERID"
 
-; Minimal response report — prevents "Invalid data" dialog since server returns XML
 [Report: TBSHTTPResp]
     Form : TBSHTTPResp
 
@@ -157,5 +208,5 @@
     Fields : TBSHTTPRespFld
 
 [Field: TBSHTTPRespFld]
-    Set as : $STATUS
+    Set as  : $STATUS
     XML Tag : "STATUS"
