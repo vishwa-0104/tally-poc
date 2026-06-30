@@ -49,8 +49,6 @@ tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) =>
 
   const body = parseBody(req)
 
-  // Return XML — Tally's HTTP Post action expects XML back, not JSON.
-  // JSON causes "Invalid data. Could not process XML format" in Tally.
-  res.set('Content-Type', 'text/xml')
-  res.send('<?xml version="1.0"?><RESPONSE><STATUS>1</STATUS><MESSAGE>Received</MESSAGE></RESPONSE>')
+  // Walk Collection (Data Source:HTTP JSON) needs JSON back to parse rows.
+  res.json([{ Status: '1', Message: 'Received by TallyBillSync' }])
 })

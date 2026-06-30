@@ -81,17 +81,12 @@
 ; =============================================================================
 ; VOUCHER PUSH
 ;
-; The HTTP Post request report renders in a standalone context — $GUID/$Date/etc.
-; have no voucher object to resolve against, so they come back empty.
+; Strategy: single On:FormAccept calls a function.
+; Function runs in FormAccept context (object available) — sets Variables from
+; $GUID/$Date etc., then Walk Collection to push them.
+; Testing if FormAccept function context allows Walk Collection (like Menu does).
 ;
-; Fix: declare two On:FormAccept handlers.
-;   1st: Call TBSCaptureVoucher — runs in FormAccept context where $GUID resolves,
-;        stores values into global Variables.
-;   2nd: HTTP Post — renders request report which reads those Variables (##TBSVG etc.)
-;
-; Button (Alt+B) does the same: Call to capture, then HTTP Post via a separate
-; button that the user presses after Alt+B captures (or we rely on FormAccept
-; having already captured on last save).
+; Button does the same via Call. Both paths identical.
 ; =============================================================================
 
 [Variable: TBSVG]
@@ -124,16 +119,14 @@
 
 [#Form: Voucher]
     Add : Button     : TBSVoucherBtn
-    On  : FormAccept : Yes : Call      : TBSCaptureVoucher
-    On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
+    On  : FormAccept : Yes : Call : TBSVoucherPush
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : Call : TBSCaptureAndHTTPPost
+    Action : Call : TBSVoucherPush
 
-; Captures voucher fields into global Variables while in FormAccept/button context
-[Function: TBSCaptureVoucher]
+[Function: TBSVoucherPush]
     01 : SET : TBSVG  : $GUID
     02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
     03 : SET : TBSVT  : $VoucherTypeName
@@ -141,72 +134,49 @@
     05 : SET : TBSVN  : $VoucherNumber
     06 : SET : TBSVA  : $$String:$Amount
     07 : SET : TBSVAI : $$String:$AlterID
+    08 : Walk Collection : TBSVoucherPushCol
 
-; Button: capture variables first, then show result via Walk Collection (Menu-style)
-; If HTTP Post is needed from button, user can press Alt+B after saving (vars are set by FormAccept)
-[Function: TBSCaptureAndHTTPPost]
-    01 : SET : TBSVG  : $GUID
-    02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
-    03 : SET : TBSVT  : $VoucherTypeName
-    04 : SET : TBSVP  : $PartyLedgerName
-    05 : SET : TBSVN  : $VoucherNumber
-    06 : SET : TBSVA  : $$String:$Amount
-    07 : SET : TBSVAI : $$String:$AlterID
-    08 : Walk Collection : TBSPushResp
+[Collection: TBSVoucherPushCol]
+    Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
+    RemoteRequest : TBSVoucherPushReq : UTF8
 
-[Report: TBSVoucherXMLReq]
-    Form : TBSVoucherXMLReq
+[Report: TBSVoucherPushReq]
+    Form       : TBSVoucherPushReq
+    Plain JSON : Yes
 
-[Form: TBSVoucherXMLReq]
-    Part    : TBSVoucherXMLPart
-    XML Tag : "TBSVOUCHER"
+[Form: TBSVoucherPushReq]
+    Part : TBSVoucherPushPart
 
-[Part: TBSVoucherXMLPart]
-    Line : TBSVoucherXMLLine
+[Part: TBSVoucherPushPart]
+    Line : TBSVoucherPushLine
 
-[Line: TBSVoucherXMLLine]
-    Fields : TBSXGuid, TBSXDate, TBSXType, TBSXParty, TBSXNo, TBSXAmt, TBSXAlterID
+[Line: TBSVoucherPushLine]
+    Fields : TBSPGuid, TBSPDate, TBSPType, TBSPParty, TBSPNo, TBSPAmt, TBSPAlterID
 
-[Field: TBSXGuid]
+[Field: TBSPGuid]
     Set as  : ##TBSVG
-    XML Tag : "GUID"
+    JSONTag : "guid"
 
-[Field: TBSXDate]
+[Field: TBSPDate]
     Set as  : ##TBSVD
-    XML Tag : "DATE"
+    JSONTag : "date"
 
-[Field: TBSXType]
+[Field: TBSPType]
     Set as  : ##TBSVT
-    XML Tag : "TYPE"
+    JSONTag : "type"
 
-[Field: TBSXParty]
+[Field: TBSPParty]
     Set as  : ##TBSVP
-    XML Tag : "PARTY"
+    JSONTag : "party"
 
-[Field: TBSXNo]
+[Field: TBSPNo]
     Set as  : ##TBSVN
-    XML Tag : "VOUCHERNO"
+    JSONTag : "voucherNo"
 
-[Field: TBSXAmt]
+[Field: TBSPAmt]
     Set as  : ##TBSVA
-    XML Tag : "AMOUNT"
+    JSONTag : "amount"
 
-[Field: TBSXAlterID]
+[Field: TBSPAlterID]
     Set as  : ##TBSVAI
-    XML Tag : "ALTERID"
-
-[Report: TBSHTTPResp]
-    Form : TBSHTTPResp
-
-[Form: TBSHTTPResp]
-    Part : TBSHTTPRespPart
-
-[Part: TBSHTTPRespPart]
-    Line : TBSHTTPRespLine
-
-[Line: TBSHTTPRespLine]
-    Fields : TBSHTTPRespFld
-
-[Field: TBSHTTPRespFld]
-    Set as  : $STATUS
-    XML Tag : "STATUS"
+    JSONTag : "alterId"
