@@ -41,20 +41,13 @@ function parseBody(req: Request): Record<string, any> {
 }
 
 tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) => {
-  const body = parseBody(req)
+  console.log('='.repeat(60))
+  console.log('[TallyHook] Content-Type :', req.headers['content-type'] ?? '(none)')
+  console.log('[TallyHook] body type    :', typeof req.body)
+  console.log('[TallyHook] RAW BODY >>>\n', req.body, '\n<<<')
+  console.log('='.repeat(60))
 
-  console.log('='.repeat(60))
-  console.log('[TallyHook] Received push from Tally')
-  console.log('[TallyHook] Content-Type:', req.headers['content-type'] ?? '(none)')
-  console.log('[TallyHook] guid       :', body.guid)
-  console.log('[TallyHook] alterId    :', body.alterId)
-  console.log('[TallyHook] date       :', body.date)
-  console.log('[TallyHook] type       :', body.type)
-  console.log('[TallyHook] party      :', body.party)
-  console.log('[TallyHook] voucherNo  :', body.voucherNo)
-  console.log('[TallyHook] amount     :', body.amount)
-  if (body.test) console.log('[TallyHook] TEST PUSH — company:', body.company)
-  console.log('='.repeat(60))
+  const body = parseBody(req)
 
   // JSON array so the Tally collection can parse Status/Message back
   res.json([{ Status: '1', Message: 'Received by TallyBillSync' }])
