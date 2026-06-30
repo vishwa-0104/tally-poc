@@ -36,7 +36,7 @@
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
 
 ; =============================================================================
-; GATEWAY TEST-PUSH
+; GATEWAY TEST-PUSH (Walk Collection in Menu context — confirmed working)
 ; =============================================================================
 
 [#Menu: Gateway of Tally]
@@ -81,12 +81,26 @@
 ; =============================================================================
 ; VOUCHER PUSH
 ;
-; Strategy: single On:FormAccept calls a function.
-; Function runs in FormAccept context (object available) — sets Variables from
-; $GUID/$Date etc., then Walk Collection to push them.
-; Testing if FormAccept function context allows Walk Collection (like Menu does).
+; Root cause of empty <TBSVOUCHER></TBSVOUCHER>:
+;   Without Repeat over a collection, TDL's report engine produces zero rows —
+;   no fields are ever evaluated, so all output is empty regardless of $field
+;   or ##Variable values.
 ;
-; Button does the same via Call. Both paths identical.
+; Fix:
+;   1. TBSSingleRow collection (Type:Company) has exactly 1 object.
+;      Repeat: over it forces one row to render, making fields evaluate.
+;   2. Fields read global Variables (##TBSVG etc.) — independent of the
+;      Company object being iterated, Variables resolve to their stored value.
+;   3. On:Load captures Variables while $GUID/$Date/etc. are live in the
+;      form context. On:Load and On:FormAccept are DIFFERENT events — no
+;      conflict, both can be declared on the same [#Form: Voucher].
+;   4. On:FormAccept fires HTTP Post which renders the report (1 row via
+;      Company Repeat) — Variables populated by On:Load are now in the output.
+;   5. Button (Alt+B) fires the same HTTP Post for manual push.
+;
+; Limitation: Variables are captured on form Load, not on every keystroke.
+;   For ALTER (editing existing voucher), GUID/AlterID are correct from Load.
+;   For CREATE (new voucher), GUID is empty at Load (assigned only on save).
 ; =============================================================================
 
 [Variable: TBSVG]
@@ -117,16 +131,23 @@
     Type    : String
     Default : ""
 
+; Single-row collection — Company type always has exactly one object.
+; Used in Repeat to force the request report Part to produce output rows.
+[Collection: TBSSingleRow]
+    Type : Company
+
 [#Form: Voucher]
     Add : Button     : TBSVoucherBtn
-    On  : FormAccept : Yes : Call : TBSVoucherPush
+    On  : Load       : Yes : Call      : TBSCaptureVoucher
+    On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : Call : TBSVoucherPush
+    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
 
-[Function: TBSVoucherPush]
+; Runs on form Load — $GUID/$Date/etc. resolve here because the form object is live
+[Function: TBSCaptureVoucher]
     01 : SET : TBSVG  : $GUID
     02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
     03 : SET : TBSVT  : $VoucherTypeName
@@ -134,49 +155,61 @@
     05 : SET : TBSVN  : $VoucherNumber
     06 : SET : TBSVA  : $$String:$Amount
     07 : SET : TBSVAI : $$String:$AlterID
-    08 : Walk Collection : TBSVoucherPushCol
 
-[Collection: TBSVoucherPushCol]
-    Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
-    RemoteRequest : TBSVoucherPushReq : UTF8
+[Report: TBSVoucherXMLReq]
+    Form : TBSVoucherXMLReq
 
-[Report: TBSVoucherPushReq]
-    Form       : TBSVoucherPushReq
-    Plain JSON : Yes
+[Form: TBSVoucherXMLReq]
+    Part    : TBSVoucherXMLPart
+    XML Tag : "TBSVOUCHER"
 
-[Form: TBSVoucherPushReq]
-    Part : TBSVoucherPushPart
+[Part: TBSVoucherXMLPart]
+    Line   : TBSVoucherXMLLine
+    Repeat : TBSVoucherXMLLine : TBSSingleRow
 
-[Part: TBSVoucherPushPart]
-    Line : TBSVoucherPushLine
+[Line: TBSVoucherXMLLine]
+    Fields : TBSXGuid, TBSXDate, TBSXType, TBSXParty, TBSXNo, TBSXAmt, TBSXAlterID
 
-[Line: TBSVoucherPushLine]
-    Fields : TBSPGuid, TBSPDate, TBSPType, TBSPParty, TBSPNo, TBSPAmt, TBSPAlterID
-
-[Field: TBSPGuid]
+[Field: TBSXGuid]
     Set as  : ##TBSVG
-    JSONTag : "guid"
+    XML Tag : "GUID"
 
-[Field: TBSPDate]
+[Field: TBSXDate]
     Set as  : ##TBSVD
-    JSONTag : "date"
+    XML Tag : "DATE"
 
-[Field: TBSPType]
+[Field: TBSXType]
     Set as  : ##TBSVT
-    JSONTag : "type"
+    XML Tag : "TYPE"
 
-[Field: TBSPParty]
+[Field: TBSXParty]
     Set as  : ##TBSVP
-    JSONTag : "party"
+    XML Tag : "PARTY"
 
-[Field: TBSPNo]
+[Field: TBSXNo]
     Set as  : ##TBSVN
-    JSONTag : "voucherNo"
+    XML Tag : "VOUCHERNO"
 
-[Field: TBSPAmt]
+[Field: TBSXAmt]
     Set as  : ##TBSVA
-    JSONTag : "amount"
+    XML Tag : "AMOUNT"
 
-[Field: TBSPAlterID]
+[Field: TBSXAlterID]
     Set as  : ##TBSVAI
-    JSONTag : "alterId"
+    XML Tag : "ALTERID"
+
+[Report: TBSHTTPResp]
+    Form : TBSHTTPResp
+
+[Form: TBSHTTPResp]
+    Part : TBSHTTPRespPart
+
+[Part: TBSHTTPRespPart]
+    Line : TBSHTTPRespLine
+
+[Line: TBSHTTPRespLine]
+    Fields : TBSHTTPRespFld
+
+[Field: TBSHTTPRespFld]
+    Set as  : $STATUS
+    XML Tag : "STATUS"
