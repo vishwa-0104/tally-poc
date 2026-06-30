@@ -1,8 +1,8 @@
 ; TallySyncBridge.tdl — TallyBillSync Dashboard Data Provider
 ;
-; ─── HOW TO LOAD ────────────────────────────────────────────────────────────
+; HOW TO LOAD
 ;
-; Tally Prime:
+; TallyPrime:
 ;   Gateway of Tally > F12 Configure > TDL & Add-on
 ;   Click "Add TDL File" and browse to this file.
 ;
@@ -12,8 +12,6 @@
 ;   In "List of TDL Files" add the full path to this file.
 ;
 ; Restart Tally after loading.
-;
-; ────────────────────────────────────────────────────────────────────────────
 
 [Collection: TBSVouchers]
     Type        : Voucher
@@ -46,21 +44,11 @@
     Fetch       : Date, VoucherTypeName
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
 
-; ═════════════════════════════════════════════════════════════════════════════
-; GATEWAY TEST-PUSH  —  one-click "does the pipe to TallyBillSync work?"
-; ─────────────────────────────────────────────────────────────────────────────
-; Adds a "TBS Test Push" line to the Gateway of Tally menu (shortcut: T).
-; Selecting it POSTs a tiny JSON payload to the TallyBillSync server and shows
-; the server's reply in a message box.
-;
-; WHY THIS SHAPE (earlier attempts failed for two reasons):
-;   1. Gateway of Tally is a MENU, not a Form — so the entry must be a menu item
-;      (Add : Key Item), not a Form button. No Form named "Gateway of Tally"
-;      exists, which is why the button never appeared.
-;   2. There is no "HTTPPOST" function step in TDL. The supported way to send
-;      data out is a Collection with `Data Source : HTTP JSON`; walking that
-;      collection performs the POST and reads the response back.
-; ═════════════════════════════════════════════════════════════════════════════
+; =============================================================================
+; GATEWAY TEST-PUSH
+; Adds "TBS Test Push" to Gateway of Tally menu (key: T).
+; Walk Collection fires the HTTP POST from Menu context (confirmed working).
+; =============================================================================
 
 [#Menu: Gateway of Tally]
     Add : Key Item : TBS Test Push : T : Call : TBSTestPush
@@ -70,19 +58,16 @@
     01 : Set  : TBSGotResp : No
     02 : Walk Collection : TBSPushResp
     03 :     Set : TBSGotResp : Yes
-    04 :     Msg Box : "TallyBillSync — Server Reply" : "Status: " + $$String:$Status + "   Message: " + $$String:$Message
+    04 :     Msg Box : "TallyBillSync" : "Status: " + $$String:$Status + "   Message: " + $$String:$Message
     05 : End Walk
     06 : If : Not ##TBSGotResp
-    07 :     Msg Box : "TallyBillSync" : "Push fired but no rows parsed from the reply. Open the backend console and look for the [TallyHook] banner to confirm it arrived."
+    07 :     Msg Box : "TallyBillSync" : "No response from server. Check backend is running."
     08 : End If
 
-; Walking this collection fires the HTTP POST. The request body is the rendered
-; JSON of report TBSPushReq; the JSON response is parsed back into these rows.
 [Collection: TBSPushResp]
     Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
     RemoteRequest : TBSPushReq : UTF8
 
-; Request payload → { "test": "true", "company": "<current company>" }
 [Report: TBSPushReq]
     Form       : TBSPushReq
     Plain JSON : Yes
@@ -104,112 +89,62 @@
     Set as  : ##SVCurrentCompany
     JSONTag : "company"
 
-; ═════════════════════════════════════════════════════════════════════════════
-; ON-SAVE PUSH  —  fires automatically when any voucher is saved in Tally
-; ─────────────────────────────────────────────────────────────────────────────
-; Hooks into the Voucher form's Accept event. Every time a voucher is saved,
-; TBSOnSavePush fires and POSTs the voucher details to TallyBillSync.
+; =============================================================================
+; VOUCHER PUSH — fires on Alt+B button OR automatically on every voucher save
 ;
-; WHY VARIABLES: The RemoteRequest report renders outside the voucher object
-; context, so $GUID/$Date/etc. are blank there. We capture them first inside
-; the function (which runs IN the voucher form context), store in global
-; Variables, then the report fields read those Variables.
-; ═════════════════════════════════════════════════════════════════════════════
+; WHY HTTP Post action (not Walk Collection):
+;   Walk Collection with Data Source:HTTP JSON works only in Menu context.
+;   From a Form button or On:Accept, the HTTP Post ACTION is the right primitive.
+;   The request report runs inside the Voucher form — $GUID/$Date/etc. resolve
+;   directly without needing Variables.
+; =============================================================================
 
-[Variable: TBSVarGuid]
-    Type    : String
-
-[Variable: TBSVarDate]
-    Type    : String
-
-[Variable: TBSVarType]
-    Type    : String
-
-[Variable: TBSVarParty]
-    Type    : String
-
-[Variable: TBSVarNo]
-    Type    : String
-
-[Variable: TBSVarAmt]
-    Type    : String
-
-[Variable: TBSVarAlterID]
-    Type    : String
-
-; Button gives a manual fallback AND confirms [#Form: Voucher] is hooked in.
-; If the button appears in the voucher screen, the form hook is working.
-; If pressing the button shows the MsgBox but On:Accept never does, the event name is wrong.
 [#Form: Voucher]
     Add : Button : TBSVoucherBtn
-    On  : Accept : Yes : Call : TBSOnSavePush
+    On  : Accept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : Call : TBSOnSavePush
+    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq
 
-; WHY XML NOT JSON: Plain JSON:Yes requires a Repeat over a collection to produce
-; field output — standalone variables produce an empty ENVELOPE. XML is Tally's
-; native report format and populates fields correctly in the On:Accept context.
-; Server parses the XML with regex — no extra npm packages needed.
+[Report: TBSVoucherXMLReq]
+    Form : TBSVoucherXMLReq
 
-[Function: TBSOnSavePush]
-    01 : Msg Box : "TBS Debug" : "TBSOnSavePush called"
-    02 : SET : TBSVarGuid    : $GUID
-    03 : SET : TBSVarDate    : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
-    04 : SET : TBSVarType    : $VoucherTypeName
-    05 : SET : TBSVarParty   : $PartyLedgerName
-    06 : SET : TBSVarNo      : $VoucherNumber
-    07 : SET : TBSVarAmt     : $$String:$Amount
-    08 : SET : TBSVarAlterID : $$String:$AlterID
-    ; Temporarily walk the test collection (Plain JSON:Yes) to confirm
-    ; HTTP fires from this context — if server gets a hit, Plain JSON:Yes is required
-    09 : Walk Collection : TBSPushResp
-    10 : End Walk
-
-[Collection: TBSVoucherPushResp]
-    Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
-    RemoteRequest : TBSVoucherPushReq : UTF8
-
-; No Plain JSON:Yes — sends raw XML so Tally populates the fields
-[Report: TBSVoucherPushReq]
-    Form : TBSVoucherPushReq
-
-[Form: TBSVoucherPushReq]
-    Part    : TBSVoucherPushReq
+[Form: TBSVoucherXMLReq]
+    Part    : TBSVoucherXMLPart
     XML Tag : "TBSVOUCHER"
 
-[Part: TBSVoucherPushReq]
-    Line : TBSVoucherPushReq
+[Part: TBSVoucherXMLPart]
+    Line : TBSVoucherXMLLine
 
-[Line: TBSVoucherPushReq]
-    Fields : TBSVGuid, TBSVDate, TBSVType, TBSVParty, TBSVNo, TBSVAmt, TBSVAlterID
+[Line: TBSVoucherXMLLine]
+    Fields : TBSXGuid, TBSXDate, TBSXType, TBSXParty, TBSXNo, TBSXAmt, TBSXAlterID
 
-[Field: TBSVGuid]
-    Set as  : ##TBSVarGuid
+[Field: TBSXGuid]
+    Set as  : $GUID
     XML Tag : "GUID"
 
-[Field: TBSVDate]
-    Set as  : ##TBSVarDate
+[Field: TBSXDate]
+    Set as  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
     XML Tag : "DATE"
 
-[Field: TBSVType]
-    Set as  : ##TBSVarType
+[Field: TBSXType]
+    Set as  : $VoucherTypeName
     XML Tag : "TYPE"
 
-[Field: TBSVParty]
-    Set as  : ##TBSVarParty
+[Field: TBSXParty]
+    Set as  : $PartyLedgerName
     XML Tag : "PARTY"
 
-[Field: TBSVNo]
-    Set as  : ##TBSVarNo
+[Field: TBSXNo]
+    Set as  : $VoucherNumber
     XML Tag : "VOUCHERNO"
 
-[Field: TBSVAmt]
-    Set as  : ##TBSVarAmt
+[Field: TBSXAmt]
+    Set as  : $$String:$Amount
     XML Tag : "AMOUNT"
 
-[Field: TBSVAlterID]
-    Set as  : ##TBSVarAlterID
+[Field: TBSXAlterID]
+    Set as  : $$String:$AlterID
     XML Tag : "ALTERID"
