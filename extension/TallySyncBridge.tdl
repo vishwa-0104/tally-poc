@@ -103,88 +103,42 @@
 ;   For CREATE (new voucher), GUID is empty at Load (assigned only on save).
 ; =============================================================================
 
-[Variable: TBSVG]
-    Type    : String
-    Default : ""
-
-[Variable: TBSVD]
-    Type    : String
-    Default : ""
-
-[Variable: TBSVT]
-    Type    : String
-    Default : ""
-
-[Variable: TBSVP]
-    Type    : String
-    Default : ""
-
-[Variable: TBSVN]
-    Type    : String
-    Default : ""
-
-[Variable: TBSVA]
-    Type    : String
-    Default : ""
-
-[Variable: TBSVAI]
-    Type    : String
-    Default : ""
-
-; Single-row collection — Company type always has exactly one object.
-; Used in Repeat to force the request report Part to produce output rows.
-[Collection: TBSSingleRow]
-    Type : Company
 
 [#Form: Voucher]
     Add : Button     : TBSVoucherBtn
-    On  : Load       : Yes : Call      : TBSCaptureVoucher
-    On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
+    On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : UTF8 : TBSVoucherJSONReq : TBSHTTPResp
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPResp
+    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : UTF8 : TBSVoucherJSONReq : TBSHTTPResp
 
-; Runs on form Load — $GUID/$Date/etc. resolve here because the form object is live
-[Function: TBSCaptureVoucher]
-    01 : SET : TBSVG  : $GUID
-    02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
-    03 : SET : TBSVT  : $VoucherTypeName
-    04 : SET : TBSVP  : $PartyLedgerName
-    05 : SET : TBSVN  : $VoucherNumber
-    06 : SET : TBSVA  : $$String:$Amount
-    07 : SET : TBSVAI : $$String:$AlterID
+; Plain JSON uses a different TDL rendering path than XML.
+; The Gateway Test Push RemoteRequest with Plain JSON produced {"ENVELOPE":{}}
+; (at least the envelope rendered), while XML HTTP Post gives empty content.
+; Testing if Plain JSON path renders field values where XML path does not.
+[Report: TBSVoucherJSONReq]
+    Form       : TBSVoucherJSONReq
+    Plain JSON : Yes
+    Object     : Voucher
 
-; Object: Voucher tells TDL to inherit the calling Voucher form's object
-; context into the request report. Without this, the Report renders in
-; isolation — no object → Lines produce no output, even for static fields.
-[Report: TBSVoucherXMLReq]
-    Form   : TBSVoucherXMLReq
-    Object : Voucher
+[Form: TBSVoucherJSONReq]
+    Part     : TBSVoucherJSONPart
+    JSON Tag : "voucher"
 
-[Form: TBSVoucherXMLReq]
-    Part    : TBSVoucherXMLPart
-    XML Tag : "TBSVOUCHER"
+[Part: TBSVoucherJSONPart]
+    Line : TBSVoucherJSONLine
 
-[Part: TBSVoucherXMLPart]
-    Line : TBSVoucherXMLLine
+[Line: TBSVoucherJSONLine]
+    Fields : TBSJStatic, TBSJGuid
 
-[Line: TBSVoucherXMLLine]
-    Fields : TBSXStatic, TBSXGuid
+[Field: TBSJStatic]
+    Set as   : "HELLO"
+    JSON Tag : "ping"
 
-; Two fields together: static + live GUID.
-; If server sees <PING>HELLO</PING> but empty <GUID> → context works
-;   but $GUID isn't in scope, need Variables.
-; If both have values → done.
-; If both empty → Object: Voucher didn't help, need a different fix.
-[Field: TBSXStatic]
-    Set as  : "HELLO"
-    XML Tag : "PING"
-
-[Field: TBSXGuid]
-    Set as  : $GUID
-    XML Tag : "GUID"
+[Field: TBSJGuid]
+    Set as   : $GUID
+    JSON Tag : "guid"
 
 [Report: TBSHTTPResp]
     Form : TBSHTTPResp
