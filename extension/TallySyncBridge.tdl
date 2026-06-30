@@ -146,15 +146,16 @@
 ; Server parses the XML with regex — no extra npm packages needed.
 
 [Function: TBSOnSavePush]
-    01 : SET : TBSVarGuid    : $GUID
-    02 : SET : TBSVarDate    : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
-    03 : SET : TBSVarType    : $VoucherTypeName
-    04 : SET : TBSVarParty   : $PartyLedgerName
-    05 : SET : TBSVarNo      : $VoucherNumber
-    06 : SET : TBSVarAmt     : $$String:$Amount
-    07 : SET : TBSVarAlterID : $$String:$AlterID
-    08 : Walk Collection : TBSVoucherPushResp
-    09 : End Walk
+    01 : Msg Box : "TBS Debug" : "OnSave fired! GUID=" + $GUID
+    02 : SET : TBSVarGuid    : $GUID
+    03 : SET : TBSVarDate    : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    04 : SET : TBSVarType    : $VoucherTypeName
+    05 : SET : TBSVarParty   : $PartyLedgerName
+    06 : SET : TBSVarNo      : $VoucherNumber
+    07 : SET : TBSVarAmt     : $$String:$Amount
+    08 : SET : TBSVarAlterID : $$String:$AlterID
+    09 : Walk Collection : TBSVoucherPushResp
+    10 : End Walk
 
 [Collection: TBSVoucherPushResp]
     Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
