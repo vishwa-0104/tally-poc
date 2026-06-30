@@ -164,17 +164,17 @@
     XML Tag : "TBSVOUCHER"
 
 [Part: TBSVoucherXMLPart]
-    Line   : TBSVoucherXMLLine
-    Repeat : TBSVoucherXMLLine : TBSSingleRow
+    Line : TBSVoucherXMLLine
 
+; No Repeat — Line should render once unconditionally.
+; Field has a hardcoded static value: if <PING>HELLO</PING> appears in the
+; server log, the Part/Line renders and the issue is purely variable/context.
+; If still empty, TDL suppresses fields with no object context even for statics.
 [Line: TBSVoucherXMLLine]
     Fields : TBSXStatic
 
-; Static field test — if server sees <PING>HELLO_FROM_TDL</PING> inside
-; <TBSVOUCHER>, the Repeat is working and the problem is variable resolution.
-; If still empty, the Repeat itself is not producing rows.
 [Field: TBSXStatic]
-    Set as  : "HELLO_FROM_TDL"
+    Set as  : "HELLO"
     XML Tag : "PING"
 
 [Report: TBSHTTPResp]
