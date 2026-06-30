@@ -163,7 +163,9 @@
     06 : SET : TBSVarNo      : $VoucherNumber
     07 : SET : TBSVarAmt     : $$String:$Amount
     08 : SET : TBSVarAlterID : $$String:$AlterID
-    09 : Walk Collection : TBSVoucherPushResp
+    ; Temporarily walk the test collection (Plain JSON:Yes) to confirm
+    ; HTTP fires from this context — if server gets a hit, Plain JSON:Yes is required
+    09 : Walk Collection : TBSPushResp
     10 : End Walk
 
 [Collection: TBSVoucherPushResp]
