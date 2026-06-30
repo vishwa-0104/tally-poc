@@ -140,6 +140,11 @@
 [#Form: Voucher]
     On : Accept : Yes : Call : TBSOnSavePush
 
+; WHY XML NOT JSON: Plain JSON:Yes requires a Repeat over a collection to produce
+; field output — standalone variables produce an empty ENVELOPE. XML is Tally's
+; native report format and populates fields correctly in the On:Accept context.
+; Server parses the XML with regex — no extra npm packages needed.
+
 [Function: TBSOnSavePush]
     01 : SET : TBSVarGuid    : $GUID
     02 : SET : TBSVarDate    : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
@@ -155,12 +160,13 @@
     Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
     RemoteRequest : TBSVoucherPushReq : UTF8
 
+; No Plain JSON:Yes — sends raw XML so Tally populates the fields
 [Report: TBSVoucherPushReq]
-    Form       : TBSVoucherPushReq
-    Plain JSON : Yes
+    Form : TBSVoucherPushReq
 
 [Form: TBSVoucherPushReq]
-    Part : TBSVoucherPushReq
+    Part    : TBSVoucherPushReq
+    XML Tag : "TBSVOUCHER"
 
 [Part: TBSVoucherPushReq]
     Line : TBSVoucherPushReq
@@ -170,28 +176,28 @@
 
 [Field: TBSVGuid]
     Set as  : ##TBSVarGuid
-    JSONTag : "guid"
+    XML Tag : "GUID"
 
 [Field: TBSVDate]
     Set as  : ##TBSVarDate
-    JSONTag : "date"
+    XML Tag : "DATE"
 
 [Field: TBSVType]
     Set as  : ##TBSVarType
-    JSONTag : "type"
+    XML Tag : "TYPE"
 
 [Field: TBSVParty]
     Set as  : ##TBSVarParty
-    JSONTag : "party"
+    XML Tag : "PARTY"
 
 [Field: TBSVNo]
     Set as  : ##TBSVarNo
-    JSONTag : "voucherNo"
+    XML Tag : "VOUCHERNO"
 
 [Field: TBSVAmt]
     Set as  : ##TBSVarAmt
-    JSONTag : "amount"
+    XML Tag : "AMOUNT"
 
 [Field: TBSVAlterID]
     Set as  : ##TBSVarAlterID
-    JSONTag : "alterId"
+    XML Tag : "ALTERID"

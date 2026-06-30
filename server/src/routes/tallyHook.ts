@@ -2,31 +2,60 @@ import { Router, Request, Response, text } from 'express'
 
 export const tallyHookRouter = Router()
 
-// Tally's HTTP JSON data source may POST without an `application/json` content-type,
-// which the global express.json() would skip. Capture those bodies as raw text so
-// nothing is lost; JSON bodies are still parsed by the global middleware.
-const captureRawIfNotJson = text({
-  type: (req) => !(req.headers['content-type'] || '').toLowerCase().includes('json'),
+// Accept any content-type — Tally sends XML (text/xml) without Plain JSON:Yes,
+// or JSON (application/json) with Plain JSON:Yes. The global express.json()
+// middleware already handles JSON; this catches everything else as raw text.
+const captureRaw = text({
+  type: () => true,
   limit: '20mb',
 })
 
-tallyHookRouter.post('/tally-hook', captureRawIfNotJson, (req: Request, res: Response) => {
-  let body: any = req.body
-  if (typeof body === 'string' && body.trim()) {
-    try {
-      body = JSON.parse(body)
-    } catch {
-      // leave as raw string — still logged below
-    }
+function extractXml(xml: string, tag: string): string {
+  const m = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'))
+  return m ? m[1].trim() : ''
+}
+
+function parseBody(req: Request): Record<string, any> {
+  const raw: any = req.body
+  if (raw && typeof raw === 'object') return raw   // already parsed as JSON
+
+  const str = typeof raw === 'string' ? raw : ''
+  if (!str) return {}
+
+  // Try JSON first (fallback)
+  try { return JSON.parse(str) } catch {}
+
+  // Tally XML — pull the fields we care about
+  return {
+    guid:      extractXml(str, 'GUID')      || null,
+    alterId:   extractXml(str, 'ALTERID')   || null,
+    date:      extractXml(str, 'DATE')      || null,
+    type:      extractXml(str, 'TYPE')      || null,
+    party:     extractXml(str, 'PARTY')     || null,
+    voucherNo: extractXml(str, 'VOUCHERNO') || null,
+    amount:    extractXml(str, 'AMOUNT')    || null,
+    test:      extractXml(str, 'TEST')      || null,
+    company:   extractXml(str, 'COMPANY')   || null,
+    rawXml:    str,
   }
+}
+
+tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) => {
+  const body = parseBody(req)
 
   console.log('='.repeat(60))
   console.log('[TallyHook] Received push from Tally')
   console.log('[TallyHook] Content-Type:', req.headers['content-type'] ?? '(none)')
-  console.log('[TallyHook] Body:', JSON.stringify(body, null, 2))
+  console.log('[TallyHook] guid       :', body.guid)
+  console.log('[TallyHook] alterId    :', body.alterId)
+  console.log('[TallyHook] date       :', body.date)
+  console.log('[TallyHook] type       :', body.type)
+  console.log('[TallyHook] party      :', body.party)
+  console.log('[TallyHook] voucherNo  :', body.voucherNo)
+  console.log('[TallyHook] amount     :', body.amount)
+  if (body.test) console.log('[TallyHook] TEST PUSH — company:', body.company)
   console.log('='.repeat(60))
 
-  // Reply as a one-element JSON array so the Tally collection (Plain JSON) can
-  // parse it back into a row exposing $Status and $Message in the Msg Box.
+  // JSON array so the Tally collection can parse Status/Message back
   res.json([{ Status: '1', Message: 'Received by TallyBillSync' }])
 })
