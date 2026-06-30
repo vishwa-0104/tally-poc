@@ -1,11 +1,7 @@
 ; TallySyncBridge.tdl — TallyBillSync Dashboard Data Provider
 ;
 ; HOW TO LOAD
-;
-; TallyPrime:
-;   Gateway of Tally > F12 Configure > TDL & Add-on
-;   Click "Add TDL File" and browse to this file.
-;
+; TallyPrime: Gateway of Tally > F12 Configure > TDL & Add-on > Add TDL File
 ; Restart Tally after loading.
 
 [Collection: TBSVouchers]
@@ -40,7 +36,8 @@
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
 
 ; =============================================================================
-; GATEWAY TEST-PUSH — Walk Collection fires HTTP from Menu context (confirmed)
+; GATEWAY TEST-PUSH
+; Walk Collection works in Menu context (confirmed). Uses it to test the pipe.
 ; =============================================================================
 
 [#Menu: Gateway of Tally]
@@ -83,17 +80,21 @@
     JSONTag : "company"
 
 ; =============================================================================
-; VOUCHER PUSH — button (Alt+B) on the Voucher form
+; VOUCHER PUSH
 ;
-; WHY this shape:
-;   HTTP Post action fires from Form context (confirmed working).
-;   BUT the request report renders outside the voucher object — so $GUID/$Date
-;   are empty. Fix: button calls a Function (which runs IN the voucher context),
-;   function captures fields into global Variables, then fires HTTP Post as a
-;   function step. Report reads the Variables instead of $GUID directly.
+; Confirmed facts from testing:
+;   - HTTP Post as a button Action DOES fire the HTTP request.
+;   - HTTP Post as a Function step does NOT fire (button goes dead).
+;   - Walk Collection works in Menu context but NOT in Form button context.
+;   - $GUID/$Date etc. are empty in the request report because HTTP Post
+;     renders the report standalone, outside the Voucher object context.
 ;
-;   On:Accept auto-save is kept but TallyPrime may restrict that event —
-;   the button (Alt+B) is the reliable fallback.
+; Fix for empty fields: capture data into global Variables via a function
+; called from On:Load (when the voucher form opens). The button then fires
+; HTTP Post with a report that reads those Variables.
+;
+; On:Load is tried here alongside On:Accept. If On:Load fires, Variables
+; will be populated by the time the user clicks the button or saves.
 ; =============================================================================
 
 [Variable: TBSVG]
@@ -118,15 +119,17 @@
     Type : String
 
 [#Form: Voucher]
-    Add : Button : TBSVoucherBtn
-    On  : Accept : Yes : Call : TBSOnSavePush
+    Add : Button   : TBSVoucherBtn
+    On  : Load     : Yes : Call : TBSCaptureVoucher
+    On  : Accept   : Yes : Call : TBSCaptureAndPush
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : Call : TBSOnSavePush
+    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq
 
-[Function: TBSOnSavePush]
+; Capture voucher fields into global Variables (runs in voucher form context)
+[Function: TBSCaptureVoucher]
     01 : SET : TBSVG  : $GUID
     02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
     03 : SET : TBSVT  : $VoucherTypeName
@@ -134,7 +137,18 @@
     05 : SET : TBSVN  : $VoucherNumber
     06 : SET : TBSVA  : $$String:$Amount
     07 : SET : TBSVAI : $$String:$AlterID
-    08 : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSVoucherXMLReq : TBSHTTPErr : TBSHTTPOk
+
+; On save: capture latest data then push (Walk Collection works here if called
+; from a non-form context — but we try it anyway; worst case button covers it)
+[Function: TBSCaptureAndPush]
+    01 : SET : TBSVG  : $GUID
+    02 : SET : TBSVD  : $$DatetoStr:$Date:"%DD%-%MM%-%YYYY%"
+    03 : SET : TBSVT  : $VoucherTypeName
+    04 : SET : TBSVP  : $PartyLedgerName
+    05 : SET : TBSVN  : $VoucherNumber
+    06 : SET : TBSVA  : $$String:$Amount
+    07 : SET : TBSVAI : $$String:$AlterID
+    08 : Walk Collection : TBSPushResp
 
 [Report: TBSVoucherXMLReq]
     Form : TBSVoucherXMLReq
@@ -176,25 +190,3 @@
 [Field: TBSXAlterID]
     Set as  : ##TBSVAI
     XML Tag : "ALTERID"
-
-; Minimal success/error reports so Tally does not show "Invalid data" dialog
-[Report: TBSHTTPOk]
-    Form : TBSHTTPOk
-
-[Form: TBSHTTPOk]
-    Part : TBSHTTPPart
-
-[Part: TBSHTTPPart]
-    Line : TBSHTTPLine
-
-[Line: TBSHTTPLine]
-    Fields : TBSHTTPMsg
-
-[Field: TBSHTTPMsg]
-    Set as : "Synced"
-
-[Report: TBSHTTPErr]
-    Form : TBSHTTPErr
-
-[Form: TBSHTTPErr]
-    Part : TBSHTTPPart
