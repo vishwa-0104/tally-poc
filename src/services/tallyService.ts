@@ -125,6 +125,7 @@ export interface TallyVoucher {
   amount:           number  // total including GST (party ledger value)
   taxableAmount:    number  // amount minus CGST/SGST/IGST/Cess
   voucherNo:        string
+  alterId?:         string  // Tally's ALTERID — changes on every edit, useful for diffing/dedup
   hasSalesLedger?:  boolean // true when a configured sales account ledger appears in this voucher
   salesLedger?:     string  // matched sales account ledger name (set when salesAccounts is configured)
   purchaseLedger?:  string  // matched purchase account ledger name (set when purchaseAccounts is configured)

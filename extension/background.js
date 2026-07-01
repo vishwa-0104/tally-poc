@@ -1032,7 +1032,7 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
       console.log(`[PurchaseDebug] date=${date} type="${type}" voucherNo="${voucherNo}" party="${party}" | amount=${amount.toFixed(2)} gstTotal=${gstTotal.toFixed(2)} taxable=${taxableAmount.toFixed(2)}${gstLedgers ? ` | GST: [${gstLedgers}]` : ' | ⚠️ NO GST LEDGERS FOUND'}`)
     }
 
-    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, hasSalesLedger, salesLedger: salesLedger || undefined, purchaseLedger: purchaseLedger || undefined })
+    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, alterId, hasSalesLedger, salesLedger: salesLedger || undefined, purchaseLedger: purchaseLedger || undefined })
 
     // ── Item aggregation for Top Performing Items ──────────────────────────
     // Only count inventory entries from sales vouchers within the date range.
