@@ -98,7 +98,7 @@
 
 [#Form: Voucher]
     Add : Button : TBSVoucherBtn
-    On  : Accept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSNotifyReq
+    On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSNotifyReq
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"

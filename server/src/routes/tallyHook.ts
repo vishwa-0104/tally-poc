@@ -64,6 +64,13 @@ tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) =>
   }
   console.log('='.repeat(60))
 
-  // Walk Collection (Data Source:HTTP JSON) needs JSON back to parse rows.
-  res.json([{ Status: '1', Message: 'Received by TallyBillSync' }])
+  const contentType = req.headers['content-type'] ?? ''
+  if (contentType.includes('json')) {
+    // Walk Collection (Data Source:HTTP JSON, Plain JSON:Yes) needs JSON back to parse rows.
+    res.json([{ Status: '1', Message: 'Received by TallyBillSync' }])
+  } else {
+    // Plain HTTP Post action (ASCII/XML) — Tally expects a valid XML body back,
+    // otherwise it shows "Invalid data. Could not process XML format".
+    res.type('text/xml').send('<RESPONSE><STATUS>1</STATUS><MESSAGE>Received by TallyBillSync</MESSAGE></RESPONSE>')
+  }
 })
