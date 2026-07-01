@@ -1,7 +1,16 @@
 ; TallySyncBridge.tdl — TallyBillSync Dashboard Data Provider
 ;
 ; HOW TO LOAD
-; TallyPrime: Gateway of Tally > F12 Configure > TDL & Add-on > Add TDL File
+;
+; TallyPrime:
+;   Gateway of Tally > F12 Configure > TDL & Add-on
+;   Click "Add TDL File" and browse to this file.
+;
+; Tally ERP 9:
+;   Gateway of Tally > F12 Configure > TDL Configuration
+;   Set "Load TDL files on startup" = Yes
+;   In "List of TDL Files" add the full path to this file.
+;
 ; Restart Tally after loading.
 
 [Collection: TBSVouchers]
@@ -36,7 +45,9 @@
     Fetch       : AllInventoryEntries.StockItemName, AllInventoryEntries.Amount
 
 ; =============================================================================
-; GATEWAY TEST-PUSH (Walk Collection in Menu context — confirmed working)
+; GATEWAY TEST-PUSH
+; Adds "TBS Test Push" to Gateway of Tally menu (key: T).
+; Walk Collection fires the HTTP POST from Menu context (confirmed working).
 ; =============================================================================
 
 [#Menu: Gateway of Tally]
@@ -50,7 +61,7 @@
     04 :     Msg Box : "TallyBillSync" : "Status: " + $$String:$Status + "   Message: " + $$String:$Message
     05 : End Walk
     06 : If : Not ##TBSGotResp
-    07 :     Msg Box : "TallyBillSync" : "No response. Check backend is running."
+    07 :     Msg Box : "TallyBillSync" : "No response from server. Check backend is running."
     08 : End If
 
 [Collection: TBSPushResp]
@@ -79,74 +90,34 @@
     JSONTag : "company"
 
 ; =============================================================================
-; VOUCHER PUSH
-;
-; Root cause of empty <TBSVOUCHER></TBSVOUCHER>:
-;   Without Repeat over a collection, TDL's report engine produces zero rows —
-;   no fields are ever evaluated, so all output is empty regardless of $field
-;   or ##Variable values.
-;
-; Fix:
-;   1. TBSSingleRow collection (Type:Company) has exactly 1 object.
-;      Repeat: over it forces one row to render, making fields evaluate.
-;   2. Fields read global Variables (##TBSVG etc.) — independent of the
-;      Company object being iterated, Variables resolve to their stored value.
-;   3. On:Load captures Variables while $GUID/$Date/etc. are live in the
-;      form context. On:Load and On:FormAccept are DIFFERENT events — no
-;      conflict, both can be declared on the same [#Form: Voucher].
-;   4. On:FormAccept fires HTTP Post which renders the report (1 row via
-;      Company Repeat) — Variables populated by On:Load are now in the output.
-;   5. Button (Alt+B) fires the same HTTP Post for manual push.
-;
-; Limitation: Variables are captured on form Load, not on every keystroke.
-;   For ALTER (editing existing voucher), GUID/AlterID are correct from Load.
-;   For CREATE (new voucher), GUID is empty at Load (assigned only on save).
+; VOUCHER SAVE NOTIFY — fires on Alt+B button OR automatically on every voucher
+; save. No voucher field extraction — just a bare signal to the server. The
+; server decides what to do next (e.g. pull the day's daybook directly from
+; Tally itself and console.log it).
 ; =============================================================================
 
-
-; URL query-string approach: $GUID/$Date/etc. are evaluated as expressions
-; in the calling Voucher form context (where the object IS live), not inside
-; the request report renderer (where they were always empty).
-; Body stays empty — all data travels in the URL.
 [#Form: Voucher]
-    Add : Button     : TBSVoucherBtn
-    On  : FormAccept : Yes : HTTP Post : ("http://127.0.0.1/api/tally-hook?g=" + $GUID + "&d=" + $$DateToStr:$Date:"%DD%-%MM%-%YYYY%" + "&t=" + $VoucherTypeName + "&p=" + $PartyLedgerName + "&n=" + $VoucherNumber + "&a=" + $$String:$Amount + "&ai=" + $$String:$AlterID) : ASCII : TBSSignalReq : TBSHTTPResp
+    Add : Button : TBSVoucherBtn
+    On  : Accept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSNotifyReq
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : HTTP Post : ("http://127.0.0.1/api/tally-hook?g=" + $GUID + "&d=" + $$DateToStr:$Date:"%DD%-%MM%-%YYYY%" + "&t=" + $VoucherTypeName + "&p=" + $PartyLedgerName + "&n=" + $VoucherNumber + "&a=" + $$String:$Amount + "&ai=" + $$String:$AlterID) : ASCII : TBSSignalReq : TBSHTTPResp
+    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSNotifyReq
 
-; Minimal body — just a signal marker, data is in the URL query string
-[Report: TBSSignalReq]
-    Form : TBSSignalReq
+[Report: TBSNotifyReq]
+    Form : TBSNotifyReq
 
-[Form: TBSSignalReq]
-    Parts   : TBSSignalPart
-    XML Tag : "S"
+[Form: TBSNotifyReq]
+    Part    : TBSNotifyPart
+    XML Tag : "TBSNOTIFY"
 
-[Part: TBSSignalPart]
-    Lines : TBSSignalLine
+[Part: TBSNotifyPart]
+    Line : TBSNotifyLine
 
-[Line: TBSSignalLine]
-    Fields : TBSSignalField
+[Line: TBSNotifyLine]
+    Fields : TBSNotifyField
 
-[Field: TBSSignalField]
+[Field: TBSNotifyField]
     Set as  : "1"
-    XML Tag : "P"
-
-[Report: TBSHTTPResp]
-    Form : TBSHTTPResp
-
-[Form: TBSHTTPResp]
-    Part : TBSHTTPRespPart
-
-[Part: TBSHTTPRespPart]
-    Line : TBSHTTPRespLine
-
-[Line: TBSHTTPRespLine]
-    Fields : TBSHTTPRespFld
-
-[Field: TBSHTTPRespFld]
-    Set as  : $STATUS
-    XML Tag : "STATUS"
+    XML Tag : "SAVED"
