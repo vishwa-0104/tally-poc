@@ -1,5 +1,5 @@
 [#Form: Voucher]
-;; Triggers when the voucher is saved or altered
+;; Trigger when the voucher is saved
 Add: On: Form Accept: Yes: Call: PushVoucherWebhook
 
 [Function: PushVoucherWebhook]
@@ -7,30 +7,20 @@ Variable: WebhookURL : String
 
 00: Set: WebhookURL : "http://127.0.0.1/api/tally-hook"
 
-;; Syntax: HTTP Request : URL : Method : Format : Encoding : RequestReport : PostActionFunc
-;; We point directly to our custom 'MyStaticTextReport' defined below
-10: HTTP Request: ##WebhookURL : "POST" : "JSON" : "ASCII" : "MyStaticTextReport" : HandleWebhookResponse
+;; FIX: Instead of a Report, we use a custom data Object with a System Formula.
+;; This bypasses the empty report validation errors entirely.
+10: HTTP Request: ##WebhookURL : "POST" : "JSON" : "ASCII" : "MyPayloadObject" : HandleWebhookResponse
 
 20: Return: Yes
 
-;; --- THE FIX: Defining the Report Structure Tally expects ---
-[Report: MyStaticTextReport]
-    Form: MyStaticTextForm
-    ;; Tells Tally to just output raw string data instead of standard JSON object envelopes
-    Plain JSON: Yes 
+;; --- THE BULLETPROOF FIX: Data Object Definition ---
+[Object: MyPayloadObject]
+    ;; We define a single key-value string using a System Formula
+    DataText : @MyStaticMessageFormula
 
-[Form: MyStaticTextForm]
-    Part: MyStaticTextPart
-
-[Part: MyStaticTextPart]
-    Line: MyStaticTextLine
-
-[Line: MyStaticTextLine]
-    Field: MyStaticTextField
-
-[Field: MyStaticTextField]
-    ;; Your plain/static text goes here
-    Set as: "SUCCESS: Voucher modified/saved in Tally. Payload transmitted successfully."
+[System: Formula]
+    ;; This is the exact raw string text sent in the POST body
+    MyStaticMessageFormula : "SUCCESS: Voucher saved. Text payload transmitted."
 
 
 [Function: HandleWebhookResponse]
