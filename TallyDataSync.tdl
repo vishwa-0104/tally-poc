@@ -1,0 +1,38 @@
+[#Form: Voucher]
+;; This hook triggers exactly when a user accepts (saves/updates) a voucher screen
+Add: On: Form Accept: Yes: Call: PushVoucherWebhook
+
+[Function: PushVoucherWebhook]
+;; Variables to capture execution state
+Variable: WebhookURL  : String
+Variable: PostData    : String
+Variable: LogResult   : String
+
+00: Set: WebhookURL : "http://127.0.0.1/api/tally-hook"
+
+;; Step 1: Define your plain text payload. 
+;; Replace this string with any dummy text or variables later.
+05: Set: PostData   : "SUCCESS: Voucher modified/saved in Tally. Syncing raw packet payload."
+
+;; Step 2: Use Tally's Native HTTP Request Action
+;; Syntax: HTTP Request : URL : Method : Format : Encoding : RequestReport : PostActionFunc
+;; We pass "JSON" or "XML" but because your endpoint accepts text() natively, 
+;; it will read the raw body buffer. We pass "" for RequestReport since we are sending a direct string variable.
+10: HTTP Request: ##WebhookURL : "POST" : "JSON" : "ASCII" : "" : HandleWebhookResponse(##PostData)
+
+20: Return: Yes
+
+[Function: HandleWebhookResponse]
+Parameter: SentPayload : String
+Variable: RespStatus   : String
+
+;; Tally implicitly populates a system collection 'Parameter Collection' with the API response.
+;; Checking if the HTTP handshake passed:
+00: Walk Collection: Parameter Collection
+10:    Set: RespStatus : $Status
+20: End Walk
+
+;; Optional: Log to Tally's internal calculator pane (Ctrl + Alt + M) for local debugging
+30: Log: "Webhook Fired with Payload: " + ##SentPayload
+40: Log: "Server Handshake Status: " + ##RespStatus
+50: Return: Yes
