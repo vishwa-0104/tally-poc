@@ -118,6 +118,19 @@ export async function createTallyLedger(payload: CreateLedgerPayload, tallyUrl: 
   return result
 }
 
+export interface VoucherLedgerEntry {
+  ledgerName:    string
+  amount:        number
+  isPartyLedger: boolean
+}
+
+export interface VoucherInventoryEntry {
+  itemName: string
+  qty:      number
+  unit:     string
+  amount:   number
+}
+
 export interface TallyVoucher {
   date:             string
   type:             string
@@ -126,9 +139,12 @@ export interface TallyVoucher {
   taxableAmount:    number  // amount minus CGST/SGST/IGST/Cess
   voucherNo:        string
   alterId?:         string  // Tally's ALTERID — changes on every edit, useful for diffing/dedup
+  guid?:            string  // Tally's GUID — stable across edits, the safe identity for versioning (voucherNo alone collides across voucher types)
   hasSalesLedger?:  boolean // true when a configured sales account ledger appears in this voucher
   salesLedger?:     string  // matched sales account ledger name (set when salesAccounts is configured)
   purchaseLedger?:  string  // matched purchase account ledger name (set when purchaseAccounts is configured)
+  ledgerEntries?:    VoucherLedgerEntry[]    // raw per-ledger detail — lets cash/bank flow etc. be recomputed later from DB
+  inventoryEntries?: VoucherInventoryEntry[] // raw per-item detail — lets Top Items be recomputed later from DB
 }
 
 export async function fetchTallyVouchers(

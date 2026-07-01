@@ -919,21 +919,177 @@ companiesRouter.post('/companies/:id/cash-book-fingerprints', async (req, res) =
   res.json({ saved: result.data.fingerprints.length })
 })
 
-// POST /api/companies/:id/daybook-log — test endpoint: console.log today's
-// parsed vouchers (client already parsed Tally's Day Book XML, which itself
-// can run into tens of MB since it doesn't scope tightly to the date range —
-// sending the compact parsed list instead avoids re-transmitting that).
-// No DB writes.
-companiesRouter.post('/companies/:id/daybook-log', async (req, res) => {
+// GET /api/companies/:id/vouchers?from=YYYY-MM-DD&to=YYYY-MM-DD — serves the
+// DB cache. Never touches Tally. `fetchedDates` lets the UI tell "genuinely
+// no vouchers that day" apart from "never fetched" for empty-state messaging.
+companiesRouter.get('/companies/:id/vouchers', async (req, res) => {
   if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
-  const result = z.object({ vouchers: z.array(z.record(z.any())) }).safeParse(req.body)
+  const from = String(req.query.from ?? '')
+  const to   = String(req.query.to ?? '')
+  if (!from || !to) { res.status(400).json({ error: 'from and to are required' }); return }
+
+  const companyId = req.params.id
+
+  const [vouchers, fetchLogs] = await Promise.all([
+    prisma.voucher.findMany({
+      where:   { companyId, isLatest: true, date: { gte: from, lte: to } },
+      include: { ledgerEntries: true, inventoryEntries: true },
+      orderBy: { date: 'asc' },
+    }),
+    prisma.voucherFetchLog.findMany({
+      where:  { companyId, date: { gte: from, lte: to } },
+      select: { date: true },
+    }),
+  ])
+
+  res.json({ vouchers, fetchedDates: fetchLogs.map((f) => f.date) })
+})
+
+const voucherLedgerEntrySchema = z.object({
+  ledgerName:    z.string(),
+  amount:        z.number(),
+  isPartyLedger: z.boolean(),
+})
+
+const voucherInventoryEntrySchema = z.object({
+  itemName: z.string(),
+  qty:      z.number(),
+  unit:     z.string(),
+  amount:   z.number(),
+})
+
+const voucherInputSchema = z.object({
+  date:             z.string(),
+  type:             z.string(),
+  party:            z.string(),
+  voucherNo:        z.string(),
+  amount:           z.number(),
+  taxableAmount:    z.number(),
+  alterId:          z.string().optional(),
+  guid:             z.string().optional(),
+  hasSalesLedger:   z.boolean().optional(),
+  salesLedger:      z.string().optional(),
+  purchaseLedger:   z.string().optional(),
+  ledgerEntries:    z.array(voucherLedgerEntrySchema).optional(),
+  inventoryEntries: z.array(voucherInventoryEntrySchema).optional(),
+})
+
+function datesBetween(from: string, to: string): string[] {
+  const dates: string[] = []
+  const cursor = new Date(`${from}T00:00:00Z`)
+  const end    = new Date(`${to}T00:00:00Z`)
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10))
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+  return dates
+}
+
+// POST /api/companies/:id/vouchers — persists a live Tally fetch (from Apply
+// or the voucher-saved notify). Append-only: a voucher whose alterId changed
+// gets a new row (old row's isLatest flips to false); unchanged vouchers are
+// skipped (idempotent — notify may refetch data unchanged since last time).
+companiesRouter.post('/companies/:id/vouchers', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const result = z.object({
+    from:     z.string(),
+    to:       z.string(),
+    vouchers: z.array(voucherInputSchema),
+  }).safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
 
-  console.log('='.repeat(60))
-  console.log('[DaybookLog] company', req.params.id, '|', result.data.vouchers.length, 'voucher(s)')
-  console.log(JSON.stringify(result.data.vouchers, null, 2))
-  console.log('='.repeat(60))
-  res.json({ ok: true })
+  const companyId = req.params.id
+  const { from, to, vouchers } = result.data
+  let inserted = 0
+  let skipped  = 0
+
+  await prisma.$transaction(async (tx) => {
+    for (const v of vouchers) {
+      const alterId     = v.alterId ?? ''
+      const identityKey = v.guid || `${v.voucherNo}::${v.type}`
+
+      const existing = await tx.voucher.findFirst({
+        where: { companyId, identityKey, isLatest: true },
+      })
+
+      if (existing && existing.alterId === alterId) { skipped++; continue }
+      if (existing) {
+        await tx.voucher.update({ where: { id: existing.id }, data: { isLatest: false } })
+      }
+
+      await tx.voucher.create({
+        data: {
+          companyId,
+          identityKey,
+          date:           v.date,
+          type:           v.type,
+          party:          v.party,
+          voucherNo:      v.voucherNo,
+          amount:         v.amount,
+          taxableAmount:  v.taxableAmount,
+          alterId,
+          guid:           v.guid,
+          hasSalesLedger: v.hasSalesLedger ?? false,
+          salesLedger:    v.salesLedger,
+          purchaseLedger: v.purchaseLedger,
+          isLatest:       true,
+          ledgerEntries:    { create: v.ledgerEntries ?? [] },
+          inventoryEntries: { create: v.inventoryEntries ?? [] },
+        },
+      })
+      inserted++
+    }
+
+    for (const date of datesBetween(from, to)) {
+      await tx.voucherFetchLog.upsert({
+        where:  { companyId_date: { companyId, date } },
+        update: { fetchedAt: new Date() },
+        create: { companyId, date },
+      })
+    }
+  }, { timeout: 30000 })
+
+  res.json({ inserted, skipped })
+})
+
+// GET/PUT /api/companies/:id/dashboard-snapshot — "current value" cache for
+// Tally queries that can't be scoped to a past date (closing balances,
+// receivables/payables, stock value, slow-stock). One row per company.
+companiesRouter.get('/companies/:id/dashboard-snapshot', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const snapshot = await prisma.dashboardSnapshot.findUnique({ where: { companyId: req.params.id } })
+  res.json(snapshot ?? null)
+})
+
+companiesRouter.put('/companies/:id/dashboard-snapshot', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.object({
+    cashInHand:         z.number().nullable().optional(),
+    bankBalance:        z.number().nullable().optional(),
+    receivables:        z.number().nullable().optional(),
+    payables:           z.number().nullable().optional(),
+    openingStock:       z.number().nullable().optional(),
+    closingStock:       z.number().nullable().optional(),
+    directExpenseTotal: z.number().nullable().optional(),
+    slowStockItems:     z.array(z.record(z.any())).optional(),
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  const companyId = req.params.id
+  const data = { ...result.data, fetchedAt: new Date() }
+  const snapshot = await prisma.dashboardSnapshot.upsert({
+    where:  { companyId },
+    update: data,
+    create: { companyId, ...data },
+  })
+  res.json(snapshot)
 })

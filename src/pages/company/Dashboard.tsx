@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -12,12 +12,17 @@ import {
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
-import { fetchSalesTargets, fetchDashboardSettings } from '@/lib/api'
+import {
+  fetchSalesTargets, fetchDashboardSettings,
+  fetchCachedVouchers, saveVouchers, fetchDashboardSnapshot, saveDashboardSnapshot,
+  type DashboardSnapshotPatch,
+} from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
 import { SalesTargetModal } from '@/components/company/SalesTargetModal'
+import { classifyVouchers } from '@/lib/voucherClassification'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -630,6 +635,7 @@ export default function Dashboard() {
   const [fetched,       setFetched]       = useState(false)
   const [error,         setError]         = useState<string | null>(null)
   const [activePeriod,  setActivePeriod]  = useState<{ from: string; to: string } | null>(null)
+  const [uncachedRange, setUncachedRange] = useState(false) // true when the DB has never seen this range — hints "click Apply"
 
   const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string, settingsOverride?: DashboardSettings) => {
     const settings = settingsOverride ?? dashboardSettings
@@ -764,6 +770,13 @@ export default function Dashboard() {
 
       // 4. Closing balances — only fetched and shown when filter is "Today".
       // Tally's ClosingBalance ignores SVTODATE so historical balances are not possible.
+      // Captured in outer-scoped lets (not just state) so the DB-persist block below
+      // can use the freshly-fetched values — reading state here would race, since
+      // setState doesn't apply synchronously within the same function execution.
+      let latestCashInHand:  number | null = null
+      let latestBankBalance: number | null = null
+      let latestReceivables: number | null = null
+      let latestPayables:    number | null = null
       if (to === todayStr()) {
         try {
           const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr()))
@@ -775,6 +788,8 @@ export default function Dashboard() {
             console.log('[Balances] cashInHand:', cashInHand, '| bankBalance:', bankBal)
             setCashInHand(cashInHand)
             setBankBalance(bankBal)
+            latestCashInHand  = cashInHand
+            latestBankBalance = bankBal
           } else {
             setCashInHand(null)
             setBankBalance(null)
@@ -790,6 +805,8 @@ export default function Dashboard() {
           console.log('[GroupBalances] receivables:', rec, '| payables:', pay)
           setReceivables(rec)
           setPayables(pay)
+          latestReceivables = rec
+          latestPayables    = pay
         } catch (err) {
           console.error('[GroupBalances] fetchGroupBalances failed:', err)
           setReceivables(null)
@@ -899,6 +916,28 @@ export default function Dashboard() {
         setNetProfit(np)
         setNetProfitPct(npPct)
       }
+
+      // Persist this live fetch to the DB — best-effort, fire-and-forget, never
+      // blocks the UI. Only include snapshot fields actually computed this run,
+      // so e.g. applying a past custom range doesn't clobber today's cached
+      // balances with nulls.
+      void saveVouchers(companyId, from, to, all).catch((err: unknown) => console.error('[Dashboard] Failed to persist vouchers:', err))
+
+      const snapshotPatch: DashboardSnapshotPatch = {
+        slowStockItems: slowResult.status === 'fulfilled' ? slowResult.value.items : [],
+      }
+      if (to === todayStr()) {
+        snapshotPatch.cashInHand  = latestCashInHand
+        snapshotPatch.bankBalance = latestBankBalance
+        snapshotPatch.receivables = latestReceivables
+        snapshotPatch.payables    = latestPayables
+      }
+      if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
+        snapshotPatch.openingStock       = stockResult.value.openingStock
+        snapshotPatch.closingStock       = stockResult.value.closingStock
+        snapshotPatch.directExpenseTotal = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
+      }
+      void saveDashboardSnapshot(companyId, snapshotPatch).catch((err: unknown) => console.error('[Dashboard] Failed to persist snapshot:', err))
     } catch (err) {
       console.error('[Dashboard] fetchData failed:', err)
       setError('no-data')
@@ -907,6 +946,151 @@ export default function Dashboard() {
       setLoading(false)
     }
   }, [connected, tallyUrl, tallyCompany, dashboardSettings])
+
+  // Reads whatever's cached in the DB for the given range — never touches
+  // Tally. Used for every tab/filter switch; Apply and the initial mount's
+  // one-time backfill are the only paths that go live (see fetchData above).
+  const loadFromDb = useCallback(async (preset: FilterPreset, cfrom: string, cto: string): Promise<{ fetchedDates: string[] }> => {
+    if (!companyId) return { fetchedDates: [] }
+    const { from, to } = getFilterDates(preset, cfrom, cto)
+    const salesSettings = dashboardSettings.today
+
+    setLoading(true)
+    setError(null)
+    try {
+      const [{ vouchers: all, fetchedDates }, snapshot] = await Promise.all([
+        fetchCachedVouchers(companyId, from, to),
+        fetchDashboardSnapshot(companyId),
+      ])
+
+      const { cashFlow, bankFlow, topItems: fetchedTopItems, indExpTotal, indIncTotal, ebitdaAddback } = classifyVouchers(
+        all,
+        {
+          salesAccounts:           salesSettings?.salesAccounts,
+          salesIncludeVouchers:    salesSettings?.salesIncludeVouchers,
+          salesExcludeVouchers:    salesSettings?.salesExcludeVouchers,
+          cashInflowLedgers:       dashboardSettings.today?.cashInflowLedgers,
+          bankLedgers:             dashboardSettings.today?.bankLedgers,
+          purchaseAccounts:        dashboardSettings.ytd?.purchaseAccounts,
+          indirectExpenseLedgers:         dashboardSettings.ytd?.indirectExpenseLedgers,
+          indirectExpenseIncludeVouchers: dashboardSettings.ytd?.indirectExpenseIncludeVouchers,
+          indirectExpenseExcludeVouchers: dashboardSettings.ytd?.indirectExpenseExcludeVouchers,
+          indirectIncomeLedgers:          dashboardSettings.ytd?.indirectIncomeLedgers,
+          indirectIncomeIncludeVouchers:  dashboardSettings.ytd?.indirectIncomeIncludeVouchers,
+          indirectIncomeExcludeVouchers:  dashboardSettings.ytd?.indirectIncomeExcludeVouchers,
+          ebitdaLedgers:                  dashboardSettings.ytd?.ebitdaLedgers,
+          ebitdaIncludeVouchers:          dashboardSettings.ytd?.ebitdaIncludeVouchers,
+          ebitdaExcludeVouchers:          dashboardSettings.ytd?.ebitdaExcludeVouchers,
+        },
+        from,
+        to,
+      )
+      setTopItems(fetchedTopItems)
+
+      const pf = dashboardSettings.ytd as PurchaseFilterSettings | undefined
+      const { purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
+      const pvIncluded = all
+        .filter(v => purchaseIncludeVouchers?.length
+          ? purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type))
+        .map(v => ({ ...v, role: 'Included' as const }))
+      const pvExcluded = all
+        .filter(v => purchaseExcludeVouchers?.length
+          ? purchaseExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /debit\s*note/i.test(v.type))
+        .map(v => ({ ...v, role: 'Excluded' as const }))
+      setPurchaseVouchers([...pvIncluded, ...pvExcluded].sort((a, b) => a.date.localeCompare(b.date)))
+
+      const totalSales = computeSalesTotal(all, salesSettings)
+      setTotal(totalSales)
+      setActivePeriod({ from, to })
+
+      const purchaseTotal = preset === 'ytd' ? computePurchaseTotal(all, dashboardSettings.ytd) : 0
+
+      setCashInflow(cashFlow.inflow)
+      setCashOutflow(cashFlow.outflow)
+      setBankInflow(bankFlow.inflow)
+      setBankOutflow(bankFlow.outflow)
+
+      // Top debtors — same logic as the live path in fetchData
+      {
+        const { salesAccounts, salesIncludeVouchers, salesExcludeVouchers } = salesSettings ?? {}
+        const base = salesAccounts?.length ? all.filter(v => v.hasSalesLedger) : all
+        const salesVouchers = base.filter(v => salesIncludeVouchers?.length
+          ? salesIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /sales/i.test(v.type) && !/credit\s*note/i.test(v.type))
+        const creditNotes = base.filter(v => salesExcludeVouchers?.length
+          ? salesExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
+          : /credit\s*note/i.test(v.type))
+        const partyMap = new Map<string, number>()
+        for (const v of salesVouchers) partyMap.set(v.party, (partyMap.get(v.party) ?? 0) + v.amount)
+        for (const v of creditNotes) partyMap.set(v.party, (partyMap.get(v.party) ?? 0) - v.amount)
+        const debtors = [...partyMap.entries()]
+          .filter(([, amt]) => amt > 0)
+          .sort(([, a], [, b]) => b - a)
+          .map(([name, amount]) => ({ name, amount }))
+        setTopDebtors(debtors)
+      }
+
+      // Snapshot fields — cached "current value" data, only meaningful for today/ytd-relevant views
+      if (to === todayStr()) {
+        setCashInHand(snapshot?.cashInHand ?? null)
+        setBankBalance(snapshot?.bankBalance ?? null)
+        setReceivables(snapshot?.receivables ?? null)
+        setPayables(snapshot?.payables ?? null)
+      } else {
+        setCashInHand(null)
+        setBankBalance(null)
+        setReceivables(null)
+        setPayables(null)
+      }
+      setSlowStock(snapshot?.slowStockItems ?? [])
+
+      if (preset === 'ytd' && snapshot?.openingStock != null && snapshot?.closingStock != null) {
+        const openingStock    = snapshot.openingStock
+        const closingStock    = snapshot.closingStock
+        const directExpenses  = snapshot.directExpenseTotal ?? 0
+        const gm    = (totalSales + closingStock) - (openingStock + purchaseTotal + directExpenses)
+        const gmPct = totalSales > 0 ? (gm / totalSales) * 100 : 0
+        const np    = gm - indExpTotal + indIncTotal
+        const npPct = totalSales > 0 ? (np / totalSales) * 100 : 0
+        const eb    = np + ebitdaAddback
+        const ebPct = totalSales > 0 ? (eb / totalSales) * 100 : 0
+        setGrossMargin(gm)
+        setGrossMarginPct(gmPct)
+        setEbitda(eb)
+        setEbitdaPct(ebPct)
+        setNetProfit(np)
+        setNetProfitPct(npPct)
+      } else {
+        setGrossMargin(null)
+        setGrossMarginPct(null)
+        setEbitda(null)
+        setEbitdaPct(null)
+        setNetProfit(null)
+        setNetProfitPct(null)
+      }
+
+      // Previous-day comparison — only from cache, never a live Tally call
+      if (preset === 'today') {
+        const yDate = new Date(); yDate.setDate(yDate.getDate() - 1)
+        const yd = fmt(yDate)
+        const { vouchers: yv } = await fetchCachedVouchers(companyId, yd, yd)
+        setPrevDaySales(yv.length > 0 ? computeSalesTotal(yv, salesSettings) : null)
+      } else {
+        setPrevDaySales(null)
+      }
+
+      setFetched(true)
+      return { fetchedDates }
+    } catch (err) {
+      console.error('[Dashboard] loadFromDb failed:', err)
+      setError('no-data')
+      return { fetchedDates: [] }
+    } finally {
+      setLoading(false)
+    }
+  }, [companyId, dashboardSettings])
 
   const reloadMeta = () => {
     if (!companyId) return
@@ -922,11 +1106,26 @@ export default function Dashboard() {
       .catch(() => ({} as DashboardSettings))
   }
 
-  // Auto-fetch today + load targets/settings on mount
-  // Settings must resolve before fetchData so saved voucher types are applied
+  // Load targets/settings on mount
   useEffect(() => {
     reloadMeta()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // DB-only read on every tab/filter-preset/custom-date change — never calls
+  // Tally. The one exception is the very first run ever for this company: if
+  // nothing has been cached yet, do a one-time live fetch to populate it
+  // (mirrors the previously-documented "auto-fetch today on mount" behavior).
+  const hasDoneInitialLoadRef = useRef(false)
+  useEffect(() => {
+    if (!companyId) return
+    loadFromDb(filterPreset, customFrom, customTo).then(({ fetchedDates }) => {
+      setUncachedRange(fetchedDates.length === 0)
+      if (!hasDoneInitialLoadRef.current) {
+        hasDoneInitialLoadRef.current = true
+        if (fetchedDates.length === 0) fetchData(filterPreset, customFrom, customTo)
+      }
+    })
+  }, [filterPreset, customFrom, customTo, companyId, dashboardSettings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab)
@@ -937,6 +1136,7 @@ export default function Dashboard() {
   }
 
   const handleApply = () => {
+    setUncachedRange(false)
     fetchData(filterPreset, customFrom, customTo)
   }
 
@@ -1224,6 +1424,14 @@ export default function Dashboard() {
               <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
                 <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
                 <p className="text-xs text-red-600">No data available. Please ensure Tally is open and click Refresh.</p>
+              </div>
+            )}
+
+            {/* Uncached range hint — DB has never seen this range; distinct from "genuinely zero vouchers" */}
+            {!error && !loading && fetched && uncachedRange && (
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                <p className="text-xs text-amber-700">No cached data for this range yet — click Apply to fetch it from Tally.</p>
               </div>
             )}
 

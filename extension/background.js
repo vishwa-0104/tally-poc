@@ -865,6 +865,8 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
     let salesLedger         = ''  // first matched sales account ledger name
     let salesLedgerTotal    = 0   // sum of all matched sales account ledger amounts
     let purchaseLedger      = ''  // first matched purchase account ledger name
+    const ledgerEntries     = []  // {ledgerName, amount, isPartyLedger}[] — persisted for DB caching, lets classification be redone later if ledger-mapping settings change
+    const inventoryEntries  = []  // {itemName, qty, unit, amount}[] — same purpose, captured unconditionally (not gated by sales/ledger filters)
     let purchaseLedgerTotal = 0   // sum of all matched purchase account ledger amounts
 
     // Collect ledger entries from ALLLEDGERENTRIES.LIST / ALLLEDGERENTRIES first,
@@ -924,6 +926,8 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
       const leAmt      = parseFloat(leAmtRaw.replace(/,/g, '')) || 0
 
       const ledgerLower = ledgerName.toLowerCase()
+
+      ledgerEntries.push({ ledgerName, amount: leAmt, isPartyLedger: isParty })
 
       // Never count a configured purchase/sales account as GST even if its name
       // contains "igst"/"cgst" etc. (e.g. "Credit Note 18% IGST" is a purchase ledger).
@@ -1032,7 +1036,25 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
       console.log(`[PurchaseDebug] date=${date} type="${type}" voucherNo="${voucherNo}" party="${party}" | amount=${amount.toFixed(2)} gstTotal=${gstTotal.toFixed(2)} taxable=${taxableAmount.toFixed(2)}${gstLedgers ? ` | GST: [${gstLedgers}]` : ' | ⚠️ NO GST LEDGERS FOUND'}`)
     }
 
-    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, alterId, hasSalesLedger, salesLedger: salesLedger || undefined, purchaseLedger: purchaseLedger || undefined })
+    // Unconditional inventory-entry capture (not gated by sales/ledger filters like
+    // the topItems aggregation below) — persisted for DB caching so Top Items can be
+    // reclassified later if ledger-mapping settings change without a fresh Tally fetch.
+    for (const ie of block.matchAll(/<ALLINVENTORYENTRIES\.LIST[^>]*>([\s\S]*?)<\/ALLINVENTORYENTRIES\.LIST>/gi)) {
+      const ieBlock  = ie[0]
+      const itemName = decode(ieBlock.match(/<STOCKITEMNAME[^>]*>([^<]+)<\/STOCKITEMNAME>/i)?.[1] ?? '')
+      if (!itemName) continue
+      const qtyRaw = decode(
+        ieBlock.match(/<BILLEDQTY[^>]*>([^<]+)<\/BILLEDQTY>/i)?.[1] ??
+        ieBlock.match(/<ACTUALQTY[^>]*>([^<]+)<\/ACTUALQTY>/i)?.[1] ?? '0'
+      )
+      const qtyNum = parseFloat(qtyRaw.replace(/,/g, '')) || 0
+      const unit   = qtyRaw.replace(/^[\d.,\s-]+/, '').trim()
+      const amtRaw = decode(ieBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+      const amt    = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
+      inventoryEntries.push({ itemName, qty: qtyNum, unit, amount: amt })
+    }
+
+    vouchers.push({ date, type, party, amount, taxableAmount, voucherNo, alterId, guid: guid || undefined, hasSalesLedger, salesLedger: salesLedger || undefined, purchaseLedger: purchaseLedger || undefined, ledgerEntries, inventoryEntries })
 
     // ── Item aggregation for Top Performing Items ──────────────────────────
     // Only count inventory entries from sales vouchers within the date range.

@@ -73,6 +73,9 @@ model Company {
   bankSyncLogs     BankSyncLog[]
   cashBookSyncLogs CashBookSyncLog[]
   salesTargets     SalesTarget[]
+  vouchers         Voucher[]
+  voucherFetchLogs VoucherFetchLog[]
+  dashboardSnapshot DashboardSnapshot?
   voucherType       String         @default("GST PURCHASE")
   syncTimestamps    Json?
   dashboardSettings Json?
@@ -279,4 +282,86 @@ model LineItem {
   amount          Float
   tallyLedger     String?
   tallyStockItem  String?
+}
+
+// Append-only voucher history — a Tally edit (new AlterID) inserts a new row
+// rather than overwriting; isLatest marks the current version per identityKey.
+// identityKey = Tally's GUID when present, else `${voucherNo}::${type}` —
+// voucherNo alone isn't safe since each voucher type numbers its own series.
+model Voucher {
+  id               String   @id @default(cuid())
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId        String
+  identityKey      String
+  date             String   // YYYY-MM-DD
+  type             String
+  party            String
+  voucherNo        String
+  amount           Float
+  taxableAmount    Float
+  alterId          String
+  guid             String?
+  hasSalesLedger   Boolean  @default(false)
+  salesLedger      String?
+  purchaseLedger   String?
+  isLatest         Boolean  @default(true)
+  fetchedAt        DateTime @default(now())
+  ledgerEntries    VoucherLedgerEntry[]
+  inventoryEntries VoucherInventoryEntry[]
+
+  @@unique([companyId, identityKey, alterId])
+  @@index([companyId, date])
+  @@index([companyId, identityKey])
+}
+
+model VoucherLedgerEntry {
+  id            String  @id @default(cuid())
+  voucher       Voucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  voucherId     String
+  ledgerName    String
+  amount        Float
+  isPartyLedger Boolean @default(false)
+}
+
+model VoucherInventoryEntry {
+  id        String  @id @default(cuid())
+  voucher   Voucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  voucherId String
+  itemName  String
+  qty       Float
+  unit      String
+  amount    Float
+}
+
+// Marks which calendar dates have been fetched from Tally at least once,
+// even if zero vouchers existed that day — without this, a genuinely
+// voucher-free day is indistinguishable from "never fetched" when reading
+// from the DB. Used for empty-state messaging only, not for gating —
+// tab/filter switches never auto-fetch regardless of coverage.
+model VoucherFetchLog {
+  id        String   @id @default(cuid())
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  date      String
+  fetchedAt DateTime @default(now())
+
+  @@unique([companyId, date])
+}
+
+// One row per company — latest known values for snapshot-style Tally queries
+// (closing balances, receivables/payables, stock value, slow-stock) that
+// Tally itself can only report "as of now", not for an arbitrary past date.
+model DashboardSnapshot {
+  id                 String   @id @default(cuid())
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String   @unique
+  cashInHand         Float?
+  bankBalance        Float?
+  receivables        Float?
+  payables           Float?
+  openingStock       Float?
+  closingStock       Float?
+  directExpenseTotal Float?
+  slowStockItems     Json?
+  fetchedAt          DateTime @default(now())
 }
