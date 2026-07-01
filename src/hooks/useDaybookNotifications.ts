@@ -30,7 +30,7 @@ function getToken(): string | null {
  * TDL notify hook via WebSocket) and, on receiving it, pulls today's Day Book
  * through the already-working FETCH_DAYBOOK extension message — never
  * through Tally directly, since only the client machine can reach it — then
- * hands the raw XML to the backend to log.
+ * hands the parsed voucher list (not the raw XML) to the backend to log.
  */
 export function useDaybookNotifications(companyId: string) {
   const { connected }                        = useExtensionStatus()
@@ -83,9 +83,13 @@ export function useDaybookNotifications(companyId: string) {
       const today        = todayYYYYMMDD()
 
       try {
-        const { vouchers, rawXml } = await fetchDaybook(today, today, tallyUrl, tallyCompany)
-        console.log('[DaybookNotify] fetched — vouchers:', vouchers.length, '| rawXml length:', rawXml.length, 'chars')
-        await api.post(`/companies/${companyId}/daybook-log`, { rawXml })
+        // Tally's own Day Book export doesn't scope tightly to the date range
+        // (can run into tens of MB) — send the already-parsed, compact voucher
+        // list instead of the raw XML. It's the exact same data the dashboard
+        // itself renders, already filtered to this date range client-side.
+        const { vouchers } = await fetchDaybook(today, today, tallyUrl, tallyCompany)
+        console.log('[DaybookNotify] fetched', vouchers.length, 'voucher(s) for', today)
+        await api.post(`/companies/${companyId}/daybook-log`, { vouchers })
       } catch (err) {
         console.error('[DaybookNotify] Failed to fetch/log Day Book:', err)
       }

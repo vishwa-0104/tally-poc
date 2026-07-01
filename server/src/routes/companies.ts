@@ -919,22 +919,21 @@ companiesRouter.post('/companies/:id/cash-book-fingerprints', async (req, res) =
   res.json({ saved: result.data.fingerprints.length })
 })
 
-// POST /api/companies/:id/daybook-log — test endpoint: console.log the Day Book
-// XML fetched client-side via the extension. No DB writes.
+// POST /api/companies/:id/daybook-log — test endpoint: console.log today's
+// parsed vouchers (client already parsed Tally's Day Book XML, which itself
+// can run into tens of MB since it doesn't scope tightly to the date range —
+// sending the compact parsed list instead avoids re-transmitting that).
+// No DB writes.
 companiesRouter.post('/companies/:id/daybook-log', async (req, res) => {
   if (!(await canAccessCompany(req.auth, req.params.id))) {
     res.status(403).json({ error: 'Forbidden' }); return
   }
-  const result = z.object({ rawXml: z.string() }).safeParse(req.body)
+  const result = z.object({ vouchers: z.array(z.record(z.any())) }).safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
 
-  const xml = result.data.rawXml
   console.log('='.repeat(60))
-  console.log('[DaybookLog] company', req.params.id, '| length:', xml.length, 'chars')
-  console.log('[DaybookLog] first 2000 chars >>>')
-  console.log(xml.slice(0, 2000))
-  console.log('<<< [DaybookLog] last 2000 chars >>>')
-  console.log(xml.slice(-2000))
+  console.log('[DaybookLog] company', req.params.id, '|', result.data.vouchers.length, 'voucher(s)')
+  console.log(JSON.stringify(result.data.vouchers, null, 2))
   console.log('='.repeat(60))
   res.json({ ok: true })
 })
