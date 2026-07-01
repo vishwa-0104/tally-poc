@@ -83,7 +83,8 @@ export function useDaybookNotifications(companyId: string) {
       const today        = todayYYYYMMDD()
 
       try {
-        const { rawXml } = await fetchDaybook(today, today, tallyUrl, tallyCompany)
+        const { vouchers, rawXml } = await fetchDaybook(today, today, tallyUrl, tallyCompany)
+        console.log('[DaybookNotify] fetched — vouchers:', vouchers.length, '| rawXml length:', rawXml.length, 'chars')
         await api.post(`/companies/${companyId}/daybook-log`, { rawXml })
       } catch (err) {
         console.error('[DaybookNotify] Failed to fetch/log Day Book:', err)

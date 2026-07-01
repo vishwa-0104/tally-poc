@@ -928,9 +928,13 @@ companiesRouter.post('/companies/:id/daybook-log', async (req, res) => {
   const result = z.object({ rawXml: z.string() }).safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
 
+  const xml = result.data.rawXml
   console.log('='.repeat(60))
-  console.log('[DaybookLog] company', req.params.id)
-  console.log(result.data.rawXml)
+  console.log('[DaybookLog] company', req.params.id, '| length:', xml.length, 'chars')
+  console.log('[DaybookLog] first 2000 chars >>>')
+  console.log(xml.slice(0, 2000))
+  console.log('<<< [DaybookLog] last 2000 chars >>>')
+  console.log(xml.slice(-2000))
   console.log('='.repeat(60))
   res.json({ ok: true })
 })
