@@ -918,3 +918,19 @@ companiesRouter.post('/companies/:id/cash-book-fingerprints', async (req, res) =
   )
   res.json({ saved: result.data.fingerprints.length })
 })
+
+// POST /api/companies/:id/daybook-log — test endpoint: console.log the Day Book
+// XML fetched client-side via the extension. No DB writes.
+companiesRouter.post('/companies/:id/daybook-log', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const result = z.object({ rawXml: z.string() }).safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }
+
+  console.log('='.repeat(60))
+  console.log('[DaybookLog] company', req.params.id)
+  console.log(result.data.rawXml)
+  console.log('='.repeat(60))
+  res.json({ ok: true })
+})

@@ -91,19 +91,27 @@
 
 ; =============================================================================
 ; VOUCHER SAVE NOTIFY — fires on Alt+B button OR automatically on every voucher
-; save. No voucher field extraction — just a bare signal to the server. The
-; server decides what to do next (e.g. pull the day's daybook directly from
-; Tally itself and console.log it).
+; save. No voucher field extraction — just a bare signal to the server.
+;
+; WHY THE COMPANY NAME IS IN THE URL, NOT AN XML FIELD:
+;   Action:HTTP Post on a Form fires the request-report renderer with no
+;   Repeat context — the whole Report/Line/Field structure produces zero
+;   rows, so nothing inside it ever evaluates (this is the exact root cause
+;   from the all-night blank-tag debugging: <TBSNOTIFY></TBSNOTIFY> came back
+;   empty even for a literal "1" — no $field or ##Variable, doesn't matter).
+;   The URL string itself, by contrast, is built via + concatenation that
+;   evaluates directly in the live Form context before HTTP Post ever fires
+;   — this is the one mechanism proven to actually carry real values out.
 ; =============================================================================
 
 [#Form: Voucher]
     Add : Button : TBSVoucherBtn
-    On  : FormAccept : Yes : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSNotifyReq
+    On  : FormAccept : Yes : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany) : ASCII : TBSNotifyReq
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : HTTP Post : "http://127.0.0.1/api/tally-hook" : ASCII : TBSNotifyReq
+    Action : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany) : ASCII : TBSNotifyReq
 
 [Report: TBSNotifyReq]
     Form : TBSNotifyReq

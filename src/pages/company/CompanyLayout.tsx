@@ -8,6 +8,7 @@ import { useBillStore } from '@/store/billStore'
 import { useCompanyStore } from '@/store/companyStore'
 import { COMPANY_FEATURES } from '@/types'
 import { useAutoSyncTally } from '@/hooks/useAutoSyncTally'
+import { useDaybookNotifications } from '@/hooks/useDaybookNotifications'
 
 export default function CompanyLayout() {
   const { activeCompanyId } = useAuthStore()
@@ -16,6 +17,7 @@ export default function CompanyLayout() {
 
   const company = getCompany(activeCompanyId ?? '')
   useAutoSyncTally(activeCompanyId ?? '')
+  useDaybookNotifications(activeCompanyId ?? '')
   const hasBankVoucher = useMemo(
     () => (company?.features ?? []).some((f) => f.feature === COMPANY_FEATURES.BANK_VOUCHER && f.enabled),
     [company?.features],

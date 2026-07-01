@@ -1,4 +1,6 @@
 import { Router, Request, Response, text } from 'express'
+import { prisma } from '../db'
+import { notifyCompany } from '../ws'
 
 export const tallyHookRouter = Router()
 
@@ -40,13 +42,45 @@ function parseBody(req: Request): Record<string, any> {
   }
 }
 
+function todayYYYYMMDD(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}${m}${day}`
+}
+
+// Tally itself has no LAN route to a server, so it can never fetch the Day
+// Book back from us — only the client's own machine (browser + extension)
+// can reach Tally's localhost:9000. This just resolves which company's
+// browser tab to nudge, then fires a WS event; the actual fetch happens
+// client-side via the extension's existing FETCH_DAYBOOK handler.
+async function triggerDaybookFetch(companyName: string | null): Promise<void> {
+  if (!companyName) {
+    console.log('[TallyHook] No COMPANY tag in notify payload — cannot resolve which company to notify')
+    return
+  }
+  const company = await prisma.company.findFirst({ where: { name: companyName } })
+  if (!company) {
+    console.log('[TallyHook] No company found matching Tally company name:', companyName)
+    return
+  }
+  console.log('[TallyHook] Company matched:', company.name, '(', company.id, ') — notifying via WS')
+  notifyCompany(company.id, { type: 'DAYBOOK_TRIGGER', date: todayYYYYMMDD() })
+}
+
 tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) => {
   console.log('='.repeat(60))
   console.log('[TallyHook] Content-Type :', req.headers['content-type'] ?? '(none)')
   console.log('[TallyHook] RAW BODY     :', req.body)
 
-  // Primary path: data in URL query string (TDL URL expression approach)
+  // Company name travels in the URL query string — expressions there evaluate
+  // in the live Form context, unlike XML body fields which need a Repeat
+  // context that Action:HTTP Post never provides (see comment in the TDL file).
   const q = req.query as Record<string, string>
+  console.log('[TallyHook] QUERY company:', q.company ?? '(empty)')
+  let companyName: string | null = q.company ?? null
+
   if (q.g || q.d || q.t) {
     console.log('[TallyHook] QUERY DATA >>>')
     console.log('  guid      :', q.g  ?? '(empty)')
@@ -58,9 +92,11 @@ tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) =>
     console.log('  alterId   :', q.ai ?? '(empty)')
     console.log('<<<')
   } else {
-    // Fallback: try to parse body (XML or JSON)
+    // Fallback: try to parse body (XML or JSON) — kept for older/other callers
+    // that still send company as a body field.
     const body = parseBody(req)
     console.log('[TallyHook] BODY DATA >>>', body, '<<<')
+    companyName = companyName ?? body.company ?? null
   }
   console.log('='.repeat(60))
 
@@ -73,4 +109,7 @@ tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) =>
     // otherwise it shows "Invalid data. Could not process XML format".
     res.type('text/xml').send('<RESPONSE><STATUS>1</STATUS><MESSAGE>Received by TallyBillSync</MESSAGE></RESPONSE>')
   }
+
+  // Fire-and-forget: doesn't block the response above — Tally already has its answer.
+  void triggerDaybookFetch(companyName)
 })
