@@ -1020,8 +1020,16 @@ companiesRouter.post('/companies/:id/vouchers', async (req, res) => {
   // the one bad voucher. Now a bad voucher is logged and skipped, and every
   // other voucher in the batch still lands.
   for (const v of vouchers) {
-    const alterId     = v.alterId ?? ''
-    const identityKey = v.guid || `${v.voucherNo}::${v.type}`
+    const alterId = v.alterId ?? ''
+    // The guid-less fallback MUST include the date. Tally frequently reuses/resets
+    // voucher numbers (e.g. across months or numbering series), so voucherNo::type
+    // alone can collide between two genuinely different vouchers. When that happened,
+    // this code (correctly, for the *edited voucher* case) treated the second one as
+    // "voucher N was edited" and flipped the first one's isLatest to false — silently
+    // discarding a real, unrelated voucher with no error at all. Confirmed happening:
+    // a Journal #572 DEPRECIATION entry the extension parsed correctly and the server
+    // accepted (0 reported failures) was invisible in every DB read afterward.
+    const identityKey = v.guid || `${v.voucherNo}::${v.type}::${v.date}`
 
     try {
       await prisma.$transaction(async (tx) => {
