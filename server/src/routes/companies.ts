@@ -1008,70 +1008,89 @@ companiesRouter.post('/companies/:id/vouchers', async (req, res) => {
   let skipped  = 0
   const failures: { voucherNo: string; type: string; date: string; party: string; identityKey: string; alterId: string; error: string }[] = []
 
-  // Each voucher is persisted in its own short transaction (find-or-supersede +
-  // create) instead of one giant transaction for the whole batch. A single bad
-  // voucher (e.g. a unique-constraint collision when the guid-less fallback
-  // identityKey — voucherNo::type, no date — collides with an older archived
-  // row) used to throw inside one all-or-nothing transaction; since that
-  // rejection was never caught, it crashed the whole Node process (Express 4
-  // doesn't auto-catch async errors, and Node 20 kills the process on an
-  // unhandled rejection by default) — Docker would restart the container
-  // mid-request, and the client saw a 502 with *nothing* persisted, not just
-  // the one bad voucher. Now a bad voucher is logged and skipped, and every
-  // other voucher in the batch still lands.
-  for (const v of vouchers) {
-    const alterId = v.alterId ?? ''
-    // The guid-less fallback MUST include the date. Tally frequently reuses/resets
-    // voucher numbers (e.g. across months or numbering series), so voucherNo::type
-    // alone can collide between two genuinely different vouchers. When that happened,
-    // this code (correctly, for the *edited voucher* case) treated the second one as
-    // "voucher N was edited" and flipped the first one's isLatest to false — silently
-    // discarding a real, unrelated voucher with no error at all. Confirmed happening:
-    // a Journal #572 DEPRECIATION entry the extension parsed correctly and the server
-    // accepted (0 reported failures) was invisible in every DB read afterward.
-    const identityKey = v.guid || `${v.voucherNo}::${v.type}::${v.date}`
+  // Vouchers are persisted in chunks, each chunk in its own transaction, with a
+  // SAVEPOINT around each individual voucher inside that transaction. This
+  // balances two things that were previously in tension:
+  //  - One giant transaction for the whole batch: a single bad voucher (e.g. a
+  //    unique-constraint collision) threw inside an all-or-nothing transaction;
+  //    since that rejection was never caught, it crashed the whole Node process
+  //    (Express 4 doesn't auto-catch async errors, Node 20 kills the process on
+  //    an unhandled rejection by default) — Docker restarted mid-request, client
+  //    saw a 502, and NOTHING persisted, not just the one bad voucher.
+  //  - One transaction per voucher (the fix that replaced the above): safe, but
+  //    for a large batch it commits one row at a time over several seconds,
+  //    leaving a wide window where a concurrent read (e.g. a tab switch)
+  //    observes a partial, still-in-progress batch — confirmed happening (DB
+  //    view briefly showed 200 of 4899 vouchers mid-persist).
+  // Chunking (SAVEPOINT per voucher, COMMIT per chunk) keeps the same
+  // per-voucher failure isolation as the one-per-voucher approach — a bad
+  // voucher rolls back only to its savepoint, not the whole chunk — while
+  // cutting both the number of round trips and the partial-visibility window
+  // by ~CHUNK_SIZE.
+  const CHUNK_SIZE = 200
+  for (let i = 0; i < vouchers.length; i += CHUNK_SIZE) {
+    const chunk = vouchers.slice(i, i + CHUNK_SIZE)
+    await prisma.$transaction(async (tx) => {
+      for (let j = 0; j < chunk.length; j++) {
+        const v = chunk[j]
+        const alterId = v.alterId ?? ''
+        // The guid-less fallback MUST include the date. Tally frequently reuses/resets
+        // voucher numbers (e.g. across months or numbering series), so voucherNo::type
+        // alone can collide between two genuinely different vouchers. When that happened,
+        // this code (correctly, for the *edited voucher* case) treated the second one as
+        // "voucher N was edited" and flipped the first one's isLatest to false — silently
+        // discarding a real, unrelated voucher with no error at all. Confirmed happening:
+        // a Journal #572 DEPRECIATION entry the extension parsed correctly and the server
+        // accepted (0 reported failures) was invisible in every DB read afterward.
+        const identityKey = v.guid || `${v.voucherNo}::${v.type}::${v.date}`
+        const savepoint = `sp_${i + j}`
 
-    try {
-      await prisma.$transaction(async (tx) => {
-        const existing = await tx.voucher.findFirst({
-          where: { companyId, identityKey, isLatest: true },
-        })
+        await tx.$executeRawUnsafe(`SAVEPOINT "${savepoint}"`)
+        try {
+          const existing = await tx.voucher.findFirst({
+            where: { companyId, identityKey, isLatest: true },
+          })
 
-        if (existing && existing.alterId === alterId) { skipped++; return }
-        if (existing) {
-          await tx.voucher.update({ where: { id: existing.id }, data: { isLatest: false } })
+          if (existing && existing.alterId === alterId) {
+            skipped++
+          } else {
+            if (existing) {
+              await tx.voucher.update({ where: { id: existing.id }, data: { isLatest: false } })
+            }
+            await tx.voucher.create({
+              data: {
+                companyId,
+                identityKey,
+                date:           v.date,
+                type:           v.type,
+                party:          v.party,
+                voucherNo:      v.voucherNo,
+                amount:         v.amount,
+                taxableAmount:  v.taxableAmount,
+                alterId,
+                guid:           v.guid,
+                hasSalesLedger: v.hasSalesLedger ?? false,
+                salesLedger:    v.salesLedger,
+                purchaseLedger: v.purchaseLedger,
+                isLatest:       true,
+                ledgerEntries:    { create: v.ledgerEntries ?? [] },
+                inventoryEntries: { create: v.inventoryEntries ?? [] },
+              },
+            })
+            inserted++
+          }
+          await tx.$executeRawUnsafe(`RELEASE SAVEPOINT "${savepoint}"`)
+        } catch (err) {
+          await tx.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT "${savepoint}"`)
+          const message = err instanceof Error ? err.message : String(err)
+          failures.push({ voucherNo: v.voucherNo, type: v.type, date: v.date, party: v.party, identityKey, alterId, error: message })
+          console.error(
+            `[Vouchers] Failed to persist voucher — companyId=${companyId} date=${v.date} type="${v.type}" voucherNo="${v.voucherNo}" party="${v.party}" identityKey="${identityKey}" alterId="${alterId}":`,
+            err,
+          )
         }
-
-        await tx.voucher.create({
-          data: {
-            companyId,
-            identityKey,
-            date:           v.date,
-            type:           v.type,
-            party:          v.party,
-            voucherNo:      v.voucherNo,
-            amount:         v.amount,
-            taxableAmount:  v.taxableAmount,
-            alterId,
-            guid:           v.guid,
-            hasSalesLedger: v.hasSalesLedger ?? false,
-            salesLedger:    v.salesLedger,
-            purchaseLedger: v.purchaseLedger,
-            isLatest:       true,
-            ledgerEntries:    { create: v.ledgerEntries ?? [] },
-            inventoryEntries: { create: v.inventoryEntries ?? [] },
-          },
-        })
-        inserted++
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      failures.push({ voucherNo: v.voucherNo, type: v.type, date: v.date, party: v.party, identityKey, alterId, error: message })
-      console.error(
-        `[Vouchers] Failed to persist voucher — companyId=${companyId} date=${v.date} type="${v.type}" voucherNo="${v.voucherNo}" party="${v.party}" identityKey="${identityKey}" alterId="${alterId}":`,
-        err,
-      )
-    }
+      }
+    }, { timeout: 60000 })
   }
 
   try {
