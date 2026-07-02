@@ -1000,19 +1000,30 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
 
     }
 
-    // Skip pushing to vouchers array if no party amount found — these entries still
-    // contributed to cashFlow/bankFlow above so they are not lost.
-    if (amount === 0) {
-      if (/purchase|debit\s*note/i.test(type)) {
-        const ledgerSummary = flowEntries.map(m => {
-          const n = decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '?')
-          const a = decode(m[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
-          const p = /ISPARTYLEDGER[^>]*>Yes/i.test(m[0]) ? '[PARTY]' : ''
-          return `${p}"${n}"=${a}`
-        }).join(' | ')
-        console.warn(`[PurchaseDebug] ⚠️ SKIPPED amount=0 | date=${date} type="${type}" voucherNo="${voucherNo}" party="${party}" | ledgers: ${ledgerSummary}`)
-      }
-      continue
+    // amount=0 means no ISPARTYLEDGER=Yes entry was found (e.g. a pure Journal/
+    // Contra transfer between two non-party ledgers, like Depreciation Dr /
+    // Depreciation Reserve Cr). This voucher is still pushed below — its
+    // ledgerEntries were already fully captured above regardless of `amount`,
+    // and cashFlow/bankFlow/indirect-expense/indirect-income/EBITDA-addback
+    // were already accumulated from them too. Previously this voucher was
+    // dropped entirely (`continue`, never pushed to vouchers[]) — the live
+    // dashboard still looked correct because those totals are summed directly
+    // from the ledger-entry loop above, not from vouchers[]. But the DB cache
+    // persists per-voucher ledgerEntries and recomputes those same totals from
+    // storage later — with the voucher never pushed, its ledgerEntries never
+    // reached the server, so a real ledger line (confirmed: a ₹32,000
+    // DEPRECIATION entry) silently vanished from every DB-side calculation
+    // forever, with no error anywhere. Sales/Purchase totals and Top Items are
+    // unaffected by still pushing zero-amount vouchers — those filter by
+    // voucher `type`, not by whether this array omits zero-amount entries.
+    if (amount === 0 && /purchase|debit\s*note/i.test(type)) {
+      const ledgerSummary = flowEntries.map(m => {
+        const n = decode(m[0].match(/<LEDGERNAME[^>]*>([^<]+)<\/LEDGERNAME>/i)?.[1] ?? '?')
+        const a = decode(m[0].match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
+        const p = /ISPARTYLEDGER[^>]*>Yes/i.test(m[0]) ? '[PARTY]' : ''
+        return `${p}"${n}"=${a}`
+      }).join(' | ')
+      console.warn(`[PurchaseDebug] ⚠️ amount=0, still pushed | date=${date} type="${type}" voucherNo="${voucherNo}" party="${party}" | ledgers: ${ledgerSummary}`)
     }
 
     // Use configured ledger amounts directly (no GST subtraction needed — avoids
