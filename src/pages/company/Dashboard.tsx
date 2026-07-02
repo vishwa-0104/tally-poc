@@ -8,7 +8,7 @@ import {
   TrendingUp, TrendingDown, AlertCircle,
   Lightbulb, AlertTriangle, CheckCircle,
   ArrowUpRight, ArrowDownRight, RefreshCw, Settings, Wallet, Building2,
-  Users, Store, Download,
+  Users, Store, Download, Zap,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
@@ -1117,13 +1117,20 @@ export default function Dashboard() {
     reloadMeta()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // DB-only read on every tab/filter-preset/custom-date change — never calls
-  // Tally. The one exception is the very first run ever for this company: if
-  // nothing has been cached yet, do a one-time live fetch to populate it
-  // (mirrors the previously-documented "auto-fetch today on mount" behavior).
+  // DB-only read, auto-fired on preset/company/settings change — never calls
+  // Tally. Only for Today / This Quarter / YTD. Custom is deliberately excluded:
+  // it used to also auto-fire on every customFrom/customTo change, so picking a
+  // start then an end date on the calendar fired two separate reads (and, if
+  // Apply was clicked before both had landed, could race and appear to "double"
+  // data on screen). Custom is now fully manual — see handleApply below. The one
+  // exception here is the very first run ever for this company: if nothing has
+  // been cached yet for the active non-custom preset, do a one-time live fetch
+  // to populate it (mirrors the previously-documented "auto-fetch today on
+  // mount" behavior).
   const hasDoneInitialLoadRef = useRef(false)
   useEffect(() => {
     if (!companyId) return
+    if (filterPreset === 'custom') return
     loadFromDb(filterPreset, customFrom, customTo).then(({ fetchedDates }) => {
       setUncachedRange(fetchedDates.length === 0)
       if (!hasDoneInitialLoadRef.current) {
@@ -1131,7 +1138,7 @@ export default function Dashboard() {
         if (fetchedDates.length === 0) fetchData(filterPreset, customFrom, customTo)
       }
     })
-  }, [filterPreset, customFrom, customTo, companyId, dashboardSettings]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filterPreset, companyId, dashboardSettings]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab)
@@ -1141,7 +1148,18 @@ export default function Dashboard() {
     setFilterPreset(preset)
   }
 
+  // Custom mode only — reads whatever's already cached in the DB for the
+  // chosen from/to. Never touches Tally. Picking dates no longer fires any
+  // request on its own; this is the only trigger for Custom now.
   const handleApply = () => {
+    loadFromDb(filterPreset, customFrom, customTo).then(({ fetchedDates }) => {
+      setUncachedRange(fetchedDates.length === 0)
+    })
+  }
+
+  // Always available regardless of preset — explicit live Tally fetch, which
+  // also persists the result to the DB for future DB-only reads.
+  const handleFetchLive = () => {
     setUncachedRange(false)
     fetchData(filterPreset, customFrom, customTo)
   }
@@ -1273,15 +1291,24 @@ export default function Dashboard() {
                     onChange={e => setCustomTo(e.target.value)}
                     className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-blue-500"
                   />
+                  <button
+                    onClick={handleApply}
+                    disabled={loading}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    Apply
+                  </button>
                 </>
               )}
 
               <button
-                onClick={handleApply}
+                onClick={handleFetchLive}
                 disabled={loading}
-                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                title="Fetch the latest data from Tally and save it to the database"
+                className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50"
               >
-                Apply
+                <Zap className="w-3 h-3" />
+                Fetch Live
               </button>
 
               {fetched && purchaseVouchers.length > 0 && (
@@ -1437,7 +1464,7 @@ export default function Dashboard() {
             {!error && !loading && fetched && uncachedRange && (
               <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                <p className="text-xs text-amber-700">No cached data for this range yet — click Apply to fetch it from Tally.</p>
+                <p className="text-xs text-amber-700">No cached data for this range yet — click Fetch Live to pull it from Tally.</p>
               </div>
             )}
 
