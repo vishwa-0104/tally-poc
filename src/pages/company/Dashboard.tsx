@@ -921,7 +921,13 @@ export default function Dashboard() {
       // blocks the UI. Only include snapshot fields actually computed this run,
       // so e.g. applying a past custom range doesn't clobber today's cached
       // balances with nulls.
-      void saveVouchers(companyId, from, to, all).catch((err: unknown) => console.error('[Dashboard] Failed to persist vouchers:', err))
+      void saveVouchers(companyId, from, to, all)
+        .then((r) => {
+          if (r.failed > 0) {
+            console.error(`[Dashboard] ${r.failed}/${all.length} voucher(s) failed to persist to DB — dashboard cache will be missing these until fixed:`, r.failures)
+          }
+        })
+        .catch((err: unknown) => console.error('[Dashboard] Failed to persist vouchers:', err))
 
       const snapshotPatch: DashboardSnapshotPatch = {
         slowStockItems: slowResult.status === 'fulfilled' ? slowResult.value.items : [],

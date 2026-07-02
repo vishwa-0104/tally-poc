@@ -57,13 +57,25 @@ export async function fetchCachedVouchers(
   return data
 }
 
+export interface SaveVouchersFailure {
+  voucherNo:   string
+  type:        string
+  date:        string
+  party:       string
+  identityKey: string
+  alterId:     string
+  error:       string
+}
+
 // Persists a live Tally fetch (Apply or the voucher-saved notify) — append-only by identityKey/alterId.
+// Each voucher is saved independently server-side, so a bad voucher shows up in `failures`
+// instead of silently taking the whole batch down with it.
 export async function saveVouchers(
   companyId: string,
   from: string,
   to: string,
   vouchers: TallyVoucher[],
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<{ inserted: number; skipped: number; failed: number; failures: SaveVouchersFailure[] }> {
   const { data } = await api.post(`/companies/${companyId}/vouchers`, { from, to, vouchers })
   return data
 }

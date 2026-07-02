@@ -1006,54 +1006,83 @@ companiesRouter.post('/companies/:id/vouchers', async (req, res) => {
   const { from, to, vouchers } = result.data
   let inserted = 0
   let skipped  = 0
+  const failures: { voucherNo: string; type: string; date: string; party: string; identityKey: string; alterId: string; error: string }[] = []
 
-  await prisma.$transaction(async (tx) => {
-    for (const v of vouchers) {
-      const alterId     = v.alterId ?? ''
-      const identityKey = v.guid || `${v.voucherNo}::${v.type}`
+  // Each voucher is persisted in its own short transaction (find-or-supersede +
+  // create) instead of one giant transaction for the whole batch. A single bad
+  // voucher (e.g. a unique-constraint collision when the guid-less fallback
+  // identityKey — voucherNo::type, no date — collides with an older archived
+  // row) used to throw inside one all-or-nothing transaction; since that
+  // rejection was never caught, it crashed the whole Node process (Express 4
+  // doesn't auto-catch async errors, and Node 20 kills the process on an
+  // unhandled rejection by default) — Docker would restart the container
+  // mid-request, and the client saw a 502 with *nothing* persisted, not just
+  // the one bad voucher. Now a bad voucher is logged and skipped, and every
+  // other voucher in the batch still lands.
+  for (const v of vouchers) {
+    const alterId     = v.alterId ?? ''
+    const identityKey = v.guid || `${v.voucherNo}::${v.type}`
 
-      const existing = await tx.voucher.findFirst({
-        where: { companyId, identityKey, isLatest: true },
+    try {
+      await prisma.$transaction(async (tx) => {
+        const existing = await tx.voucher.findFirst({
+          where: { companyId, identityKey, isLatest: true },
+        })
+
+        if (existing && existing.alterId === alterId) { skipped++; return }
+        if (existing) {
+          await tx.voucher.update({ where: { id: existing.id }, data: { isLatest: false } })
+        }
+
+        await tx.voucher.create({
+          data: {
+            companyId,
+            identityKey,
+            date:           v.date,
+            type:           v.type,
+            party:          v.party,
+            voucherNo:      v.voucherNo,
+            amount:         v.amount,
+            taxableAmount:  v.taxableAmount,
+            alterId,
+            guid:           v.guid,
+            hasSalesLedger: v.hasSalesLedger ?? false,
+            salesLedger:    v.salesLedger,
+            purchaseLedger: v.purchaseLedger,
+            isLatest:       true,
+            ledgerEntries:    { create: v.ledgerEntries ?? [] },
+            inventoryEntries: { create: v.inventoryEntries ?? [] },
+          },
+        })
+        inserted++
       })
-
-      if (existing && existing.alterId === alterId) { skipped++; continue }
-      if (existing) {
-        await tx.voucher.update({ where: { id: existing.id }, data: { isLatest: false } })
-      }
-
-      await tx.voucher.create({
-        data: {
-          companyId,
-          identityKey,
-          date:           v.date,
-          type:           v.type,
-          party:          v.party,
-          voucherNo:      v.voucherNo,
-          amount:         v.amount,
-          taxableAmount:  v.taxableAmount,
-          alterId,
-          guid:           v.guid,
-          hasSalesLedger: v.hasSalesLedger ?? false,
-          salesLedger:    v.salesLedger,
-          purchaseLedger: v.purchaseLedger,
-          isLatest:       true,
-          ledgerEntries:    { create: v.ledgerEntries ?? [] },
-          inventoryEntries: { create: v.inventoryEntries ?? [] },
-        },
-      })
-      inserted++
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      failures.push({ voucherNo: v.voucherNo, type: v.type, date: v.date, party: v.party, identityKey, alterId, error: message })
+      console.error(
+        `[Vouchers] Failed to persist voucher — companyId=${companyId} date=${v.date} type="${v.type}" voucherNo="${v.voucherNo}" party="${v.party}" identityKey="${identityKey}" alterId="${alterId}":`,
+        err,
+      )
     }
+  }
 
+  try {
     for (const date of datesBetween(from, to)) {
-      await tx.voucherFetchLog.upsert({
+      await prisma.voucherFetchLog.upsert({
         where:  { companyId_date: { companyId, date } },
         update: { fetchedAt: new Date() },
         create: { companyId, date },
       })
     }
-  }, { timeout: 30000 })
+  } catch (err) {
+    console.error(`[Vouchers] Failed to write VoucherFetchLog — companyId=${companyId} from=${from} to=${to}:`, err)
+  }
 
-  res.json({ inserted, skipped })
+  if (failures.length > 0) {
+    console.error(`[Vouchers] ${failures.length}/${vouchers.length} voucher(s) failed to persist for companyId=${companyId}, from=${from}, to=${to}`)
+  }
+
+  res.json({ inserted, skipped, failed: failures.length, failures })
 })
 
 // GET/PUT /api/companies/:id/dashboard-snapshot — "current value" cache for
