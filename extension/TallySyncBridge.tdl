@@ -90,12 +90,13 @@
     JSONTag : "company"
 
 ; =============================================================================
-; VOUCHER SAVE NOTIFY — fires on Alt+B button OR automatically on every voucher
-; save. No voucher field extraction in the XML body — just a bare signal to
-; the server. The voucher's own date/number/type/party/amount/alterid/guid are
-; carried in the URL query string instead (see below) — diagnostic only for
-; now, the server just logs them (server/src/routes/tallyHook.ts already
-; parses q.d/q.n/q.t/q.p/q.a/q.ai/q.g) and nothing consumes them yet.
+; VOUCHER SAVE NOTIFY — fires automatically on every voucher save via
+; FormAccept. No voucher field extraction in the XML body — just a bare
+; signal to the server. The voucher's own date/number/type/party/amount/
+; alterid/guid are carried in the URL query string instead (see below) —
+; the server just logs them (server/src/routes/tallyHook.ts parses
+; q.d/q.n/q.t/q.p/q.a/q.ai/q.g); q.d (date) also now drives which day's
+; daybook the notify handler re-fetches.
 ;
 ; WHY THESE ARE IN THE URL, NOT AN XML FIELD:
 ;   Action:HTTP Post on a Form fires the request-report renderer with no
@@ -109,25 +110,24 @@
 ;   [#Form: Voucher] is Tally's own native voucher entry form, so the voucher
 ;   being saved is the implicit object in scope here.
 ;
-;   CONFIRMED WORKING (2026-07-03, real Tally): $Date → "19-Jun-26" (display
-;   format, NOT YYYYMMDD — needs parsing before use), $VoucherNumber →
-;   "NRP/26-27/01048". company= (##SVCurrentCompany) unaffected by adding
-;   these, confirming the whole-expression-breaks-on-one-bad-field risk didn't
-;   materialize for this pair. $VoucherTypeName/$AlterID/$Guid/
-;   $PartyLedgerName/$Amount added below on the strength of that — still
-;   UNVERIFIED, check server logs after a save/Alt+B to confirm all seven
-;   (company, d, n, t, ai, g, p, a) populate; if company or d/n regress, one
-;   of these five broke the whole expression and needs isolating.
+;   CONFIRMED WORKING (2026-07-03, real Tally): all seven of company/d/n/t/
+;   ai/g/p/a populate correctly. $Date renders as e.g. "1-Jul-26" (display
+;   format, NOT YYYYMMDD — parsed server-side).
+;
+;   NO LONGER HAS A SEPARATE Alt+B BUTTON: this used to also add a manual
+;   "TBS Sync" button (Alt+B) wired to the identical HTTP Post action as a
+;   fallback in case FormAccept didn't fire reliably. Once FormAccept was
+;   confirmed working, that became a footgun rather than a safety net —
+;   pressing Alt+B on top of a normal save fired the exact same notify twice
+;   for one edit (confirmed in server logs: identical guid/alterId/amount,
+;   two back-to-back requests), doubling the number of concurrent Tally
+;   requests the notify handler fires per edit and contributing to Tally
+;   hanging under load. Removed rather than trying to guard against the
+;   double-fire, since the button was redundant once FormAccept works.
 ; =============================================================================
 
 [#Form: Voucher]
-    Add : Button : TBSVoucherBtn
     On  : FormAccept : Yes : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany + "&d=" + $$String:$Date + "&n=" + $VoucherNumber + "&t=" + $VoucherTypeName + "&ai=" + $$String:$AlterID + "&g=" + $Guid + "&p=" + $PartyLedgerName + "&a=" + $$String:$Amount) : ASCII : TBSNotifyReq
-
-[Button: TBSVoucherBtn]
-    Title  : "TBS Sync"
-    Key    : Alt + B
-    Action : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany + "&d=" + $$String:$Date + "&n=" + $VoucherNumber + "&t=" + $VoucherTypeName + "&ai=" + $$String:$AlterID + "&g=" + $Guid + "&p=" + $PartyLedgerName + "&a=" + $$String:$Amount) : ASCII : TBSNotifyReq
 
 [Report: TBSNotifyReq]
     Form : TBSNotifyReq

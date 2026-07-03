@@ -10,6 +10,15 @@ import { api, fetchDashboardSettings } from '@/lib/api'
 
 const RECONNECT_DELAY_MS = 5000
 
+// Stock value and slow-stock are the heaviest of the "current snapshot"
+// queries (O(items × transactions)-style, same class of query background.js
+// already documents as able to hang Tally under load) and don't need
+// per-edit freshness the way cash/bank/receivables arguably do right after a
+// payment/receipt voucher. Module-level (not component state) so the cooldown
+// survives the hook remounting, e.g. on a companyId change and back.
+const HEAVY_REFRESH_COOLDOWN_MS = 15 * 60 * 1000
+const lastHeavyRefreshAt = new Map<string, number>()
+
 function todayYYYYMMDD(): string {
   const d = new Date()
   const y = d.getFullYear()
@@ -121,19 +130,30 @@ export function useDaybookNotifications(companyId: string) {
       }
 
       // Refresh the "current snapshot" data too — closing balances/receivables/
-      // payables/slow-stock/stock-value can't be scoped to a past date in Tally,
-      // so a save anywhere should refresh the one cached row for this company.
+      // payables can't be scoped to a past date in Tally, so a save anywhere
+      // should refresh the one cached row for this company. Stock value and
+      // slow-stock are skipped here if refreshed recently (see
+      // HEAVY_REFRESH_COOLDOWN_MS above) — a burst of several voucher saves
+      // in a row would otherwise re-run the heaviest queries on every single
+      // one, on top of the equally heavy YTD daybook fetch above.
       try {
         const { from: ytdFrom, to: ytdTo } = ytdRange()
         const settings = await fetchDashboardSettings(companyId)
 
+        const lastHeavy = lastHeavyRefreshAt.get(companyId) ?? 0
+        const refreshHeavy = Date.now() - lastHeavy >= HEAVY_REFRESH_COOLDOWN_MS
+        if (!refreshHeavy) {
+          console.log('[DaybookNotify] Skipping stock-value/slow-stock refresh — refreshed within the last', HEAVY_REFRESH_COOLDOWN_MS / 60000, 'min')
+        }
+
         const [balancesRes, groupRes, slowStockRes, ytdStockValueRes, ytdDirectExpRes] = await Promise.allSettled([
           fetchLedgerBalances(tallyUrl, tallyCompany, today),
           fetchGroupBalances(tallyUrl, tallyCompany),
-          fetchSlowMovingStock(tallyUrl, tallyCompany),
-          fetchStockValue(ytdFrom.replace(/-/g, ''), ytdTo.replace(/-/g, ''), tallyUrl, tallyCompany),
+          refreshHeavy ? fetchSlowMovingStock(tallyUrl, tallyCompany) : Promise.resolve(null),
+          refreshHeavy ? fetchStockValue(ytdFrom.replace(/-/g, ''), ytdTo.replace(/-/g, ''), tallyUrl, tallyCompany) : Promise.resolve(null),
           fetchLedgerAmounts(ytdFrom.replace(/-/g, ''), ytdTo.replace(/-/g, ''), tallyUrl, tallyCompany, settings.ytd?.directExpenseLedgers),
         ])
+        if (refreshHeavy) lastHeavyRefreshAt.set(companyId, Date.now())
 
         const rawLedgers = balancesRes.status === 'fulfilled' ? balancesRes.value.rawLedgers : []
         const cashInHand = rawLedgers.length
@@ -143,16 +163,23 @@ export function useDaybookNotifications(companyId: string) {
           ? -rawLedgers.filter((l) => l.group.toLowerCase().includes('bank')).reduce((s, l) => s + l.balance, 0)
           : null
 
-        await api.put(`/companies/${companyId}/dashboard-snapshot`, {
+        // Only include the heavy fields when actually refreshed this cycle —
+        // sending them as null on a skipped cycle would clobber the last good
+        // cached values instead of just leaving them alone.
+        const patch: Record<string, unknown> = {
           cashInHand,
           bankBalance,
           receivables:        groupRes.status === 'fulfilled' ? groupRes.value.receivables : null,
           payables:           groupRes.status === 'fulfilled' ? groupRes.value.payables    : null,
-          openingStock:       ytdStockValueRes.status === 'fulfilled' ? ytdStockValueRes.value.openingStock : null,
-          closingStock:       ytdStockValueRes.status === 'fulfilled' ? ytdStockValueRes.value.closingStock : null,
           directExpenseTotal: ytdDirectExpRes.status === 'fulfilled' ? ytdDirectExpRes.value : null,
-          slowStockItems:     slowStockRes.status === 'fulfilled' ? slowStockRes.value.items : [],
-        })
+        }
+        if (refreshHeavy) {
+          patch.openingStock   = ytdStockValueRes.status === 'fulfilled' ? ytdStockValueRes.value?.openingStock ?? null : null
+          patch.closingStock   = ytdStockValueRes.status === 'fulfilled' ? ytdStockValueRes.value?.closingStock ?? null : null
+          patch.slowStockItems = slowStockRes.status === 'fulfilled' ? slowStockRes.value?.items ?? [] : []
+        }
+
+        await api.put(`/companies/${companyId}/dashboard-snapshot`, patch)
       } catch (err) {
         console.error('[DaybookNotify] Failed to refresh dashboard snapshot:', err)
       }
