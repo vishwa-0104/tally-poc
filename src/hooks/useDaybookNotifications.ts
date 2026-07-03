@@ -19,6 +19,17 @@ const RECONNECT_DELAY_MS = 5000
 const HEAVY_REFRESH_COOLDOWN_MS = 15 * 60 * 1000
 const lastHeavyRefreshAt = new Map<string, number>()
 
+// FormAccept fires the moment Tally accepts the voucher on screen — that's
+// not the same instant Tally has finished writing/indexing it internally.
+// Querying the Day Book back immediately can race ahead of Tally's own save
+// and read stale data (observed: the just-edited voucher not reflected yet).
+// A short pause before the very first Tally re-query gives it time to settle.
+const POST_SAVE_SETTLE_DELAY_MS = 15 * 1000
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function todayYYYYMMDD(): string {
   const d = new Date()
   const y = d.getFullYear()
@@ -53,9 +64,11 @@ function getToken(): string | null {
 
 /**
  * Listens for a "voucher saved" push from the backend (relayed from Tally's
- * TDL notify hook via WebSocket) and, on receiving it, pulls the Day Book for
- * the day the saved voucher actually belongs to (falls back to today if the
- * server couldn't resolve a date) through the already-working FETCH_DAYBOOK
+ * TDL notify hook via WebSocket) and, after a short settle delay (see
+ * POST_SAVE_SETTLE_DELAY_MS — Tally's FormAccept firing doesn't mean the save
+ * is fully written/indexed internally yet), pulls the Day Book for the day
+ * the saved voucher actually belongs to (falls back to today if the server
+ * couldn't resolve a date) through the already-working FETCH_DAYBOOK
  * extension message — never through Tally directly, since only the client
  * machine can reach it — then persists the parsed vouchers (append-only, by
  * identityKey/alterId) and refreshes the one cached dashboard snapshot row
@@ -111,6 +124,10 @@ export function useDaybookNotifications(companyId: string) {
     async function handleTrigger(voucherDateYYYYMMDD?: string) {
       const company = getCompany(companyId)
       if (!company) return
+
+      // Give Tally time to finish writing/indexing the voucher internally
+      // before re-querying it — see POST_SAVE_SETTLE_DELAY_MS above.
+      await sleep(POST_SAVE_SETTLE_DELAY_MS)
 
       const tallyUrl     = getTallyUrl(companyId, company.port)
       const tallyCompany = company.name ?? undefined
