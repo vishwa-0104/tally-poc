@@ -10,7 +10,7 @@ import {
   ArrowUpRight, ArrowDownRight, RefreshCw, Settings, Wallet, Building2,
   Users, Store, Download, Zap,
 } from 'lucide-react'
-import { useAuthStore, useCompanyStore } from '@/store'
+import { useAuthStore, useCompanyStore, useDaybookSyncStore } from '@/store'
 import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import {
   fetchSalesTargets, fetchDashboardSettings,
@@ -1139,6 +1139,22 @@ export default function Dashboard() {
       }
     })
   }, [filterPreset, companyId, dashboardSettings]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-refresh from DB when the notify-triggered background sync
+  // (useDaybookNotifications, mounted once at CompanyLayout regardless of
+  // which page is visible) finishes updating this company's data — without
+  // this, a Tally edit only shows up here after a manual page reload.
+  // Skipped for Custom mode, matching the "Custom is fully manual" design
+  // above — an edit landing in the DB shouldn't itself trigger a read while
+  // the user's mid-adjusting a custom date range.
+  const lastDaybookSync = useDaybookSyncStore((s) => (companyId ? s.lastUpdated[companyId] : undefined))
+  useEffect(() => {
+    if (!companyId || !lastDaybookSync) return
+    if (filterPreset === 'custom') return
+    loadFromDb(filterPreset, customFrom, customTo).then(({ fetchedDates }) => {
+      setUncachedRange(fetchedDates.length === 0)
+    })
+  }, [lastDaybookSync]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab)

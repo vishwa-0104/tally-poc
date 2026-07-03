@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useExtensionStatus } from './useExtension'
-import { useCompanyStore } from '@/store'
+import { useCompanyStore, useDaybookSyncStore } from '@/store'
 import {
   fetchDaybook, fetchLedgerBalances, fetchGroupBalances,
   fetchSlowMovingStock, fetchStockValue, fetchLedgerAmounts,
@@ -230,6 +230,11 @@ export function useDaybookNotifications(companyId: string) {
       } catch (err) {
         console.error('[DaybookNotify] Failed to refresh dashboard snapshot:', err)
       }
+
+      // Best-effort signal regardless of whether either step above fully
+      // succeeded — Dashboard.tsx watches this to re-read from the DB
+      // automatically instead of requiring a manual page reload.
+      useDaybookSyncStore.getState().markUpdated(companyId)
     }
 
     connect()
