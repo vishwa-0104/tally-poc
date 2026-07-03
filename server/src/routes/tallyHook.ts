@@ -50,12 +50,32 @@ function todayYYYYMMDD(): string {
   return `${y}${m}${day}`
 }
 
+const MONTH_ABBR: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+}
+
+// Tally's $$String:$Date (from the TDL's ?d= query param) renders as e.g.
+// "1-Jul-26" or "19-Jun-26" — day (no leading zero), 3-letter month, 2-digit
+// year — not the YYYYMMDD format the rest of the app uses. Returns null if
+// the string doesn't match (missing param, older un-reloaded TDL, or an
+// unexpected Tally date format) so the caller can fall back to today.
+function parseTallyDisplayDate(raw: string | undefined): string | null {
+  if (!raw) return null
+  const m = raw.trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/)
+  if (!m) return null
+  const [, day, monAbbr, yy] = m
+  const mon = MONTH_ABBR[monAbbr.toLowerCase()]
+  if (!mon) return null
+  return `20${yy}${mon}${day.padStart(2, '0')}`
+}
+
 // Tally itself has no LAN route to a server, so it can never fetch the Day
 // Book back from us — only the client's own machine (browser + extension)
 // can reach Tally's localhost:9000. This just resolves which company's
 // browser tab to nudge, then fires a WS event; the actual fetch happens
 // client-side via the extension's existing FETCH_DAYBOOK handler.
-async function triggerDaybookFetch(companyName: string | null): Promise<void> {
+async function triggerDaybookFetch(companyName: string | null, voucherDateRaw?: string): Promise<void> {
   if (!companyName) {
     console.log('[TallyHook] No COMPANY tag in notify payload — cannot resolve which company to notify')
     return
@@ -65,8 +85,16 @@ async function triggerDaybookFetch(companyName: string | null): Promise<void> {
     console.log('[TallyHook] No company found matching Tally company name:', companyName)
     return
   }
-  console.log('[TallyHook] Company matched:', company.name, '(', company.id, ') — notifying via WS')
-  notifyCompany(company.id, { type: 'DAYBOOK_TRIGGER', date: todayYYYYMMDD() })
+  // Prefer the edited voucher's own date (so a backdated edit refetches the
+  // right day, not always today) — falls back to today if the TDL hasn't
+  // been reloaded yet or the date didn't parse.
+  const parsedDate = parseTallyDisplayDate(voucherDateRaw)
+  const date = parsedDate ?? todayYYYYMMDD()
+  if (!parsedDate) {
+    console.log('[TallyHook] Could not resolve voucher date from', JSON.stringify(voucherDateRaw), '— falling back to today:', date)
+  }
+  console.log('[TallyHook] Company matched:', company.name, '(', company.id, ') — notifying via WS for date', date)
+  notifyCompany(company.id, { type: 'DAYBOOK_TRIGGER', date })
 }
 
 tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) => {
@@ -80,6 +108,7 @@ tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) =>
   const q = req.query as Record<string, string>
   console.log('[TallyHook] QUERY company:', q.company ?? '(empty)')
   let companyName: string | null = q.company ?? null
+  const voucherDateRaw: string | undefined = q.d
 
   if (q.g || q.d || q.t) {
     console.log('[TallyHook] QUERY DATA >>>')
@@ -111,5 +140,5 @@ tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) =>
   }
 
   // Fire-and-forget: doesn't block the response above — Tally already has its answer.
-  void triggerDaybookFetch(companyName)
+  void triggerDaybookFetch(companyName, voucherDateRaw)
 })

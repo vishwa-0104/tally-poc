@@ -44,11 +44,13 @@ function getToken(): string | null {
 
 /**
  * Listens for a "voucher saved" push from the backend (relayed from Tally's
- * TDL notify hook via WebSocket) and, on receiving it, pulls today's Day Book
- * through the already-working FETCH_DAYBOOK extension message — never
- * through Tally directly, since only the client machine can reach it — then
- * persists the parsed vouchers (append-only, by identityKey/alterId) and
- * refreshes the one cached dashboard snapshot row for this company.
+ * TDL notify hook via WebSocket) and, on receiving it, pulls the Day Book for
+ * the day the saved voucher actually belongs to (falls back to today if the
+ * server couldn't resolve a date) through the already-working FETCH_DAYBOOK
+ * extension message — never through Tally directly, since only the client
+ * machine can reach it — then persists the parsed vouchers (append-only, by
+ * identityKey/alterId) and refreshes the one cached dashboard snapshot row
+ * for this company.
  */
 export function useDaybookNotifications(companyId: string) {
   const { connected }                        = useExtensionStatus()
@@ -72,7 +74,7 @@ export function useDaybookNotifications(companyId: string) {
       ws = new WebSocket(url)
 
       ws.onmessage = (event) => {
-        let msg: { type?: string }
+        let msg: { type?: string; date?: string }
         try {
           msg = JSON.parse(event.data)
         } catch {
@@ -83,7 +85,7 @@ export function useDaybookNotifications(companyId: string) {
           console.log('[DaybookNotify] Trigger received but extension not connected — skipping')
           return
         }
-        void handleTrigger()
+        void handleTrigger(msg.date)
       }
 
       ws.onclose = () => {
@@ -92,22 +94,28 @@ export function useDaybookNotifications(companyId: string) {
       }
     }
 
-    async function handleTrigger() {
+    // voucherDateYYYYMMDD comes from the server, resolved from the TDL's own
+    // ?d= query param on the voucher that was actually saved — so a backdated
+    // edit re-fetches the day it belongs to, not always today. Falls back to
+    // today if the server couldn't resolve a date (e.g. an un-reloaded TDL, or
+    // a malformed date string) — same behavior as before this was wired up.
+    async function handleTrigger(voucherDateYYYYMMDD?: string) {
       const company = getCompany(companyId)
       if (!company) return
 
       const tallyUrl     = getTallyUrl(companyId, company.port)
       const tallyCompany = company.name ?? undefined
       const today        = todayYYYYMMDD()
-      const todayIso      = new Date().toISOString().slice(0, 10)
+      const daybookDate    = voucherDateYYYYMMDD && /^\d{8}$/.test(voucherDateYYYYMMDD) ? voucherDateYYYYMMDD : today
+      const daybookDateIso = `${daybookDate.slice(0, 4)}-${daybookDate.slice(4, 6)}-${daybookDate.slice(6, 8)}`
 
       try {
         // Tally's own Day Book export doesn't scope tightly to the date range
         // (can run into tens of MB) — the parsed voucher list (with ledger and
         // inventory entries) is what gets persisted, not the raw XML.
-        const { vouchers } = await fetchDaybook(today, today, tallyUrl, tallyCompany)
-        console.log('[DaybookNotify] fetched', vouchers.length, 'voucher(s) for', today)
-        await api.post(`/companies/${companyId}/vouchers`, { from: todayIso, to: todayIso, vouchers })
+        const { vouchers } = await fetchDaybook(daybookDate, daybookDate, tallyUrl, tallyCompany)
+        console.log('[DaybookNotify] fetched', vouchers.length, 'voucher(s) for', daybookDate)
+        await api.post(`/companies/${companyId}/vouchers`, { from: daybookDateIso, to: daybookDateIso, vouchers })
       } catch (err) {
         console.error('[DaybookNotify] Failed to fetch/persist Day Book:', err)
       }
