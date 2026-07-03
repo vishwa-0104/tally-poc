@@ -91,9 +91,15 @@
 
 ; =============================================================================
 ; VOUCHER SAVE NOTIFY — fires on Alt+B button OR automatically on every voucher
-; save. No voucher field extraction — just a bare signal to the server.
+; save. No voucher field extraction in the XML body — just a bare signal to
+; the server. The voucher's own date/number are carried in the URL query
+; string instead (see below) — diagnostic only for now, the server just logs
+; them (server/src/routes/tallyHook.ts already parses q.d/q.n, and q.t/q.p/
+; q.a/q.ai/q.g for when more fields are added later) and nothing consumes
+; them yet.
 ;
-; WHY THE COMPANY NAME IS IN THE URL, NOT AN XML FIELD:
+; WHY THE COMPANY NAME (AND NOW $Date/$VoucherNumber) ARE IN THE URL, NOT AN
+; XML FIELD:
 ;   Action:HTTP Post on a Form fires the request-report renderer with no
 ;   Repeat context — the whole Report/Line/Field structure produces zero
 ;   rows, so nothing inside it ever evaluates (this is the exact root cause
@@ -102,16 +108,26 @@
 ;   The URL string itself, by contrast, is built via + concatenation that
 ;   evaluates directly in the live Form context before HTTP Post ever fires
 ;   — this is the one mechanism proven to actually carry real values out.
+;   [#Form: Voucher] is Tally's own native voucher entry form, so the voucher
+;   being saved is the implicit object in scope here — $Date and
+;   $VoucherNumber are used below since both are confirmed-valid Tally field
+;   names (they already appear in this file's own TBSVouchers Collection
+;   Fetch list), which is more certain than the still-untested $VoucherTypeName/
+;   $AlterID/$Guid/$PartyLedgerName/$Amount. UNVERIFIED even so — a single bad
+;   field reference could fail to evaluate the WHOLE concatenated expression,
+;   which would silently break company= too, not just the new fields. Check
+;   server logs after a save (or Alt+B) to confirm company AND d/n still show
+;   up before adding any more fields to this URL.
 ; =============================================================================
 
 [#Form: Voucher]
     Add : Button : TBSVoucherBtn
-    On  : FormAccept : Yes : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany) : ASCII : TBSNotifyReq
+    On  : FormAccept : Yes : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany + "&d=" + $$String:$Date + "&n=" + $VoucherNumber) : ASCII : TBSNotifyReq
 
 [Button: TBSVoucherBtn]
     Title  : "TBS Sync"
     Key    : Alt + B
-    Action : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany) : ASCII : TBSNotifyReq
+    Action : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany + "&d=" + $$String:$Date + "&n=" + $VoucherNumber) : ASCII : TBSNotifyReq
 
 [Report: TBSNotifyReq]
     Form : TBSNotifyReq
