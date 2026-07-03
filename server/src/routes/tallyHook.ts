@@ -70,12 +70,30 @@ function parseTallyDisplayDate(raw: string | undefined): string | null {
   return `20${yy}${mon}${day.padStart(2, '0')}`
 }
 
+interface VoucherIdentity {
+  guid?:      string
+  voucherNo?: string
+  type?:      string
+  alterId?:   string
+}
+
+// Tally can fire FormAccept twice for a single voucher edit — confirmed: two
+// notify POSTs with the identical guid/alterId arriving back to back, no
+// Alt+B button involved (that was removed separately). This is Tally's own
+// internal event firing, not something the TDL can reliably prevent, so
+// duplicates are collapsed here instead: a second notify for the same
+// voucher within DEDUP_WINDOW_MS is logged but doesn't fire a second WS
+// trigger. Keyed per company since two different companies' voucher notifies
+// arriving close together are NOT duplicates of each other.
+const DEDUP_WINDOW_MS = 10 * 1000
+const lastNotified = new Map<string, { key: string; at: number }>()
+
 // Tally itself has no LAN route to a server, so it can never fetch the Day
 // Book back from us — only the client's own machine (browser + extension)
 // can reach Tally's localhost:9000. This just resolves which company's
 // browser tab to nudge, then fires a WS event; the actual fetch happens
 // client-side via the extension's existing FETCH_DAYBOOK handler.
-async function triggerDaybookFetch(companyName: string | null, voucherDateRaw?: string): Promise<void> {
+async function triggerDaybookFetch(companyName: string | null, voucherDateRaw: string | undefined, identity: VoucherIdentity): Promise<void> {
   if (!companyName) {
     console.log('[TallyHook] No COMPANY tag in notify payload — cannot resolve which company to notify')
     return
@@ -93,6 +111,16 @@ async function triggerDaybookFetch(companyName: string | null, voucherDateRaw?: 
   if (!parsedDate) {
     console.log('[TallyHook] Could not resolve voucher date from', JSON.stringify(voucherDateRaw), '— falling back to today:', date)
   }
+
+  const dedupKey = identity.guid || `${identity.voucherNo ?? ''}::${identity.type ?? ''}::${date}::${identity.alterId ?? ''}`
+  const now = Date.now()
+  const last = lastNotified.get(company.id)
+  if (last && last.key === dedupKey && now - last.at < DEDUP_WINDOW_MS) {
+    console.log('[TallyHook] Duplicate notify for the same voucher within', DEDUP_WINDOW_MS / 1000, 's — skipping second WS trigger. key:', dedupKey)
+    return
+  }
+  lastNotified.set(company.id, { key: dedupKey, at: now })
+
   console.log('[TallyHook] Company matched:', company.name, '(', company.id, ') — notifying via WS for date', date)
   notifyCompany(company.id, { type: 'DAYBOOK_TRIGGER', date })
 }
@@ -140,5 +168,5 @@ tallyHookRouter.post('/tally-hook', captureRaw, (req: Request, res: Response) =>
   }
 
   // Fire-and-forget: doesn't block the response above — Tally already has its answer.
-  void triggerDaybookFetch(companyName, voucherDateRaw)
+  void triggerDaybookFetch(companyName, voucherDateRaw, { guid: q.g, voucherNo: q.n, type: q.t, alterId: q.ai })
 })
