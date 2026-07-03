@@ -135,11 +135,42 @@ export function useDaybookNotifications(companyId: string) {
       const daybookDate    = voucherDateYYYYMMDD && /^\d{8}$/.test(voucherDateYYYYMMDD) ? voucherDateYYYYMMDD : today
       const daybookDateIso = `${daybookDate.slice(0, 4)}-${daybookDate.slice(4, 6)}-${daybookDate.slice(6, 8)}`
 
+      // Fetched once up front and reused below — must happen BEFORE the
+      // daybook fetch, not after. fetchDaybook's `options` (salesAccounts,
+      // purchaseAccounts, etc.) drive background.js's hasSalesLedger/
+      // salesLedger/purchaseLedger classification for every voucher in the
+      // response; omitting them (as this used to, calling fetchDaybook with
+      // no options at all) silently persisted every notify-triggered voucher
+      // with hasSalesLedger=false regardless of its real ledger entries —
+      // confirmed: a voucher with a correct "GST Sales" ledger line got
+      // hasSalesLedger=false from this path, which made computeSalesTotal
+      // (which requires hasSalesLedger=true to count a voucher at all) drop
+      // it from Total Sales completely, even though its ledgerEntries and
+      // taxableAmount were stored correctly.
+      const settings = await fetchDashboardSettings(companyId)
+      const salesSettings = settings.today
+
       try {
         // Tally's own Day Book export doesn't scope tightly to the date range
         // (can run into tens of MB) — the parsed voucher list (with ledger and
         // inventory entries) is what gets persisted, not the raw XML.
-        const { vouchers } = await fetchDaybook(daybookDate, daybookDate, tallyUrl, tallyCompany)
+        const { vouchers } = await fetchDaybook(daybookDate, daybookDate, tallyUrl, tallyCompany, {
+          salesAccounts:           salesSettings?.salesAccounts,
+          salesIncludeVouchers:    salesSettings?.salesIncludeVouchers,
+          salesExcludeVouchers:    salesSettings?.salesExcludeVouchers,
+          cashInflowLedgers:       settings.today?.cashInflowLedgers,
+          bankLedgers:             settings.today?.bankLedgers,
+          purchaseAccounts:        settings.ytd?.purchaseAccounts,
+          indirectExpenseLedgers:         settings.ytd?.indirectExpenseLedgers,
+          indirectExpenseIncludeVouchers: settings.ytd?.indirectExpenseIncludeVouchers,
+          indirectExpenseExcludeVouchers: settings.ytd?.indirectExpenseExcludeVouchers,
+          indirectIncomeLedgers:          settings.ytd?.indirectIncomeLedgers,
+          indirectIncomeIncludeVouchers:  settings.ytd?.indirectIncomeIncludeVouchers,
+          indirectIncomeExcludeVouchers:  settings.ytd?.indirectIncomeExcludeVouchers,
+          ebitdaLedgers:                  settings.ytd?.ebitdaLedgers,
+          ebitdaIncludeVouchers:          settings.ytd?.ebitdaIncludeVouchers,
+          ebitdaExcludeVouchers:          settings.ytd?.ebitdaExcludeVouchers,
+        })
         console.log('[DaybookNotify] fetched', vouchers.length, 'voucher(s) for', daybookDate)
         await api.post(`/companies/${companyId}/vouchers`, { from: daybookDateIso, to: daybookDateIso, vouchers })
       } catch (err) {
@@ -155,7 +186,6 @@ export function useDaybookNotifications(companyId: string) {
       // one, on top of the equally heavy YTD daybook fetch above.
       try {
         const { from: ytdFrom, to: ytdTo } = ytdRange()
-        const settings = await fetchDashboardSettings(companyId)
 
         const lastHeavy = lastHeavyRefreshAt.get(companyId) ?? 0
         const refreshHeavy = Date.now() - lastHeavy >= HEAVY_REFRESH_COOLDOWN_MS
