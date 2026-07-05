@@ -1285,6 +1285,18 @@ export default function Dashboard() {
         netProfit = gm - indExpTotal + indIncTotal
       }
 
+      // DIO = Closing Stock / COGS * 365, COGS = Opening Stock + Purchases + Direct Expenses − Closing Stock
+      {
+        const openingStock   = snapshot?.openingStock ?? null
+        const closingStock   = snapshot?.closingStock ?? null
+        const directExpenses = snapshot?.directExpenseTotal ?? null
+        const cogs = openingStock != null && directExpenses != null && closingStock != null
+          ? openingStock + purchaseTotal + directExpenses - closingStock : null
+        const dioDays = closingStock != null && cogs ? (closingStock / cogs) * 365 : null
+        console.log(`[Analysis][DB] DIO — Opening Stock: ${openingStock} | Closing Stock: ${closingStock} | Purchases: ${purchaseTotal} | Direct Expenses: ${directExpenses}`)
+        console.log(`[Analysis][DB] DIO — COGS: ${cogs} | DIO (days): ${dioDays}`)
+      }
+
       setAnalysisInputs({
         debtors:               isCurrent ? (snapshot?.receivables ?? null) : null,
         creditors:             isCurrent ? (snapshot?.payables ?? null) : null,
@@ -1389,6 +1401,14 @@ export default function Dashboard() {
       const directExpenses = directExpResult
       const gm = (totalSales + closingStock) - (openingStock + purchaseTotal + directExpenses)
       const netProfit = gm - indExpTotal + indIncTotal
+
+      // DIO = Closing Stock / COGS * 365, COGS = Opening Stock + Purchases + Direct Expenses − Closing Stock
+      {
+        const cogs = openingStock + purchaseTotal + directExpenses - closingStock
+        const dioDays = cogs ? (closingStock / cogs) * 365 : null
+        console.log(`[Analysis][Live] DIO — Opening Stock: ${openingStock} | Closing Stock: ${closingStock} | Purchases: ${purchaseTotal} | Direct Expenses: ${directExpenses}`)
+        console.log(`[Analysis][Live] DIO — COGS: ${cogs} | DIO (days): ${dioDays}`)
+      }
 
       let cash: number | null = null
       let bank: number | null = null
