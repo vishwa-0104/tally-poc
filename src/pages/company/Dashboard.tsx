@@ -1255,8 +1255,15 @@ export default function Dashboard() {
       ])
 
       const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
-      const creditSales   = computeCreditSalesTotal(all, dashboardSettings.today)
-      const totalSales    = computeSalesTotal(all, dashboardSettings.today)
+      // Analysis tab's own Sales definition — deliberately independent of the
+      // Performance tab's `today.salesAccounts`/include/exclude settings.
+      const analysisSalesFilter: SalesFilterSettings = {
+        salesAccounts:        dashboardSettings.ytd?.analysisSalesAccounts,
+        salesIncludeVouchers: dashboardSettings.ytd?.analysisSalesIncludeVouchers,
+        salesExcludeVouchers: dashboardSettings.ytd?.analysisSalesExcludeVouchers,
+      }
+      const creditSales   = computeCreditSalesTotal(all, analysisSalesFilter)
+      const totalSales    = computeSalesTotal(all, analysisSalesFilter)
 
       let netProfit: number | null = null
       if (snapshot?.openingStock != null && snapshot?.closingStock != null && snapshot?.directExpenseTotal != null) {
@@ -1337,6 +1344,12 @@ export default function Dashboard() {
         interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal, directorLoansTotal,
       ] = await Promise.all([
         fetchDaybook(fFrom, fTo, tallyUrl, tallyCompany, {
+          // Analysis tab's own Sales definition, not the Performance tab's —
+          // must match what computeSalesTotal/computeCreditSalesTotal filter
+          // by below, since hasSalesLedger is computed here, ledger-entry-side.
+          salesAccounts:                  dashboardSettings.ytd?.analysisSalesAccounts,
+          salesIncludeVouchers:           dashboardSettings.ytd?.analysisSalesIncludeVouchers,
+          salesExcludeVouchers:           dashboardSettings.ytd?.analysisSalesExcludeVouchers,
           indirectExpenseLedgers:         dashboardSettings.ytd?.indirectExpenseLedgers,
           indirectExpenseIncludeVouchers: dashboardSettings.ytd?.indirectExpenseIncludeVouchers,
           indirectExpenseExcludeVouchers: dashboardSettings.ytd?.indirectExpenseExcludeVouchers,
@@ -1358,8 +1371,15 @@ export default function Dashboard() {
 
       const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
       const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
-      const creditSales   = computeCreditSalesTotal(all, dashboardSettings.today)
-      const totalSales    = computeSalesTotal(all, dashboardSettings.today)
+      // Analysis tab's own Sales definition — deliberately independent of the
+      // Performance tab's `today.salesAccounts`/include/exclude settings.
+      const analysisSalesFilter: SalesFilterSettings = {
+        salesAccounts:        dashboardSettings.ytd?.analysisSalesAccounts,
+        salesIncludeVouchers: dashboardSettings.ytd?.analysisSalesIncludeVouchers,
+        salesExcludeVouchers: dashboardSettings.ytd?.analysisSalesExcludeVouchers,
+      }
+      const creditSales   = computeCreditSalesTotal(all, analysisSalesFilter)
+      const totalSales    = computeSalesTotal(all, analysisSalesFilter)
 
       const { openingStock, closingStock } = stockResult
       const directExpenses = directExpResult

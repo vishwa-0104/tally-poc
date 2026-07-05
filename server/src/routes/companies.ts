@@ -611,6 +611,9 @@ companiesRouter.put('/companies/:id/dashboard-settings', async (req, res) => {
       nonOperatingIncomeLedgers:      z.array(z.string()).optional(),
       nonOperatingInvestmentLedgers:  z.array(z.string()).optional(),
       directorLoanLedgers:            z.array(z.string()).optional(),
+      analysisSalesAccounts:          z.array(z.string()).optional(),
+      analysisSalesIncludeVouchers:   z.array(z.string()).optional(),
+      analysisSalesExcludeVouchers:   z.array(z.string()).optional(),
     }).optional(),
   })
   const result = schema.safeParse(req.body)

@@ -1723,6 +1723,9 @@ async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
   const totalLoans        = loansGrp        ? Math.abs(loansGrp.balance)       : 0
   const bankOD            = bankOdGrp       ? Math.abs(bankOdGrp.balance)      : 0
 
+  console.log(`[GroupBalances] asOfDate=${toDateRaw} | all groups from Tally:`, groups.map(g => `${g.name}=${g.balance}`))
+  console.log('[GroupBalances] mapped:', { receivables, payables, equity, investments, currentLiabilities, fixedAssets, totalLoans, bankOD })
+
   return { receivables, payables, equity, investments, currentLiabilities, fixedAssets, totalLoans, bankOD }
 }
 

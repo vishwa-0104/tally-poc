@@ -193,6 +193,11 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [nonOperatingIncomeLedgers,     setNonOperatingIncomeLedgers]     = useState<string[]>([])
   const [nonOperatingInvestmentLedgers, setNonOperatingInvestmentLedgers] = useState<string[]>([])
   const [directorLoanLedgers,           setDirectorLoanLedgers]           = useState<string[]>([])
+  // Analysis tab's own Sales definition — deliberately separate from the
+  // Today tab's Sales Accounts/Include/Exclude below.
+  const [analysisSalesAccounts,        setAnalysisSalesAccounts]        = useState<string[]>([])
+  const [analysisSalesIncludeVouchers, setAnalysisSalesIncludeVouchers] = useState<string[]>([])
+  const [analysisSalesExcludeVouchers, setAnalysisSalesExcludeVouchers] = useState<string[]>([])
   // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
   const [bankLedgers,   setBankLedgers]   = useState<string[]>([])
@@ -247,6 +252,9 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setNonOperatingIncomeLedgers(s.ytd?.nonOperatingIncomeLedgers ?? [])
         setNonOperatingInvestmentLedgers(s.ytd?.nonOperatingInvestmentLedgers ?? [])
         setDirectorLoanLedgers(s.ytd?.directorLoanLedgers ?? [])
+        setAnalysisSalesAccounts(s.ytd?.analysisSalesAccounts ?? [])
+        setAnalysisSalesIncludeVouchers(s.ytd?.analysisSalesIncludeVouchers ?? [])
+        setAnalysisSalesExcludeVouchers(s.ytd?.analysisSalesExcludeVouchers ?? [])
       })
       .catch(() => { /* settings optional */ })
 
@@ -302,6 +310,9 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         nonOperatingIncomeLedgers:      nonOperatingIncomeLedgers.length     > 0 ? nonOperatingIncomeLedgers     : undefined,
         nonOperatingInvestmentLedgers:  nonOperatingInvestmentLedgers.length > 0 ? nonOperatingInvestmentLedgers : undefined,
         directorLoanLedgers:            directorLoanLedgers.length           > 0 ? directorLoanLedgers           : undefined,
+        analysisSalesAccounts:          analysisSalesAccounts.length          > 0 ? analysisSalesAccounts          : undefined,
+        analysisSalesIncludeVouchers:   analysisSalesIncludeVouchers.length   > 0 ? analysisSalesIncludeVouchers   : undefined,
+        analysisSalesExcludeVouchers:   analysisSalesExcludeVouchers.length   > 0 ? analysisSalesExcludeVouchers   : undefined,
       },
     }
 
@@ -626,7 +637,44 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
 
       {activeTab === 'ratios' && (
         <div className="space-y-6">
-          <p className="text-[11px] text-gray-400 italic -mt-1">
+          {/* ── Analysis tab's own Sales definition ── */}
+          <div>
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Sales (Analysis Tab)</p>
+            <p className="text-[11px] text-gray-400 italic mb-4">
+              Used for DSO and Net Profit on the Analysis tab only — deliberately separate from the
+              Today tab's Sales Accounts, so changing one never affects the other.
+            </p>
+            <div className="space-y-5">
+              <SearchCheckList
+                label="Sales Accounts"
+                hint="Default: all vouchers matching voucher type filter below"
+                options={allLedgerOpts}
+                selected={analysisSalesAccounts}
+                onChange={setAnalysisSalesAccounts}
+                loading={loadingOpts}
+              />
+              <div className="grid grid-cols-2 gap-5">
+                <SearchCheckList
+                  label="Sales — Include Vouchers"
+                  hint="Default: voucher types containing 'sales'"
+                  options={voucherTypeOpts}
+                  selected={analysisSalesIncludeVouchers}
+                  onChange={setAnalysisSalesIncludeVouchers}
+                  loading={loadingOpts}
+                />
+                <SearchCheckList
+                  label="Sales — Exclude Vouchers"
+                  hint="Default: Credit Note"
+                  options={voucherTypeOpts}
+                  selected={analysisSalesExcludeVouchers}
+                  onChange={setAnalysisSalesExcludeVouchers}
+                  loading={loadingOpts}
+                />
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-gray-400 italic border-t border-gray-100 pt-5 -mb-1">
             Used for the Analysis tab's ROCE, ROE, and Debt/Equity cards — Tally has no standard
             group for these, so name the specific ledgers. Any left empty shows "No data available"
             on that card rather than a guessed number.

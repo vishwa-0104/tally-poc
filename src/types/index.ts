@@ -125,6 +125,13 @@ export interface DashboardSettings {
     nonOperatingIncomeLedgers?:      string[]
     nonOperatingInvestmentLedgers?:  string[]
     directorLoanLedgers?:            string[]
+    // Analysis tab's own Sales definition — deliberately separate from
+    // today.salesAccounts/salesIncludeVouchers/salesExcludeVouchers so the
+    // ratio KPIs (DSO, Net Profit) never silently depend on the Performance
+    // tab's settings.
+    analysisSalesAccounts?:          string[]
+    analysisSalesIncludeVouchers?:   string[]
+    analysisSalesExcludeVouchers?:   string[]
   }
 }
 
