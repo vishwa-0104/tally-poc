@@ -1264,6 +1264,8 @@ export default function Dashboard() {
       }
       const creditSales   = computeCreditSalesTotal(all, analysisSalesFilter)
       const totalSales    = computeSalesTotal(all, analysisSalesFilter)
+      console.log('[Analysis][DB] Sales settings:', analysisSalesFilter)
+      console.log(`[Analysis][DB] Total Sales: ${totalSales} | Credit Sales (for DSO): ${creditSales} | vouchers in range: ${all.length}`)
 
       let netProfit: number | null = null
       if (snapshot?.openingStock != null && snapshot?.closingStock != null && snapshot?.directExpenseTotal != null) {
@@ -1380,6 +1382,8 @@ export default function Dashboard() {
       }
       const creditSales   = computeCreditSalesTotal(all, analysisSalesFilter)
       const totalSales    = computeSalesTotal(all, analysisSalesFilter)
+      console.log('[Analysis][Live] Sales settings:', analysisSalesFilter)
+      console.log(`[Analysis][Live] Total Sales: ${totalSales} | Credit Sales (for DSO): ${creditSales} | vouchers in range: ${all.length}`)
 
       const { openingStock, closingStock } = stockResult
       const directExpenses = directExpResult
