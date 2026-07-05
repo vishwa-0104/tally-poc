@@ -89,6 +89,18 @@ export interface DashboardSnapshotPatch {
   closingStock?:       number | null
   directExpenseTotal?: number | null
   slowStockItems?:     SlowStockItem[]
+  equity?:             number | null
+  investments?:        number | null
+  currentLiabilities?: number | null
+  fixedAssets?:        number | null
+  totalLoans?:         number | null
+  bankOD?:             number | null
+  receivables90d?:     number | null
+  interestExpenseTotal?:        number | null
+  taxPaymentTotal?:             number | null
+  nonOperatingIncomeTotal?:     number | null
+  nonOperatingInvestmentTotal?: number | null
+  directorLoansTotal?:          number | null
 }
 
 export interface DashboardSnapshotData extends DashboardSnapshotPatch {

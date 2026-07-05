@@ -606,6 +606,11 @@ companiesRouter.put('/companies/:id/dashboard-settings', async (req, res) => {
       ebitdaIncludeVouchers:          z.array(z.string()).optional(),
       ebitdaExcludeVouchers:          z.array(z.string()).optional(),
       grossMarginTarget:              z.number().optional(),
+      interestExpenseLedgers:         z.array(z.string()).optional(),
+      taxPaymentLedgers:              z.array(z.string()).optional(),
+      nonOperatingIncomeLedgers:      z.array(z.string()).optional(),
+      nonOperatingInvestmentLedgers:  z.array(z.string()).optional(),
+      directorLoanLedgers:            z.array(z.string()).optional(),
     }).optional(),
   })
   const result = schema.safeParse(req.body)
@@ -1136,6 +1141,18 @@ companiesRouter.put('/companies/:id/dashboard-snapshot', async (req, res) => {
     closingStock:       z.number().nullable().optional(),
     directExpenseTotal: z.number().nullable().optional(),
     slowStockItems:     z.array(z.record(z.any())).optional(),
+    equity:             z.number().nullable().optional(),
+    investments:        z.number().nullable().optional(),
+    currentLiabilities: z.number().nullable().optional(),
+    fixedAssets:        z.number().nullable().optional(),
+    totalLoans:         z.number().nullable().optional(),
+    bankOD:             z.number().nullable().optional(),
+    receivables90d:     z.number().nullable().optional(),
+    interestExpenseTotal:        z.number().nullable().optional(),
+    taxPaymentTotal:             z.number().nullable().optional(),
+    nonOperatingIncomeTotal:     z.number().nullable().optional(),
+    nonOperatingInvestmentTotal: z.number().nullable().optional(),
+    directorLoansTotal:          z.number().nullable().optional(),
   })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }

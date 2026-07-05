@@ -18,7 +18,13 @@
       "Bash(git checkout *)",
       "Bash(git *)",
       "Bash(docker cp *)",
-      "Bash(docker restart *)"
+      "Bash(docker restart *)",
+      "Bash(python3 -c ' *)",
+      "Bash(mdls -name kMDItemNumberOfPages \"Analysis Dashboard.pdf\")",
+      "Bash(/usr/bin/python3 -)",
+      "Bash(pdfimages -list \"Analysis Dashboard.pdf\")",
+      "Bash(mkdir -p /private/tmp/claude-502/-Users-vishwnath-yadav-Desktop-projects-tally-bill-sync/0d755280-6887-4067-af24-cb344e7ba21b/scratchpad/pdfpreview)",
+      "Bash(qlmanage -t -s 1600 -o /private/tmp/claude-502/-Users-vishwnath-yadav-Desktop-projects-tally-bill-sync/0d755280-6887-4067-af24-cb344e7ba21b/scratchpad/pdfpreview \"/Users/vishwnath.yadav/Downloads/Analysis Dashboard.pdf\")"
     ]
   }
 }

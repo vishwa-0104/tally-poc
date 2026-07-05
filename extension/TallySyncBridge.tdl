@@ -33,7 +33,25 @@
     Fetch  : Name, ClosingBalance
 
 [System: Formula]
-    TBSIsDebtorCreditor : $$IsEqual:$Name:"Sundry Debtors" OR $$IsEqual:$Name:"Sundry Creditors"
+    TBSIsDebtorCreditor : $$IsEqual:$Name:"Sundry Debtors" OR $$IsEqual:$Name:"Sundry Creditors" OR $$IsEqual:$Name:"Capital Account" OR $$IsEqual:$Name:"Investments" OR $$IsEqual:$Name:"Current Liabilities" OR $$IsEqual:$Name:"Fixed Assets" OR $$IsEqual:$Name:"Loans (Liability)" OR $$IsEqual:$Name:"Bank OD A/c"
+
+; TBSReceivableBills — outstanding bills for Sundry Debtors ledgers. Ledger's
+; BillAllocations member returns the CURRENT outstanding bill list (not every
+; historical bill), which is what ageing needs. BillDate comes back as
+; YYYYMMDD like every other Collection-fetched date field in this file — NOT
+; a display-format string. Only catches ledgers whose direct Parent is
+; "Sundry Debtors" (same one-level-deep simplification TBSIsCashOrBank
+; already uses) — a company nesting debtors under sub-groups won't be caught.
+; NEW, UNTESTED against live Tally as of writing — verify BillAllocations
+; fetch actually returns rows before trusting this for Quick Ratio.
+[Collection: TBSReceivableBills]
+    Type        : Ledger
+    Filter      : TBSIsDebtorLedger
+    Fetch       : Name
+    Fetch       : BillAllocations.Name, BillAllocations.BillDate, BillAllocations.ClosingBalance
+
+[System: Formula]
+    TBSIsDebtorLedger : $$IsEqual:$Parent:"Sundry Debtors"
 
 [Collection: TBSStockBalance]
     Type        : StockItem

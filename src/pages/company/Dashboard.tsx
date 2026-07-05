@@ -11,7 +11,7 @@ import {
   Users, Store, Download, Zap,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore, useDaybookSyncStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, fetchReceivablesAgeing, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import {
   fetchSalesTargets, fetchDashboardSettings,
   fetchCachedVouchers, saveVouchers, fetchDashboardSnapshot, saveDashboardSnapshot,
@@ -22,7 +22,7 @@ import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
 import { SalesTargetModal } from '@/components/company/SalesTargetModal'
-import { classifyVouchers } from '@/lib/voucherClassification'
+import { classifyVouchers, computeCreditSalesTotal } from '@/lib/voucherClassification'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -170,15 +170,6 @@ const dummySalesByCategory = [
   { name: 'Apparel',     value: 2200 },
   { name: 'Pharma',      value: 1800 },
   { name: 'Others',      value: 900  },
-]
-
-const dummyYoY = [
-  { month: 'Jan', thisYear: 7200, lastYear: 6800 },
-  { month: 'Feb', thisYear: 6900, lastYear: 7100 },
-  { month: 'Mar', thisYear: 8100, lastYear: 7600 },
-  { month: 'Apr', thisYear: 7800, lastYear: 6900 },
-  { month: 'May', thisYear: 8916, lastYear: 8200 },
-  { month: 'Jun', thisYear: 0,    lastYear: 7900 },
 ]
 
 const cfoSuggestions = [
@@ -406,6 +397,37 @@ function PayablesCard({ balance }: { balance: number | null }) {
   )
 }
 
+// Analysis tab's 9 ratio KPI cards. Reuses KpiCard's exact visual language.
+// noData renders only the heading + "No data available" — never a fabricated
+// number — for whichever inputs genuinely aren't fetchable for this company.
+function RatioKpiCard({ title, value, subtitle, icon: Icon, suffix = '' }: {
+  title:    string
+  value:    number | null
+  subtitle: string
+  icon:     React.ElementType
+  suffix?:  string
+}) {
+  const noData = value == null
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className="p-2 bg-blue-50 rounded-lg">
+          <Icon className="w-4 h-4 text-blue-600" />
+        </div>
+      </div>
+      {noData ? (
+        <p className="text-xs font-semibold text-gray-400 italic mb-0.5">No data available</p>
+      ) : (
+        <p className="text-lg font-bold tracking-tight mb-0.5 text-gray-900">
+          {value.toLocaleString('en-IN', { maximumFractionDigits: 1 })}{suffix}
+        </p>
+      )}
+      <p className="text-[11px] font-semibold text-gray-600">{title}</p>
+      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{subtitle}</p>
+    </div>
+  )
+}
+
 function GrossMarginCard({ value, pct, targetPct }: {
   value:     number | null
   pct:       number | null
@@ -587,6 +609,112 @@ const FILTERS: { key: FilterPreset; label: string }[] = [
   { key: 'custom',  label: 'Custom'       },
 ]
 
+// Analysis tab's own filter — independent of the Performance tab's FILTERS/
+// filterPreset state above, so switching one never affects the other.
+const ANALYSIS_FILTERS: { key: FilterPreset; label: string }[] = [
+  { key: 'today',  label: 'Today'  },
+  { key: 'ytd',    label: 'YTD'    },
+  { key: 'custom', label: 'Custom' },
+]
+
+// Raw inputs behind the 9 ratio KPIs. null = genuinely unavailable (never a
+// fabricated number) — every ratio card checks its own required inputs and
+// renders "No data available" if any are null, rather than guessing.
+interface AnalysisInputs {
+  debtors:                     number | null
+  creditors:                   number | null
+  creditSales:                 number | null
+  openingStock:                number | null
+  closingStock:                number | null
+  purchases:                   number | null
+  directExpenses:              number | null
+  cash:                        number | null
+  bank:                        number | null
+  investments:                 number | null
+  receivables90d:              number | null
+  currentLiabilities:          number | null
+  bankOD:                      number | null
+  equity:                      number | null
+  totalLoans:                  number | null
+  netProfit:                   number | null
+  interestExpense:             number | null
+  taxPayment:                  number | null
+  nonOperatingIncome:          number | null
+  nonOperatingInvestment:      number | null
+  directorLoans:               number | null
+}
+
+const emptyAnalysisInputs: AnalysisInputs = {
+  debtors: null, creditors: null, creditSales: null, openingStock: null, closingStock: null,
+  purchases: null, directExpenses: null, cash: null, bank: null, investments: null,
+  receivables90d: null, currentLiabilities: null, bankOD: null, equity: null, totalLoans: null,
+  netProfit: null, interestExpense: null, taxPayment: null, nonOperatingIncome: null,
+  nonOperatingInvestment: null, directorLoans: null,
+}
+
+interface RatioResults {
+  dso:         number | null
+  dio:         number | null
+  dpo:         number | null
+  ccc:         number | null
+  currentRatio: number | null
+  quickRatio:  number | null
+  roce:        number | null
+  roe:         number | null
+  debtEquity:  number | null
+}
+
+// Pure derivation from AnalysisInputs — every ratio individually null-guards
+// its own required inputs so one missing figure never silently zeroes or
+// skews a different card.
+function computeRatios(i: AnalysisInputs): RatioResults {
+  const dso = i.debtors != null && i.creditSales
+    ? (i.debtors / i.creditSales) * 365 : null
+
+  const cogs = i.openingStock != null && i.purchases != null && i.directExpenses != null && i.closingStock != null
+    ? i.openingStock + i.purchases + i.directExpenses - i.closingStock : null
+  const dio = i.closingStock != null && cogs
+    ? (i.closingStock / cogs) * 365 : null
+
+  const dpo = i.creditors != null && i.purchases
+    ? (i.creditors / i.purchases) * 365 : null
+
+  const ccc = dso != null && dio != null && dpo != null ? dso + dio - dpo : null
+
+  const currentRatio = i.closingStock != null && i.debtors != null && i.creditors
+    ? (i.closingStock + i.debtors) / i.creditors : null
+
+  const quickNumerator = i.cash != null && i.bank != null && i.investments != null && i.receivables90d != null
+    ? i.cash + i.bank + i.investments + i.receivables90d : null
+  const quickDenominator = i.currentLiabilities != null && i.bankOD != null
+    ? i.currentLiabilities - i.bankOD : null
+  const quickRatio = quickNumerator != null && quickDenominator
+    ? quickNumerator / quickDenominator : null
+
+  const ebit = i.netProfit != null && i.interestExpense != null && i.taxPayment != null
+    ? i.netProfit - i.interestExpense - i.taxPayment : null
+  const roceNumerator = ebit != null && i.nonOperatingIncome != null ? ebit - i.nonOperatingIncome : null
+  const roceDenominator = i.equity != null && i.totalLoans != null && i.nonOperatingInvestment != null
+    ? i.equity + i.totalLoans - i.nonOperatingInvestment : null
+  const roce = roceNumerator != null && roceDenominator ? (roceNumerator / roceDenominator) * 100 : null
+
+  // ROE's own borrowings/intangible-assets sub-buckets have no standard Tally
+  // source (see plan) — deliberately left out rather than substituting Total
+  // Loans/Total Fixed Assets under a different label, so ROE always shows
+  // "No data available" for now rather than a number computed from the wrong
+  // inputs.
+  const roe: number | null = null
+
+  const debtEquityNumerator = i.totalLoans != null && i.cash != null && i.bank != null
+    ? i.totalLoans - i.cash - i.bank : null
+  const debtEquityDenominator = i.equity != null && i.directorLoans != null
+    ? i.equity + i.directorLoans : null
+  const debtEquity = debtEquityNumerator != null && debtEquityDenominator
+    ? debtEquityNumerator / debtEquityDenominator : null
+
+  return { dso, dio, dpo, ccc, currentRatio, quickRatio, roce, roe, debtEquity }
+}
+
 export default function Dashboard() {
   const { activeCompanyId } = useAuthStore()
   const { getCompany }       = useCompanyStore()
@@ -636,6 +764,16 @@ export default function Dashboard() {
   const [error,         setError]         = useState<string | null>(null)
   const [activePeriod,  setActivePeriod]  = useState<{ from: string; to: string } | null>(null)
   const [uncachedRange, setUncachedRange] = useState(false) // true when the DB has never seen this range — hints "click Apply"
+
+  // ── Analysis tab — fully independent filter/state from the Performance tab above ──
+  const [analysisFilterPreset, setAnalysisFilterPreset] = useState<FilterPreset>('ytd')
+  const [analysisCustomFrom,   setAnalysisCustomFrom]   = useState(todayStr())
+  const [analysisCustomTo,     setAnalysisCustomTo]     = useState(todayStr())
+  const [analysisLoading,      setAnalysisLoading]      = useState(false)
+  const [analysisFetched,      setAnalysisFetched]      = useState(false)
+  const [analysisUncachedRange, setAnalysisUncachedRange] = useState(false)
+  const [analysisActivePeriod, setAnalysisActivePeriod] = useState<{ from: string; to: string } | null>(null)
+  const [analysisInputs,       setAnalysisInputs]       = useState<AnalysisInputs>(emptyAnalysisInputs)
 
   const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string, settingsOverride?: DashboardSettings) => {
     const settings = settingsOverride ?? dashboardSettings
@@ -1098,6 +1236,229 @@ export default function Dashboard() {
     }
   }, [companyId, dashboardSettings])
 
+  // ── Analysis tab — DB-only read, mirrors loadFromDb above but for the 9
+  // ratio KPIs. Never touches Tally. Balance-sheet inputs (debtors, creditors,
+  // cash, bank, investments, current liabilities, bank OD, equity, total
+  // loans, receivables-90d) only apply when `to` is today — same Tally
+  // "ClosingBalance ignores SVTODATE" limitation loadFromDb already works
+  // around for receivables/payables/cash/bank.
+  const loadAnalysisFromDb = useCallback(async (preset: FilterPreset, cfrom: string, cto: string): Promise<{ fetchedDates: string[] }> => {
+    if (!companyId) return { fetchedDates: [] }
+    const { from, to } = getFilterDates(preset, cfrom, cto)
+    const isCurrent = to === todayStr()
+
+    setAnalysisLoading(true)
+    try {
+      const [{ vouchers: all, fetchedDates }, snapshot] = await Promise.all([
+        fetchCachedVouchers(companyId, from, to),
+        fetchDashboardSnapshot(companyId),
+      ])
+
+      const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
+      const creditSales   = computeCreditSalesTotal(all, dashboardSettings.today)
+      const totalSales    = computeSalesTotal(all, dashboardSettings.today)
+
+      let netProfit: number | null = null
+      if (snapshot?.openingStock != null && snapshot?.closingStock != null && snapshot?.directExpenseTotal != null) {
+        const { indExpTotal, indIncTotal } = classifyVouchers(
+          all,
+          {
+            indirectExpenseLedgers:         dashboardSettings.ytd?.indirectExpenseLedgers,
+            indirectExpenseIncludeVouchers: dashboardSettings.ytd?.indirectExpenseIncludeVouchers,
+            indirectExpenseExcludeVouchers: dashboardSettings.ytd?.indirectExpenseExcludeVouchers,
+            indirectIncomeLedgers:          dashboardSettings.ytd?.indirectIncomeLedgers,
+            indirectIncomeIncludeVouchers:  dashboardSettings.ytd?.indirectIncomeIncludeVouchers,
+            indirectIncomeExcludeVouchers:  dashboardSettings.ytd?.indirectIncomeExcludeVouchers,
+          },
+          from, to,
+        )
+        const gm = (totalSales + snapshot.closingStock) - (snapshot.openingStock + purchaseTotal + snapshot.directExpenseTotal)
+        netProfit = gm - indExpTotal + indIncTotal
+      }
+
+      setAnalysisInputs({
+        debtors:               isCurrent ? (snapshot?.receivables ?? null) : null,
+        creditors:             isCurrent ? (snapshot?.payables ?? null) : null,
+        creditSales,
+        openingStock:          snapshot?.openingStock ?? null,
+        closingStock:          snapshot?.closingStock ?? null,
+        purchases:             purchaseTotal,
+        directExpenses:        snapshot?.directExpenseTotal ?? null,
+        cash:                  isCurrent ? (snapshot?.cashInHand ?? null) : null,
+        bank:                  isCurrent ? (snapshot?.bankBalance ?? null) : null,
+        investments:           isCurrent ? (snapshot?.investments ?? null) : null,
+        receivables90d:        isCurrent ? (snapshot?.receivables90d ?? null) : null,
+        currentLiabilities:    isCurrent ? (snapshot?.currentLiabilities ?? null) : null,
+        bankOD:                isCurrent ? (snapshot?.bankOD ?? null) : null,
+        equity:                isCurrent ? (snapshot?.equity ?? null) : null,
+        totalLoans:            isCurrent ? (snapshot?.totalLoans ?? null) : null,
+        netProfit,
+        interestExpense:        snapshot?.interestExpenseTotal ?? null,
+        taxPayment:             snapshot?.taxPaymentTotal ?? null,
+        nonOperatingIncome:     snapshot?.nonOperatingIncomeTotal ?? null,
+        nonOperatingInvestment: snapshot?.nonOperatingInvestmentTotal ?? null,
+        directorLoans:          snapshot?.directorLoansTotal ?? null,
+      })
+      setAnalysisActivePeriod({ from, to })
+      setAnalysisFetched(true)
+      return { fetchedDates }
+    } catch (err) {
+      console.error('[Dashboard] loadAnalysisFromDb failed:', err)
+      return { fetchedDates: [] }
+    } finally {
+      setAnalysisLoading(false)
+    }
+  }, [companyId, dashboardSettings])
+
+  // ── Analysis tab — live Tally fetch + persist, mirrors fetchData above.
+  const fetchAnalysisData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string) => {
+    if (!connected) {
+      toast.error('Tally not connected. Please ensure the extension is installed and Tally is open.')
+      return
+    }
+    const { from, to } = getFilterDates(preset, cfrom, cto)
+    const isCurrent = to === todayStr()
+    const fFrom = toTallyDate(from)
+    const fTo   = toTallyDate(to)
+
+    // Only hits Tally for a ledger list that's actually configured — an
+    // unconfigured list must stay null ("No data available"), never 0, since
+    // 0 is indistinguishable from "genuinely no expense this period".
+    const fetchLedgerTotal = (names?: string[]): Promise<number | null> =>
+      names?.length
+        ? fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, names)
+        : Promise.resolve(null)
+
+    setAnalysisLoading(true)
+    try {
+      const [
+        daybookResult, stockResult, directExpResult,
+        groupBalResult, ledgerBalResult, ageingResult,
+        interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal, directorLoansTotal,
+      ] = await Promise.all([
+        fetchDaybook(fFrom, fTo, tallyUrl, tallyCompany, {
+          indirectExpenseLedgers:         dashboardSettings.ytd?.indirectExpenseLedgers,
+          indirectExpenseIncludeVouchers: dashboardSettings.ytd?.indirectExpenseIncludeVouchers,
+          indirectExpenseExcludeVouchers: dashboardSettings.ytd?.indirectExpenseExcludeVouchers,
+          indirectIncomeLedgers:          dashboardSettings.ytd?.indirectIncomeLedgers,
+          indirectIncomeIncludeVouchers:  dashboardSettings.ytd?.indirectIncomeIncludeVouchers,
+          indirectIncomeExcludeVouchers:  dashboardSettings.ytd?.indirectIncomeExcludeVouchers,
+        }),
+        fetchStockValue(fFrom, fTo, tallyUrl, tallyCompany),
+        fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, dashboardSettings.ytd?.directExpenseLedgers),
+        isCurrent ? fetchGroupBalances(tallyUrl, tallyCompany) : Promise.resolve(null),
+        isCurrent ? fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr())) : Promise.resolve(null),
+        isCurrent ? fetchReceivablesAgeing(tallyUrl, tallyCompany, toTallyDate(todayStr()), 90) : Promise.resolve(null),
+        fetchLedgerTotal(dashboardSettings.ytd?.interestExpenseLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.taxPaymentLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.nonOperatingIncomeLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.nonOperatingInvestmentLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.directorLoanLedgers),
+      ])
+
+      const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
+      const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
+      const creditSales   = computeCreditSalesTotal(all, dashboardSettings.today)
+      const totalSales    = computeSalesTotal(all, dashboardSettings.today)
+
+      const { openingStock, closingStock } = stockResult
+      const directExpenses = directExpResult
+      const gm = (totalSales + closingStock) - (openingStock + purchaseTotal + directExpenses)
+      const netProfit = gm - indExpTotal + indIncTotal
+
+      let cash: number | null = null
+      let bank: number | null = null
+      if (isCurrent && ledgerBalResult && ledgerBalResult.rawLedgers.length > 0) {
+        const cashLedgers = ledgerBalResult.rawLedgers.filter(l => l.group.toLowerCase().includes('cash'))
+        const bankLedgers = ledgerBalResult.rawLedgers.filter(l => l.group.toLowerCase().includes('bank'))
+        cash = -cashLedgers.reduce((s, l) => s + l.balance, 0)
+        bank = -bankLedgers.reduce((s, l) => s + l.balance, 0)
+      }
+
+      const debtors             = isCurrent && groupBalResult ? groupBalResult.receivables : null
+      const creditors           = isCurrent && groupBalResult ? groupBalResult.payables : null
+      const investments         = isCurrent && groupBalResult ? groupBalResult.investments : null
+      const currentLiabilities  = isCurrent && groupBalResult ? groupBalResult.currentLiabilities : null
+      const bankOD              = isCurrent && groupBalResult ? groupBalResult.bankOD : null
+      const equity              = isCurrent && groupBalResult ? groupBalResult.equity : null
+      const totalLoans          = isCurrent && groupBalResult ? groupBalResult.totalLoans : null
+      const receivables90d      = isCurrent && ageingResult?.available ? ageingResult.total : null
+
+      setAnalysisInputs({
+        debtors, creditors, creditSales, openingStock, closingStock,
+        purchases: purchaseTotal, directExpenses, cash, bank, investments, receivables90d,
+        currentLiabilities, bankOD, equity, totalLoans, netProfit,
+        interestExpense: interestExpenseTotal, taxPayment: taxPaymentTotal,
+        nonOperatingIncome: nonOperatingIncomeTotal, nonOperatingInvestment: nonOperatingInvestmentTotal,
+        directorLoans: directorLoansTotal,
+      })
+      setAnalysisActivePeriod({ from, to })
+      setAnalysisFetched(true)
+
+      void saveVouchers(companyId, from, to, all)
+        .catch((err: unknown) => console.error('[Analysis] Failed to persist vouchers:', err))
+
+      const snapshotPatch: DashboardSnapshotPatch = {
+        openingStock, closingStock, directExpenseTotal: directExpenses,
+      }
+      if (isCurrent) {
+        snapshotPatch.receivables        = debtors
+        snapshotPatch.payables           = creditors
+        snapshotPatch.cashInHand         = cash
+        snapshotPatch.bankBalance        = bank
+        snapshotPatch.investments        = investments
+        snapshotPatch.currentLiabilities = currentLiabilities
+        snapshotPatch.bankOD             = bankOD
+        snapshotPatch.equity             = equity
+        snapshotPatch.totalLoans         = totalLoans
+        snapshotPatch.receivables90d     = receivables90d
+      }
+      if (interestExpenseTotal        != null) snapshotPatch.interestExpenseTotal        = interestExpenseTotal
+      if (taxPaymentTotal             != null) snapshotPatch.taxPaymentTotal             = taxPaymentTotal
+      if (nonOperatingIncomeTotal     != null) snapshotPatch.nonOperatingIncomeTotal     = nonOperatingIncomeTotal
+      if (nonOperatingInvestmentTotal != null) snapshotPatch.nonOperatingInvestmentTotal = nonOperatingInvestmentTotal
+      if (directorLoansTotal          != null) snapshotPatch.directorLoansTotal          = directorLoansTotal
+
+      void saveDashboardSnapshot(companyId, snapshotPatch)
+        .catch((err: unknown) => console.error('[Analysis] Failed to persist snapshot:', err))
+    } catch (err) {
+      console.error('[Dashboard] fetchAnalysisData failed:', err)
+      toast.error('No data found. Please check that Tally is open and try again.')
+    } finally {
+      setAnalysisLoading(false)
+    }
+  }, [connected, tallyUrl, tallyCompany, dashboardSettings, companyId])
+
+  // Analysis tab's own one-time DB-backfill-on-mount + preset-change auto-load,
+  // mirroring the Performance tab's equivalent effect above but fully decoupled.
+  const hasDoneAnalysisInitialLoadRef = useRef(false)
+  useEffect(() => {
+    if (!companyId) return
+    if (analysisFilterPreset === 'custom') return
+    loadAnalysisFromDb(analysisFilterPreset, analysisCustomFrom, analysisCustomTo).then(({ fetchedDates }) => {
+      setAnalysisUncachedRange(fetchedDates.length === 0)
+      if (!hasDoneAnalysisInitialLoadRef.current) {
+        hasDoneAnalysisInitialLoadRef.current = true
+        if (fetchedDates.length === 0) fetchAnalysisData(analysisFilterPreset, analysisCustomFrom, analysisCustomTo)
+      }
+    })
+  }, [analysisFilterPreset, companyId, dashboardSettings]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAnalysisFilterChange = (preset: FilterPreset) => {
+    setAnalysisFilterPreset(preset)
+  }
+
+  const handleAnalysisApply = () => {
+    loadAnalysisFromDb(analysisFilterPreset, analysisCustomFrom, analysisCustomTo).then(({ fetchedDates }) => {
+      setAnalysisUncachedRange(fetchedDates.length === 0)
+    })
+  }
+
+  const handleAnalysisFetchLive = () => {
+    setAnalysisUncachedRange(false)
+    fetchAnalysisData(analysisFilterPreset, analysisCustomFrom, analysisCustomTo)
+  }
+
   const reloadMeta = () => {
     if (!companyId) return
     fetchSalesTargets(companyId, fyYear)
@@ -1490,7 +1851,97 @@ export default function Dashboard() {
         {/* ══════════════════ ANALYSIS TAB ══════════════════ */}
         {activeTab === 'analysis' && (
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-5">
+
+            {/* Filter bar — fully independent of the Performance tab's filter above */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1">
+                {ANALYSIS_FILTERS.map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => handleAnalysisFilterChange(f.key)}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                      analysisFilterPreset === f.key
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {analysisFilterPreset === 'custom' && (
+                <>
+                  <input
+                    type="date" value={analysisCustomFrom}
+                    onChange={e => setAnalysisCustomFrom(e.target.value)}
+                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-blue-500"
+                  />
+                  <span className="text-gray-400 text-xs">to</span>
+                  <input
+                    type="date" value={analysisCustomTo}
+                    onChange={e => setAnalysisCustomTo(e.target.value)}
+                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-blue-500"
+                  />
+                  <button
+                    onClick={handleAnalysisApply}
+                    disabled={analysisLoading}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    Apply
+                  </button>
+                </>
+              )}
+
+              <button
+                onClick={handleAnalysisFetchLive}
+                disabled={analysisLoading}
+                title="Fetch the latest data from Tally and save it to the database"
+                className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50"
+              >
+                <Zap className="w-3 h-3" />
+                Fetch Live
+              </button>
+
+              {analysisLoading && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+            </div>
+
+            {!analysisLoading && analysisFetched && analysisUncachedRange && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <p className="text-xs text-amber-700">No cached data for this range yet — click Fetch Live to pull it from Tally.</p>
+              </div>
+            )}
+
+            {analysisActivePeriod && (
+              <p className="text-xs text-gray-400">
+                Showing: {analysisActivePeriod.from === analysisActivePeriod.to
+                  ? new Date(analysisActivePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : `${new Date(analysisActivePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(analysisActivePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+              </p>
+            )}
+
+            {/* 9 ratio KPI cards */}
+            <div className="grid grid-cols-3 gap-4">
+              {(() => {
+                const r = computeRatios(analysisInputs)
+                return (
+                  <>
+                    <RatioKpiCard title="DSO" subtitle="Days Sales Outstanding" icon={Users} value={r.dso} suffix=" days" />
+                    <RatioKpiCard title="DIO" subtitle="Days Inventory Outstanding" icon={Store} value={r.dio} suffix=" days" />
+                    <RatioKpiCard title="DPO" subtitle="Days Payables Outstanding" icon={Building2} value={r.dpo} suffix=" days" />
+                    <RatioKpiCard title="CCC" subtitle="Cash Conversion Cycle" icon={RefreshCw} value={r.ccc} suffix=" days" />
+                    <RatioKpiCard title="Current Ratio" subtitle="(Inventory + Debtors) / Creditors" icon={CheckCircle} value={r.currentRatio} />
+                    <RatioKpiCard title="Quick Ratio" subtitle="Liquid Assets / Current Liabilities" icon={Zap} value={r.quickRatio} />
+                    <RatioKpiCard title="ROCE" subtitle="Return on Capital Employed" icon={TrendingUp} value={r.roce} suffix="%" />
+                    <RatioKpiCard title="ROE" subtitle="Return on Equity" icon={Wallet} value={r.roe} suffix="%" />
+                    <RatioKpiCard title="Debt/Equity" subtitle="Borrowings vs Equity" icon={AlertTriangle} value={r.debtEquity} />
+                  </>
+                )
+              })()}
+            </div>
+
+            <div className="grid grid-cols-1 gap-5">
 
               {/* Sales by Category */}
               <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -1510,36 +1961,8 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-
-              {/* Year-over-Year */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-4">Year-over-Year Comparison</p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={dummyYoY} barGap={3} barCategoryGap="30%">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9CA3AF' }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} tickLine={false} axisLine={false} width={44}
-                      tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip content={<BarTip />} />
-                    <Bar dataKey="thisYear" name="This Year" fill="#2563EB" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="lastYear" name="Last Year" fill="#E5E7EB" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="flex gap-4 justify-center mt-2">
-                  <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                    <span className="w-3 h-3 rounded-sm bg-blue-600 inline-block" />This Year
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                    <span className="w-3 h-3 rounded-sm bg-gray-200 inline-block" />Last Year
-                  </span>
-                </div>
-              </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5 text-center">
-              <p className="text-sm font-semibold text-gray-600 mb-1">More analysis panels coming soon</p>
-              <p className="text-xs text-gray-400">Gross margin trend, expense breakdown, and debtor aging analysis will appear here.</p>
-            </div>
           </div>
         )}
 

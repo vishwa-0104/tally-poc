@@ -314,13 +314,38 @@ export async function fetchLedgerBalances(
   })
 }
 
+export interface GroupBalances {
+  receivables:        number
+  payables:           number
+  equity:             number
+  investments:        number
+  currentLiabilities: number
+  fixedAssets:        number
+  totalLoans:         number
+  bankOD:             number
+}
+
 export async function fetchGroupBalances(
   tallyUrl: string,
   tallyCompany?: string,
   asOfDate?: string,   // YYYYMMDD — ignored by Tally, always returns current date balance
-): Promise<{ receivables: number; payables: number }> {
-  return sendToExtension<{ receivables: number; payables: number }>('FETCH_GROUP_BALANCES', {
+): Promise<GroupBalances> {
+  return sendToExtension<GroupBalances>('FETCH_GROUP_BALANCES', {
     tallyUrl, tallyCompany, asOfDate,
+  })
+}
+
+// available: false means bill-wise ageing genuinely couldn't be determined
+// (no debtor ledgers, or bill-wise details not maintained) — never fall back
+// to a guessed number, show "No data available" instead.
+export async function fetchReceivablesAgeing(
+  tallyUrl: string,
+  tallyCompany?: string,
+  asOfDate?: string,   // YYYYMMDD
+  withinDays = 90,
+): Promise<{ available: boolean; total: number | null }> {
+  return sendToExtension<{ available: boolean; total: number | null }>('FETCH_RECEIVABLES_AGEING', {
+    tallyUrl, tallyCompany, asOfDate, withinDays,
   })
 }
 

@@ -128,3 +128,35 @@ export function classifyVouchers(
 
   return { cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback }
 }
+
+// Credit vs Cash sales split, for DSO. Sundry Debtors party ⇒ credit sale,
+// Cash/Bank party ⇒ cash sale — reuses the same party-name regex fallback
+// already used above for cash/bank ledger flow, since a cash sale's party is
+// always a Cash/Bank ledger and a credit sale's party is always a debtor
+// ledger. No separate ledger-group fetch needed. Mirrors the same
+// include/exclude voucher-type filtering computeSalesTotal (Dashboard.tsx)
+// already applies, so the two totals are directly comparable.
+export function computeCreditSalesTotal(
+  vouchers: TallyVoucher[],
+  sf: { salesAccounts?: string[]; salesIncludeVouchers?: string[]; salesExcludeVouchers?: string[] } | undefined,
+): number {
+  const { salesAccounts, salesIncludeVouchers, salesExcludeVouchers } = sf ?? {}
+  const base = salesAccounts?.length ? vouchers.filter((v) => v.hasSalesLedger) : vouchers
+
+  const included = base.filter((v) => {
+    if (salesIncludeVouchers?.length)
+      return salesIncludeVouchers.some((t) => v.type.toLowerCase() === t.toLowerCase())
+    return /sales/i.test(v.type) && !/credit\s*note/i.test(v.type)
+  })
+
+  const excluded = base.filter((v) => {
+    if (salesExcludeVouchers?.length)
+      return salesExcludeVouchers.some((t) => v.type.toLowerCase() === t.toLowerCase())
+    return /credit\s*note/i.test(v.type)
+  })
+
+  const isCreditSale = (v: TallyVoucher) => !CASH_RE.test(v.party) && !BANK_RE.test(v.party)
+
+  return included.filter(isCreditSale).reduce((s, v) => s + v.taxableAmount, 0)
+       - excluded.filter(isCreditSale).reduce((s, v) => s + v.taxableAmount, 0)
+}

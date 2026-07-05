@@ -118,6 +118,13 @@ export interface DashboardSettings {
     ebitdaIncludeVouchers?:          string[]
     ebitdaExcludeVouchers?:          string[]
     grossMarginTarget?:              number
+    // Analysis tab ratio KPIs (ROCE/ROE/Debt-Equity) — ledger lists with no
+    // standard Tally group, so the company must name them explicitly.
+    interestExpenseLedgers?:         string[]
+    taxPaymentLedgers?:              string[]
+    nonOperatingIncomeLedgers?:      string[]
+    nonOperatingInvestmentLedgers?:  string[]
+    directorLoanLedgers?:            string[]
   }
 }
 

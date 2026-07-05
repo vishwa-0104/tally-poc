@@ -27,7 +27,7 @@ function getCurrentFyYear() {
   return today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
 }
 
-type SettingsTab = 'today' | 'ytd' | 'monthly'
+type SettingsTab = 'today' | 'ytd' | 'ratios' | 'monthly'
 
 interface Props {
   open:          boolean
@@ -187,6 +187,12 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [ytdEbitdaIncludeVouchers, setYtdEbitdaIncludeVouchers] = useState<string[]>([])
   const [ytdEbitdaExcludeVouchers, setYtdEbitdaExcludeVouchers] = useState<string[]>([])
   const [ytdGrossMarginTarget,       setYtdGrossMarginTarget]       = useState<string>('')
+  // Analysis-tab ratio KPI ledger lists (ROCE/ROE/Debt-Equity)
+  const [interestExpenseLedgers,        setInterestExpenseLedgers]        = useState<string[]>([])
+  const [taxPaymentLedgers,             setTaxPaymentLedgers]             = useState<string[]>([])
+  const [nonOperatingIncomeLedgers,     setNonOperatingIncomeLedgers]     = useState<string[]>([])
+  const [nonOperatingInvestmentLedgers, setNonOperatingInvestmentLedgers] = useState<string[]>([])
+  const [directorLoanLedgers,           setDirectorLoanLedgers]           = useState<string[]>([])
   // Cash / bank settings
   const [inflowLedgers, setInflowLedgers] = useState<string[]>([])
   const [bankLedgers,   setBankLedgers]   = useState<string[]>([])
@@ -236,6 +242,11 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setYtdEbitdaIncludeVouchers(s.ytd?.ebitdaIncludeVouchers ?? [])
         setYtdEbitdaExcludeVouchers(s.ytd?.ebitdaExcludeVouchers ?? [])
         setYtdGrossMarginTarget(s.ytd?.grossMarginTarget != null ? String(s.ytd.grossMarginTarget) : '')
+        setInterestExpenseLedgers(s.ytd?.interestExpenseLedgers ?? [])
+        setTaxPaymentLedgers(s.ytd?.taxPaymentLedgers ?? [])
+        setNonOperatingIncomeLedgers(s.ytd?.nonOperatingIncomeLedgers ?? [])
+        setNonOperatingInvestmentLedgers(s.ytd?.nonOperatingInvestmentLedgers ?? [])
+        setDirectorLoanLedgers(s.ytd?.directorLoanLedgers ?? [])
       })
       .catch(() => { /* settings optional */ })
 
@@ -286,6 +297,11 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         ebitdaIncludeVouchers:          ytdEbitdaIncludeVouchers.length          > 0 ? ytdEbitdaIncludeVouchers          : undefined,
         ebitdaExcludeVouchers:          ytdEbitdaExcludeVouchers.length          > 0 ? ytdEbitdaExcludeVouchers          : undefined,
         grossMarginTarget:       ytdGrossMarginTarget ? (parseFloat(ytdGrossMarginTarget) || undefined) : undefined,
+        interestExpenseLedgers:         interestExpenseLedgers.length        > 0 ? interestExpenseLedgers        : undefined,
+        taxPaymentLedgers:              taxPaymentLedgers.length             > 0 ? taxPaymentLedgers             : undefined,
+        nonOperatingIncomeLedgers:      nonOperatingIncomeLedgers.length     > 0 ? nonOperatingIncomeLedgers     : undefined,
+        nonOperatingInvestmentLedgers:  nonOperatingInvestmentLedgers.length > 0 ? nonOperatingInvestmentLedgers : undefined,
+        directorLoanLedgers:            directorLoanLedgers.length           > 0 ? directorLoanLedgers           : undefined,
       },
     }
 
@@ -309,6 +325,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const TABS: { key: SettingsTab; label: string }[] = [
     { key: 'today',   label: 'Today'   },
     { key: 'ytd',     label: 'YTD'     },
+    { key: 'ratios',  label: 'Ratios'  },
     { key: 'monthly', label: 'Monthly' },
   ]
 
@@ -604,6 +621,61 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
             <p className="text-[11px] text-gray-400 italic mt-1">Target GM% to track achievement on the dashboard</p>
           </div>
 
+        </div>
+      )}
+
+      {activeTab === 'ratios' && (
+        <div className="space-y-6">
+          <p className="text-[11px] text-gray-400 italic -mt-1">
+            Used for the Analysis tab's ROCE, ROE, and Debt/Equity cards — Tally has no standard
+            group for these, so name the specific ledgers. Any left empty shows "No data available"
+            on that card rather than a guessed number.
+          </p>
+          <SearchCheckList
+            label="Interest Expense Ledgers"
+            hint="e.g. Interest on Loan, Interest on OD"
+            options={allLedgerOpts}
+            selected={interestExpenseLedgers}
+            onChange={setInterestExpenseLedgers}
+            loading={loadingOpts}
+            showSelectAll
+          />
+          <SearchCheckList
+            label="Tax Payment Ledgers"
+            hint="e.g. Income Tax Paid, TDS Paid"
+            options={allLedgerOpts}
+            selected={taxPaymentLedgers}
+            onChange={setTaxPaymentLedgers}
+            loading={loadingOpts}
+            showSelectAll
+          />
+          <SearchCheckList
+            label="Non-Operating Income Ledgers"
+            hint="e.g. Rental Income, Profit on Sale of Asset"
+            options={allLedgerOpts}
+            selected={nonOperatingIncomeLedgers}
+            onChange={setNonOperatingIncomeLedgers}
+            loading={loadingOpts}
+            showSelectAll
+          />
+          <SearchCheckList
+            label="Non-Operating Investment Ledgers"
+            hint="e.g. Fixed Deposits, Mutual Funds held for non-core purposes"
+            options={allLedgerOpts}
+            selected={nonOperatingInvestmentLedgers}
+            onChange={setNonOperatingInvestmentLedgers}
+            loading={loadingOpts}
+            showSelectAll
+          />
+          <SearchCheckList
+            label="Loans from Directors"
+            hint="Specific unsecured-loan ledgers held by directors/promoters"
+            options={allLedgerOpts}
+            selected={directorLoanLedgers}
+            onChange={setDirectorLoanLedgers}
+            loading={loadingOpts}
+            showSelectAll
+          />
         </div>
       )}
 
