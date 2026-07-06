@@ -1340,27 +1340,27 @@ export default function Dashboard() {
         const dbTaxPayment         = snapshot?.taxPaymentTotal ?? null
         const dbNonOpIncome        = snapshot?.nonOperatingIncomeTotal ?? null
         const dbNonOpInvestment    = snapshot?.nonOperatingInvestmentTotal ?? null
-        const dbEbit = netProfit != null && dbInterestExpense != null && dbTaxPayment != null
-          ? netProfit - dbInterestExpense - dbTaxPayment : null
+        const dbEbit = netProfit != null && dbInterestExpense != null
+          ? netProfit - dbInterestExpense - (dbTaxPayment ?? 0) : null
         const roceNum = dbEbit != null && dbNonOpIncome != null ? dbEbit - dbNonOpIncome : null
-        const roceDen = dbRoceEquity != null && dbLongTermBorrowings != null && dbNonOpInvestment != null
-          ? dbRoceEquity + dbLongTermBorrowings - dbNonOpInvestment : null
-        const roceVal = roceNum != null && roceDen ? (roceNum / roceDen) * 100 : null
+        const roceDen = dbRoceEquity != null
+          ? dbRoceEquity + (dbLongTermBorrowings ?? 0) - (dbNonOpInvestment ?? 0) : null
+        const roceVal = roceNum != null && roceDen != null && roceDen > 0 ? (roceNum / roceDen) * 100 : null
         console.log(`[Analysis][DB] ROCE — Net Profit: ${netProfit} | Interest Expense: ${dbInterestExpense} | Tax Payment: ${dbTaxPayment} | EBIT: ${dbEbit}`)
         console.log(`[Analysis][DB] ROCE — Non-Operating Income: ${dbNonOpIncome} | Equity: ${dbRoceEquity} | Long Term Borrowings: ${dbLongTermBorrowings} | Non-Operating Investment: ${dbNonOpInvestment}`)
-        console.log(`[Analysis][DB] ROCE — numerator: ${roceNum} | denominator: ${roceDen} | ROCE (%): ${roceVal}`)
+        console.log(`[Analysis][DB] ROCE — numerator: ${roceNum} | denominator: ${roceDen}${roceDen != null && roceDen <= 0 ? ' (<= 0, ratio blocked)' : ''} | ROCE (%): ${roceVal}`)
       }
 
-      // ROE = Net Profit / (Equity + Internal Borrowings − Intangible Assets)
+      // ROE = Net Profit / (Equity + Internal Borrowings − Intangible Assets) * 100
       {
         const dbRoeEquity          = snapshot?.roeEquity ?? null
         const dbInternalBorrowings = snapshot?.internalBorrowings ?? null
         const dbIntangibleAssets   = snapshot?.intangibleAssets ?? null
         const roeDen = dbRoeEquity != null
           ? dbRoeEquity + (dbInternalBorrowings ?? 0) - (dbIntangibleAssets ?? 0) : null
-        const roeVal = netProfit != null && roeDen ? netProfit / roeDen : null
+        const roeVal = netProfit != null && roeDen != null && roeDen > 0 ? (netProfit / roeDen) * 100 : null
         console.log(`[Analysis][DB] ROE — Net Profit: ${netProfit} | Equity: ${dbRoeEquity} | Internal Borrowings: ${dbInternalBorrowings} | Intangible Assets: ${dbIntangibleAssets}`)
-        console.log(`[Analysis][DB] ROE — denominator: ${roeDen} | ROE: ${roeVal}`)
+        console.log(`[Analysis][DB] ROE — denominator: ${roeDen}${roeDen != null && roeDen <= 0 ? ' (<= 0, ratio blocked)' : ''} | ROE (%): ${roeVal}`)
       }
 
       // Debt/Equity = (Loans − Cash − Bank) / (Equity + Director Loans)
@@ -1374,10 +1374,10 @@ export default function Dashboard() {
           ? dbDebtEquityLoans - (dbDebtEquityCash ?? 0) - (dbDebtEquityBank ?? 0) : null
         const deDen = dbDebtEquityEquity != null
           ? dbDebtEquityEquity + (dbDirectorLoans ?? 0) : null
-        const deVal = deNum != null && deDen ? deNum / deDen : null
+        const deVal = deNum != null && deDen != null && deDen > 0 ? deNum / deDen : null
         console.log(`[Analysis][DB] Debt/Equity — Loans: ${dbDebtEquityLoans} | Cash: ${dbDebtEquityCash} | Bank: ${dbDebtEquityBank}`)
         console.log(`[Analysis][DB] Debt/Equity — Equity: ${dbDebtEquityEquity} | Director Loans: ${dbDirectorLoans}`)
-        console.log(`[Analysis][DB] Debt/Equity — numerator: ${deNum} | denominator: ${deDen} | ratio: ${deVal}`)
+        console.log(`[Analysis][DB] Debt/Equity — numerator: ${deNum} | denominator: ${deDen}${deDen != null && deDen <= 0 ? ' (<= 0, ratio blocked)' : ''} | ratio: ${deVal}`)
       }
 
       setAnalysisInputs({
@@ -1435,16 +1435,18 @@ export default function Dashboard() {
     // unconfigured list must stay null ("No data available"), never 0, since
     // 0 is indistinguishable from "genuinely no expense this period".
     // fetchLedgerAmounts returns the SIGNED net balance (Dr positive, Cr
-    // negative) — mode decides how to interpret it: 'magnitude' (default)
-    // takes the absolute value, correct for expense/income/loan/asset
-    // figures where only "how much" matters. 'equity' instead negates the
-    // sign (Cr → positive, Dr → negative) since Equity is normally Cr —
-    // preserving genuinely negative equity (accumulated losses) as a
-    // negative number instead of silently flattening it to positive.
+    // negative, same convention as everywhere else in this codebase) — mode
+    // decides how to interpret it: 'magnitude' (default) takes the absolute
+    // value, correct for expense/income/loan/asset figures where only "how
+    // much" matters. 'equity' passes the signed value straight through with
+    // NO transform — confirmed against real Tally data that Dr-positive/
+    // Cr-negative is exactly the sign the user expects for Equity too (an
+    // earlier version negated this, which was wrong), so this preserves
+    // genuinely negative equity (accumulated losses) as a negative number.
     const fetchLedgerTotal = (names?: string[], mode: 'magnitude' | 'equity' = 'magnitude'): Promise<number | null> =>
       names?.length
         ? fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, names)
-            .then(signed => mode === 'equity' ? -signed : Math.abs(signed))
+            .then(signed => mode === 'equity' ? signed : Math.abs(signed))
             .catch((err: unknown) => {
               console.error('[Analysis][Live] fetchLedgerAmounts failed for', names, ':', err)
               return null
@@ -1567,25 +1569,29 @@ export default function Dashboard() {
 
       // ROCE = (EBIT − Non-Operating Income) / (Equity + Long Term Borrowings − Non-Operating Investment) * 100
       // EBIT = Net Profit − Interest Expense − Tax Payment
+      // Mirrors computeRatios exactly: Tax Payment/Long Term Borrowings/Non-
+      // Operating Investment default to 0 when unconfigured, and a zero-or-
+      // negative denominator (e.g. genuinely negative Equity) blocks the
+      // ratio rather than producing a misleadingly inverted number.
       {
-        const ebitVal = netProfit != null && interestExpenseTotal != null && taxPaymentTotal != null
-          ? netProfit - interestExpenseTotal - taxPaymentTotal : null
+        const ebitVal = netProfit != null && interestExpenseTotal != null
+          ? netProfit - interestExpenseTotal - (taxPaymentTotal ?? 0) : null
         const roceNum = ebitVal != null && nonOperatingIncomeTotal != null ? ebitVal - nonOperatingIncomeTotal : null
-        const roceDen = roceEquityTotal != null && longTermBorrowingsTotal != null && nonOperatingInvestmentTotal != null
-          ? roceEquityTotal + longTermBorrowingsTotal - nonOperatingInvestmentTotal : null
-        const roceVal = roceNum != null && roceDen ? (roceNum / roceDen) * 100 : null
+        const roceDen = roceEquityTotal != null
+          ? roceEquityTotal + (longTermBorrowingsTotal ?? 0) - (nonOperatingInvestmentTotal ?? 0) : null
+        const roceVal = roceNum != null && roceDen != null && roceDen > 0 ? (roceNum / roceDen) * 100 : null
         console.log(`[Analysis][Live] ROCE — Net Profit: ${netProfit} | Interest Expense: ${interestExpenseTotal} | Tax Payment: ${taxPaymentTotal} | EBIT: ${ebitVal}`)
         console.log(`[Analysis][Live] ROCE — Non-Operating Income: ${nonOperatingIncomeTotal} | Equity: ${roceEquityTotal} | Long Term Borrowings: ${longTermBorrowingsTotal} | Non-Operating Investment: ${nonOperatingInvestmentTotal}`)
-        console.log(`[Analysis][Live] ROCE — numerator: ${roceNum} | denominator: ${roceDen} | ROCE (%): ${roceVal}`)
+        console.log(`[Analysis][Live] ROCE — numerator: ${roceNum} | denominator: ${roceDen}${roceDen != null && roceDen <= 0 ? ' (<= 0, ratio blocked)' : ''} | ROCE (%): ${roceVal}`)
       }
 
-      // ROE = Net Profit / (Equity + Internal Borrowings − Intangible Assets)
+      // ROE = Net Profit / (Equity + Internal Borrowings − Intangible Assets) * 100
       {
         const roeDen = roeEquityTotal != null
           ? roeEquityTotal + (internalBorrowingsTotal ?? 0) - (intangibleAssetsTotal ?? 0) : null
-        const roeVal = netProfit != null && roeDen ? netProfit / roeDen : null
+        const roeVal = netProfit != null && roeDen != null && roeDen > 0 ? (netProfit / roeDen) * 100 : null
         console.log(`[Analysis][Live] ROE — Net Profit: ${netProfit} | Equity: ${roeEquityTotal} | Internal Borrowings: ${internalBorrowingsTotal} | Intangible Assets: ${intangibleAssetsTotal}`)
-        console.log(`[Analysis][Live] ROE — denominator: ${roeDen} | ROE: ${roeVal}`)
+        console.log(`[Analysis][Live] ROE — denominator: ${roeDen}${roeDen != null && roeDen <= 0 ? ' (<= 0, ratio blocked)' : ''} | ROE (%): ${roeVal}`)
       }
 
       // Debt/Equity = (Loans − Cash − Bank) / (Equity + Director Loans)
@@ -1594,10 +1600,10 @@ export default function Dashboard() {
           ? debtEquityLoansTotal - (debtEquityCashTotal ?? 0) - (debtEquityBankTotal ?? 0) : null
         const deDen = debtEquityEquityTotal != null
           ? debtEquityEquityTotal + (directorLoansTotal ?? 0) : null
-        const deVal = deNum != null && deDen ? deNum / deDen : null
+        const deVal = deNum != null && deDen != null && deDen > 0 ? deNum / deDen : null
         console.log(`[Analysis][Live] Debt/Equity — Loans: ${debtEquityLoansTotal} | Cash: ${debtEquityCashTotal} | Bank: ${debtEquityBankTotal}`)
         console.log(`[Analysis][Live] Debt/Equity — Equity: ${debtEquityEquityTotal} | Director Loans: ${directorLoansTotal}`)
-        console.log(`[Analysis][Live] Debt/Equity — numerator: ${deNum} | denominator: ${deDen} | ratio: ${deVal}`)
+        console.log(`[Analysis][Live] Debt/Equity — numerator: ${deNum} | denominator: ${deDen}${deDen != null && deDen <= 0 ? ' (<= 0, ratio blocked)' : ''} | ratio: ${deVal}`)
       }
 
       setAnalysisInputs({
