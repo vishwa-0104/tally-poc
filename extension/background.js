@@ -1730,9 +1730,19 @@ async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
 
 function parseGroupBalances(xml) {
   const results = []
-  const blocks  = [...xml.matchAll(/<GROUP\b[^>]*>([\s\S]*?)<\/GROUP>/gi)]
-  for (const [, inner] of blocks) {
-    const nameM = inner.match(/<NAME[^>]*>\s*([\s\S]*?)\s*<\/NAME>/i)
+  // Confirmed against a real response (2026-07-06): the group's name is the
+  // NAME="..." attribute on the opening <GROUP> tag itself. Deliberately NOT
+  // reading a nested <NAME> element — every group also nests
+  // <LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>...</NAME></NAME.LIST>,
+  // and a naive /<NAME[^>]*>/ regex matches "<NAME.LIST TYPE=..." too (since
+  // [^>]* swallows ".LIST TYPE=\"String\""), corrupting the captured name
+  // with a literal "<name>" prefix — broke every exact-match group lookup
+  // (Investments/Current Liabilities/Bank OD/etc.) while substring-based
+  // lookups (Sundry Debtors/Creditors via .includes()) coincidentally still
+  // worked despite the corruption.
+  const blocks = [...xml.matchAll(/<GROUP\b([^>]*)>([\s\S]*?)<\/GROUP>/gi)]
+  for (const [, attrs, inner] of blocks) {
+    const nameM = attrs.match(/\bNAME="([^"]*)"/i)
     const balM  = inner.match(/<CLOSINGBALANCE[^>]*>\s*([\s\S]*?)\s*<\/CLOSINGBALANCE>/i)
     if (!nameM) continue
     const name    = nameM[1].trim()
