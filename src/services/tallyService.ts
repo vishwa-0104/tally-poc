@@ -335,21 +335,6 @@ export async function fetchGroupBalances(
   })
 }
 
-// available: false means bill-wise ageing genuinely couldn't be determined
-// (no debtor ledgers, or bill-wise details not maintained) — never fall back
-// to a guessed number, show "No data available" instead.
-export async function fetchReceivablesAgeing(
-  tallyUrl: string,
-  tallyCompany?: string,
-  asOfDate?: string,   // YYYYMMDD
-  withinDays = 90,
-): Promise<{ available: boolean; total: number | null }> {
-  return sendToExtension<{ available: boolean; total: number | null }>('FETCH_RECEIVABLES_AGEING', {
-    tallyUrl, tallyCompany, asOfDate, withinDays,
-  })
-}
-
-
 export async function syncToTally(xml: string, tallyUrl: string): Promise<TallySyncResult> {
   console.group('[Sync] Tally XML Payload')
   console.log('URL:', tallyUrl)

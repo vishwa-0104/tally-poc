@@ -1150,7 +1150,6 @@ companiesRouter.put('/companies/:id/dashboard-snapshot', async (req, res) => {
     fixedAssets:        z.number().nullable().optional(),
     totalLoans:         z.number().nullable().optional(),
     bankOD:             z.number().nullable().optional(),
-    receivables90d:     z.number().nullable().optional(),
     interestExpenseTotal:        z.number().nullable().optional(),
     taxPaymentTotal:             z.number().nullable().optional(),
     nonOperatingIncomeTotal:     z.number().nullable().optional(),

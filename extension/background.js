@@ -158,12 +158,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ total: 0, error: err.message }))
       return true
 
-    case 'FETCH_RECEIVABLES_AGEING':
-      handleFetchReceivablesAgeing(payload.tallyUrl, payload.tallyCompany, payload.asOfDate, payload.withinDays)
-        .then(sendResponse)
-        .catch((err) => sendResponse({ available: false, total: null, error: err.message }))
-      return true
-
 
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
@@ -1739,73 +1733,6 @@ function parseGroupBalances(xml) {
     const name    = nameM[1].trim()
     const balance = balM ? parseTallyBalance(balM[1].trim()) : 0
     if (name) results.push({ name, balance })
-  }
-  return results
-}
-
-// ── Trade Receivables aged within N days (default 90) — for Quick Ratio ─────
-// Uses TBSReceivableBills (TallySyncBridge.tdl) — each Sundry Debtors ledger's
-// *current* outstanding BillAllocations (not historical vouchers). NEW/UNTESTED
-// against live Tally: only trust `available: true` results; an empty parse
-// could mean either no debtor ledgers or bill-wise details not maintained on
-// this company, and we can't tell those apart from the response alone — so
-// treat empty as "not available" rather than guessing 0.
-async function handleFetchReceivablesAgeing(tallyUrl, tallyCompany, asOfDate, withinDays = 90) {
-  const today = new Date()
-  const pad = (n) => String(n).padStart(2, '0')
-  const toDateRaw = asOfDate || `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`
-
-  const xml = `<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>TBSReceivableBills</ID>
-  </HEADER>
-  <BODY>
-    <DESC>
-      <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        <SVTODATE>${toTallyDisplayDate(toDateRaw)}</SVTODATE>${companyVar(tallyCompany)}
-      </STATICVARIABLES>
-    </DESC>
-  </BODY>
-</ENVELOPE>`
-
-  const responseText = await postToTally(xml, tallyUrl)
-  const bills = parseReceivableBills(responseText)
-  if (bills.length === 0) {
-    return { available: false, total: null }
-  }
-
-  const cutoff = new Date(`${toDateRaw.slice(0,4)}-${toDateRaw.slice(4,6)}-${toDateRaw.slice(6,8)}`)
-  cutoff.setDate(cutoff.getDate() - withinDays)
-
-  let total = 0
-  for (const bill of bills) {
-    if (!bill.billDate || bill.billDate.length !== 8) continue
-    const billDate = new Date(`${bill.billDate.slice(0,4)}-${bill.billDate.slice(4,6)}-${bill.billDate.slice(6,8)}`)
-    if (billDate >= cutoff) total += Math.abs(bill.balance)
-  }
-
-  console.log(`[ReceivablesAgeing] asOfDate=${toDateRaw} withinDays=${withinDays} | bills=${bills.length} | total=${total}`)
-  return { available: true, total }
-}
-
-function parseReceivableBills(xml) {
-  const results = []
-  const ledgerBlocks = [...xml.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)]
-  for (const [, ledgerInner] of ledgerBlocks) {
-    const billBlocks = [...ledgerInner.matchAll(/<BILLALLOCATIONS\.LIST[^>]*>([\s\S]*?)<\/BILLALLOCATIONS\.LIST>/gi)]
-    for (const [, billInner] of billBlocks) {
-      const dateM = billInner.match(/<BILLDATE[^>]*>\s*([\s\S]*?)\s*<\/BILLDATE>/i)
-      const balM  = billInner.match(/<CLOSINGBALANCE[^>]*>\s*([\s\S]*?)\s*<\/CLOSINGBALANCE>/i)
-      if (!balM) continue
-      results.push({
-        billDate: dateM ? dateM[1].trim() : '',
-        balance:  parseTallyBalance(balM[1].trim()),
-      })
-    }
   }
   return results
 }

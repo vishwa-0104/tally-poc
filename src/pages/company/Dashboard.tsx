@@ -11,7 +11,7 @@ import {
   Users, Store, Download, Zap,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore, useDaybookSyncStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, fetchReceivablesAgeing, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import {
   fetchSalesTargets, fetchDashboardSettings,
   fetchCachedVouchers, saveVouchers, fetchDashboardSnapshot, saveDashboardSnapshot,
@@ -631,7 +631,6 @@ interface AnalysisInputs {
   cash:                        number | null
   bank:                        number | null
   investments:                 number | null
-  receivables90d:              number | null
   currentLiabilities:          number | null
   bankOD:                      number | null
   equity:                      number | null
@@ -647,7 +646,7 @@ interface AnalysisInputs {
 const emptyAnalysisInputs: AnalysisInputs = {
   debtors: null, creditors: null, creditSales: null, openingStock: null, closingStock: null,
   purchases: null, directExpenses: null, cash: null, bank: null, investments: null,
-  receivables90d: null, currentLiabilities: null, bankOD: null, equity: null, totalLoans: null,
+  currentLiabilities: null, bankOD: null, equity: null, totalLoans: null,
   netProfit: null, interestExpense: null, taxPayment: null, nonOperatingIncome: null,
   nonOperatingInvestment: null, directorLoans: null,
 }
@@ -684,8 +683,11 @@ function computeRatios(i: AnalysisInputs): RatioResults {
   const currentRatio = i.closingStock != null && i.debtors != null && i.creditors
     ? (i.closingStock + i.debtors) / i.creditors : null
 
-  const quickNumerator = i.cash != null && i.bank != null && i.investments != null && i.receivables90d != null
-    ? i.cash + i.bank + i.investments + i.receivables90d : null
+  // Trade Receivables uses Closing Sundry Debtors (same input as DSO) —
+  // the bill-wise 90-day ageing fetch was never verified against live Tally
+  // and has been dropped in favor of this already-proven figure.
+  const quickNumerator = i.cash != null && i.bank != null && i.investments != null && i.debtors != null
+    ? i.cash + i.bank + i.investments + i.debtors : null
   const quickDenominator = i.currentLiabilities != null && i.bankOD != null
     ? i.currentLiabilities - i.bankOD : null
   const quickRatio = quickNumerator != null && quickDenominator
@@ -1239,9 +1241,9 @@ export default function Dashboard() {
   // ── Analysis tab — DB-only read, mirrors loadFromDb above but for the 9
   // ratio KPIs. Never touches Tally. Balance-sheet inputs (debtors, creditors,
   // cash, bank, investments, current liabilities, bank OD, equity, total
-  // loans, receivables-90d) only apply when `to` is today — same Tally
-  // "ClosingBalance ignores SVTODATE" limitation loadFromDb already works
-  // around for receivables/payables/cash/bank.
+  // loans) only apply when `to` is today — same Tally "ClosingBalance ignores
+  // SVTODATE" limitation loadFromDb already works around for
+  // receivables/payables/cash/bank.
   const loadAnalysisFromDb = useCallback(async (preset: FilterPreset, cfrom: string, cto: string): Promise<{ fetchedDates: string[] }> => {
     if (!companyId) return { fetchedDates: [] }
     const { from, to } = getFilterDates(preset, cfrom, cto)
@@ -1308,7 +1310,6 @@ export default function Dashboard() {
         cash:                  isCurrent ? (snapshot?.cashInHand ?? null) : null,
         bank:                  isCurrent ? (snapshot?.bankBalance ?? null) : null,
         investments:           isCurrent ? (snapshot?.investments ?? null) : null,
-        receivables90d:        isCurrent ? (snapshot?.receivables90d ?? null) : null,
         currentLiabilities:    isCurrent ? (snapshot?.currentLiabilities ?? null) : null,
         bankOD:                isCurrent ? (snapshot?.bankOD ?? null) : null,
         equity:                isCurrent ? (snapshot?.equity ?? null) : null,
@@ -1354,7 +1355,7 @@ export default function Dashboard() {
     try {
       const [
         daybookResult, stockResult, directExpResult,
-        groupBalResult, ledgerBalResult, ageingResult,
+        groupBalResult, ledgerBalResult,
         interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal, directorLoansTotal,
       ] = await Promise.all([
         fetchDaybook(fFrom, fTo, tallyUrl, tallyCompany, {
@@ -1375,7 +1376,6 @@ export default function Dashboard() {
         fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, dashboardSettings.ytd?.directExpenseLedgers),
         isCurrent ? fetchGroupBalances(tallyUrl, tallyCompany) : Promise.resolve(null),
         isCurrent ? fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr())) : Promise.resolve(null),
-        isCurrent ? fetchReceivablesAgeing(tallyUrl, tallyCompany, toTallyDate(todayStr()), 90) : Promise.resolve(null),
         fetchLedgerTotal(dashboardSettings.ytd?.interestExpenseLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.taxPaymentLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.nonOperatingIncomeLedgers),
@@ -1426,11 +1426,10 @@ export default function Dashboard() {
       const bankOD              = isCurrent && groupBalResult ? groupBalResult.bankOD : null
       const equity              = isCurrent && groupBalResult ? groupBalResult.equity : null
       const totalLoans          = isCurrent && groupBalResult ? groupBalResult.totalLoans : null
-      const receivables90d      = isCurrent && ageingResult?.available ? ageingResult.total : null
 
       setAnalysisInputs({
         debtors, creditors, creditSales, openingStock, closingStock,
-        purchases: purchaseTotal, directExpenses, cash, bank, investments, receivables90d,
+        purchases: purchaseTotal, directExpenses, cash, bank, investments,
         currentLiabilities, bankOD, equity, totalLoans, netProfit,
         interestExpense: interestExpenseTotal, taxPayment: taxPaymentTotal,
         nonOperatingIncome: nonOperatingIncomeTotal, nonOperatingInvestment: nonOperatingInvestmentTotal,
@@ -1455,7 +1454,6 @@ export default function Dashboard() {
         snapshotPatch.bankOD             = bankOD
         snapshotPatch.equity             = equity
         snapshotPatch.totalLoans         = totalLoans
-        snapshotPatch.receivables90d     = receivables90d
       }
       if (interestExpenseTotal        != null) snapshotPatch.interestExpenseTotal        = interestExpenseTotal
       if (taxPaymentTotal             != null) snapshotPatch.taxPaymentTotal             = taxPaymentTotal
