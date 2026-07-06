@@ -699,11 +699,18 @@ function computeRatios(i: AnalysisInputs): RatioResults {
   const quickRatio = quickNumerator != null && quickDenominator
     ? quickNumerator / quickDenominator : null
 
-  const ebit = i.netProfit != null && i.interestExpense != null && i.taxPayment != null
-    ? i.netProfit - i.interestExpense - i.taxPayment : null
+  // Tax Payment, Long Term Borrowings, and Non-Operating Investment default
+  // to 0 when their ledger-list setting is left empty — per the user, these
+  // three are legitimately zero for companies with no such activity, unlike
+  // Equity/Net Profit/Interest Expense/Non-Operating Income below, which stay
+  // strictly null-gated ("No data available") since a real company is never
+  // actually zero on those, and silently defaulting them to 0 would badly
+  // distort ROCE rather than just omitting it.
+  const ebit = i.netProfit != null && i.interestExpense != null
+    ? i.netProfit - i.interestExpense - (i.taxPayment ?? 0) : null
   const roceNumerator = ebit != null && i.nonOperatingIncome != null ? ebit - i.nonOperatingIncome : null
-  const roceDenominator = i.roceEquity != null && i.longTermBorrowings != null && i.nonOperatingInvestment != null
-    ? i.roceEquity + i.longTermBorrowings - i.nonOperatingInvestment : null
+  const roceDenominator = i.roceEquity != null
+    ? i.roceEquity + (i.longTermBorrowings ?? 0) - (i.nonOperatingInvestment ?? 0) : null
   const roce = roceNumerator != null && roceDenominator ? (roceNumerator / roceDenominator) * 100 : null
 
   // ROE's own borrowings/intangible-assets sub-buckets have no standard Tally

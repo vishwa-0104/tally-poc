@@ -1664,6 +1664,11 @@ async function handleFetchLedgerAmounts(tallyUrl, tallyCompany, fromDate, toDate
     total += Math.abs(parseTallyBalance(balRaw.trim()))
   }
 
+  // blocks.length === 0 means none of the configured names matched a real
+  // Tally ledger (typo, wrong company, etc.) — total would silently be 0,
+  // indistinguishable from "matched, genuinely zero balance" without this.
+  console.log(`[LedgerAmounts] requested: [${ledgerNames.join(', ')}] | matched ${blocks.length} ledger(s) | total: ${total}`)
+
   return { total }
 }
 
