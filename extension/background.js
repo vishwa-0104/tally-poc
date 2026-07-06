@@ -1657,18 +1657,22 @@ async function handleFetchLedgerAmounts(tallyUrl, tallyCompany, fromDate, toDate
   const responseText = await postToTally(xml, tallyUrl)
   const blocks = [...responseText.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)]
 
-  // Net the signed Dr/Cr balances FIRST, then take the magnitude of the final
-  // total once — NOT Math.abs() per ledger, which would add a debit entry as
-  // if it were more of the same thing instead of offsetting the credit
-  // entries (e.g. a list of Loan ledgers where one has an unusual Dr balance
-  // — like an overpayment — must reduce the net total, not inflate it).
+  // Net the signed Dr/Cr balances — NOT Math.abs() per ledger, which would add
+  // a debit entry as if it were more of the same thing instead of offsetting
+  // the credit entries (e.g. a list of Loan ledgers where one has an unusual
+  // Dr balance — like an overpayment — must reduce the net total, not
+  // inflate it). Returned SIGNED (Dr positive, Cr negative, same convention
+  // as parseTallyBalance/parseGroupBalances elsewhere) — the caller decides
+  // how to interpret the sign, since that depends on the ledger's normal
+  // nature (e.g. Equity is normally Cr, so a Dr balance there means genuinely
+  // negative equity, which must not get silently flattened to a positive
+  // magnitude here).
   let total = 0
   for (const match of blocks) {
     const inner  = match[1]
     const balRaw = inner.match(/<CLOSINGBALANCE[^>]*>([\s\S]*?)<\/CLOSINGBALANCE>/i)?.[1] ?? '0'
     total += parseTallyBalance(balRaw.trim())
   }
-  total = Math.abs(total)
 
   // blocks.length === 0 means none of the configured names matched a real
   // Tally ledger (typo, wrong company, etc.) — total would silently be 0,

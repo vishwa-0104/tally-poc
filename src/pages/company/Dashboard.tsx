@@ -695,14 +695,21 @@ function computeRatios(i: AnalysisInputs): RatioResults {
   const roceNumerator = ebit != null && i.nonOperatingIncome != null ? ebit - i.nonOperatingIncome : null
   const roceDenominator = i.roceEquity != null
     ? i.roceEquity + (i.longTermBorrowings ?? 0) - (i.nonOperatingInvestment ?? 0) : null
-  const roce = roceNumerator != null && roceDenominator ? (roceNumerator / roceDenominator) * 100 : null
+  // Equity ledgers now preserve their true sign (see fetchLedgerTotal's
+  // 'equity' mode) — a company with genuinely negative equity (accumulated
+  // losses exceeding capital) would flip the ratio's sign into something
+  // that reads as "healthy" when it's the opposite. Never divide by a
+  // zero-or-negative denominator here — show "No data available" instead.
+  const roce = roceNumerator != null && roceDenominator != null && roceDenominator > 0
+    ? (roceNumerator / roceDenominator) * 100 : null
 
   // ROE numerator reuses the existing Net Profit (YTD) figure — no separate
   // setting. Internal Borrowings/Intangible Assets default to 0 when
   // unconfigured (commonly genuinely zero); Equity stays required.
   const roeDenominator = i.roeEquity != null
     ? i.roeEquity + (i.internalBorrowings ?? 0) - (i.intangibleAssets ?? 0) : null
-  const roe = i.netProfit != null && roeDenominator ? i.netProfit / roeDenominator : null
+  const roe = i.netProfit != null && roeDenominator != null && roeDenominator > 0
+    ? (i.netProfit / roeDenominator) * 100 : null
 
   // Every Debt/Equity component is its own dedicated setting now (Loans,
   // Cash, Bank, Equity, Director Loans) — independent of the shared
@@ -714,7 +721,7 @@ function computeRatios(i: AnalysisInputs): RatioResults {
     ? i.debtEquityLoans - (i.debtEquityCash ?? 0) - (i.debtEquityBank ?? 0) : null
   const debtEquityDenominator = i.debtEquityEquity != null
     ? i.debtEquityEquity + (i.directorLoans ?? 0) : null
-  const debtEquity = debtEquityNumerator != null && debtEquityDenominator
+  const debtEquity = debtEquityNumerator != null && debtEquityDenominator != null && debtEquityDenominator > 0
     ? debtEquityNumerator / debtEquityDenominator : null
 
   return { dso, dio, dpo, ccc, currentRatio, quickRatio, roce, roe, debtEquity }
@@ -1021,7 +1028,7 @@ export default function Dashboard() {
       if (slowResult.status === 'fulfilled') setSlowStock(slowResult.value.items)
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         const { openingStock, closingStock } = stockResult.value
-        const directExpenses = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
+        const directExpenses = directExpResult.status === 'fulfilled' ? Math.abs(directExpResult.value ?? 0) : 0
 
         const indirectExpenses = indExpTotal
         const indirectIncome   = indIncTotal
@@ -1084,7 +1091,7 @@ export default function Dashboard() {
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         snapshotPatch.openingStock       = stockResult.value.openingStock
         snapshotPatch.closingStock       = stockResult.value.closingStock
-        snapshotPatch.directExpenseTotal = directExpResult.status === 'fulfilled' ? (directExpResult.value ?? 0) : 0
+        snapshotPatch.directExpenseTotal = directExpResult.status === 'fulfilled' ? Math.abs(directExpResult.value ?? 0) : 0
       }
       void saveDashboardSnapshot(companyId, snapshotPatch).catch((err: unknown) => console.error('[Dashboard] Failed to persist snapshot:', err))
     } catch (err) {
@@ -1427,9 +1434,21 @@ export default function Dashboard() {
     // Only hits Tally for a ledger list that's actually configured — an
     // unconfigured list must stay null ("No data available"), never 0, since
     // 0 is indistinguishable from "genuinely no expense this period".
-    const fetchLedgerTotal = (names?: string[]): Promise<number | null> =>
+    // fetchLedgerAmounts returns the SIGNED net balance (Dr positive, Cr
+    // negative) — mode decides how to interpret it: 'magnitude' (default)
+    // takes the absolute value, correct for expense/income/loan/asset
+    // figures where only "how much" matters. 'equity' instead negates the
+    // sign (Cr → positive, Dr → negative) since Equity is normally Cr —
+    // preserving genuinely negative equity (accumulated losses) as a
+    // negative number instead of silently flattening it to positive.
+    const fetchLedgerTotal = (names?: string[], mode: 'magnitude' | 'equity' = 'magnitude'): Promise<number | null> =>
       names?.length
         ? fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, names)
+            .then(signed => mode === 'equity' ? -signed : Math.abs(signed))
+            .catch((err: unknown) => {
+              console.error('[Analysis][Live] fetchLedgerAmounts failed for', names, ':', err)
+              return null
+            })
         : Promise.resolve(null)
 
     setAnalysisLoading(true)
@@ -1478,14 +1497,14 @@ export default function Dashboard() {
         fetchLedgerTotal(dashboardSettings.ytd?.nonOperatingInvestmentLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.directorLoanLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.longTermBorrowingLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.equityLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.roeEquityLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.equityLedgers, 'equity'),
+        fetchLedgerTotal(dashboardSettings.ytd?.roeEquityLedgers, 'equity'),
         fetchLedgerTotal(dashboardSettings.ytd?.internalBorrowingLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.intangibleAssetLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityLoanLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityCashLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityBankLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.debtEquityEquityLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.debtEquityEquityLedgers, 'equity'),
       ])
 
       const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
@@ -1506,7 +1525,7 @@ export default function Dashboard() {
       console.log(`[Analysis][Live] Total Sales (Net Profit, uses Performance tab setting): ${totalSales} | Credit Sales (for DSO): ${creditSales} | vouchers in range: ${all.length}`)
 
       const { openingStock, closingStock } = stockResult
-      const directExpenses = directExpResult
+      const directExpenses = Math.abs(directExpResult)
       const gm = (totalSales + closingStock) - (openingStock + purchaseTotal + directExpenses)
       const netProfit = gm - indExpTotal + indIncTotal
 
