@@ -1299,6 +1299,25 @@ export default function Dashboard() {
         console.log(`[Analysis][DB] DIO — COGS: ${cogs} | DIO (days): ${dioDays}`)
       }
 
+      // Quick Ratio = (Cash + Bank + Investments + Debtors) / (Current Liabilities − Bank OD)
+      {
+        const dbCash               = isCurrent ? (snapshot?.cashInHand ?? null) : null
+        const dbBank               = isCurrent ? (snapshot?.bankBalance ?? null) : null
+        const dbDebtors            = isCurrent ? (snapshot?.receivables ?? null) : null
+        const dbInvestments        = isCurrent ? (snapshot?.investments ?? null) : null
+        const dbCurrentLiabilities = isCurrent ? (snapshot?.currentLiabilities ?? null) : null
+        const dbBankOD             = isCurrent ? (snapshot?.bankOD ?? null) : null
+        const quickNum = dbCash != null && dbBank != null && dbInvestments != null && dbDebtors != null
+          ? dbCash + dbBank + dbInvestments + dbDebtors : null
+        const quickDen = dbCurrentLiabilities != null && dbBankOD != null
+          ? dbCurrentLiabilities - dbBankOD : null
+        const quickRatioVal = quickNum != null && quickDen ? quickNum / quickDen : null
+        console.log(`[Analysis][DB] Quick Ratio — isCurrent: ${isCurrent} | snapshot: ${snapshot ? 'present' : 'null (never fetched)'}`)
+        console.log(`[Analysis][DB] Quick Ratio — Cash: ${dbCash} | Bank: ${dbBank} | Investments: ${dbInvestments} | Debtors: ${dbDebtors}`)
+        console.log(`[Analysis][DB] Quick Ratio — Current Liabilities: ${dbCurrentLiabilities} | Bank OD: ${dbBankOD}`)
+        console.log(`[Analysis][DB] Quick Ratio — numerator: ${quickNum} | denominator: ${quickDen} | ratio: ${quickRatioVal}`)
+      }
+
       setAnalysisInputs({
         debtors:               isCurrent ? (snapshot?.receivables ?? null) : null,
         creditors:             isCurrent ? (snapshot?.payables ?? null) : null,
@@ -1438,6 +1457,19 @@ export default function Dashboard() {
       const bankOD              = isCurrent && groupBalResult ? groupBalResult.bankOD : null
       const equity              = isCurrent && groupBalResult ? groupBalResult.equity : null
       const totalLoans          = isCurrent && groupBalResult ? groupBalResult.totalLoans : null
+
+      // Quick Ratio = (Cash + Bank + Investments + Debtors) / (Current Liabilities − Bank OD)
+      {
+        const quickNum = cash != null && bank != null && investments != null && debtors != null
+          ? cash + bank + investments + debtors : null
+        const quickDen = currentLiabilities != null && bankOD != null
+          ? currentLiabilities - bankOD : null
+        const quickRatioVal = quickNum != null && quickDen ? quickNum / quickDen : null
+        console.log(`[Analysis][Live] Quick Ratio — isCurrent: ${isCurrent} | groupBalResult: ${groupBalResult ? 'fetched' : 'null (fetch skipped or failed)'} | ledgerBalResult: ${ledgerBalResult ? 'fetched' : 'null (fetch skipped or failed)'}`)
+        console.log(`[Analysis][Live] Quick Ratio — Cash: ${cash} | Bank: ${bank} | Investments: ${investments} | Debtors: ${debtors}`)
+        console.log(`[Analysis][Live] Quick Ratio — Current Liabilities: ${currentLiabilities} | Bank OD: ${bankOD}`)
+        console.log(`[Analysis][Live] Quick Ratio — numerator: ${quickNum} | denominator: ${quickDen} | ratio: ${quickRatioVal}`)
+      }
 
       setAnalysisInputs({
         debtors, creditors, creditSales, openingStock, closingStock,
