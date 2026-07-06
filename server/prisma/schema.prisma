@@ -370,6 +370,10 @@ model DashboardSnapshot {
   fixedAssets        Float?
   totalLoans         Float?
   bankOD             Float?
+  // ROCE's Long Term Borrowings — closing balance of specific configured
+  // ledgers (like equity/totalLoans above, an "as of now" figure, not a
+  // period-scoped flow), since Tally has no long-term/short-term group split.
+  longTermBorrowings Float?
   // Period-scoped ledger-list totals (same convention as directExpenseTotal
   // above — latest fetched period's total, not literally "as of now").
   interestExpenseTotal       Float?

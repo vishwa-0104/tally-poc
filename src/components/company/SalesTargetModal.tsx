@@ -193,6 +193,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [nonOperatingIncomeLedgers,     setNonOperatingIncomeLedgers]     = useState<string[]>([])
   const [nonOperatingInvestmentLedgers, setNonOperatingInvestmentLedgers] = useState<string[]>([])
   const [directorLoanLedgers,           setDirectorLoanLedgers]           = useState<string[]>([])
+  const [longTermBorrowingLedgers,      setLongTermBorrowingLedgers]      = useState<string[]>([])
   // Analysis tab's own Sales definition — deliberately separate from the
   // Today tab's Sales Accounts/Include/Exclude below.
   const [analysisSalesAccounts,        setAnalysisSalesAccounts]        = useState<string[]>([])
@@ -252,6 +253,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setNonOperatingIncomeLedgers(s.ytd?.nonOperatingIncomeLedgers ?? [])
         setNonOperatingInvestmentLedgers(s.ytd?.nonOperatingInvestmentLedgers ?? [])
         setDirectorLoanLedgers(s.ytd?.directorLoanLedgers ?? [])
+        setLongTermBorrowingLedgers(s.ytd?.longTermBorrowingLedgers ?? [])
         setAnalysisSalesAccounts(s.ytd?.analysisSalesAccounts ?? [])
         setAnalysisSalesIncludeVouchers(s.ytd?.analysisSalesIncludeVouchers ?? [])
         setAnalysisSalesExcludeVouchers(s.ytd?.analysisSalesExcludeVouchers ?? [])
@@ -310,6 +312,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         nonOperatingIncomeLedgers:      nonOperatingIncomeLedgers.length     > 0 ? nonOperatingIncomeLedgers     : undefined,
         nonOperatingInvestmentLedgers:  nonOperatingInvestmentLedgers.length > 0 ? nonOperatingInvestmentLedgers : undefined,
         directorLoanLedgers:            directorLoanLedgers.length           > 0 ? directorLoanLedgers           : undefined,
+        longTermBorrowingLedgers:       longTermBorrowingLedgers.length       > 0 ? longTermBorrowingLedgers       : undefined,
         analysisSalesAccounts:          analysisSalesAccounts.length          > 0 ? analysisSalesAccounts          : undefined,
         analysisSalesIncludeVouchers:   analysisSalesIncludeVouchers.length   > 0 ? analysisSalesIncludeVouchers   : undefined,
         analysisSalesExcludeVouchers:   analysisSalesExcludeVouchers.length   > 0 ? analysisSalesExcludeVouchers   : undefined,
@@ -721,6 +724,15 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
             options={allLedgerOpts}
             selected={directorLoanLedgers}
             onChange={setDirectorLoanLedgers}
+            loading={loadingOpts}
+            showSelectAll
+          />
+          <SearchCheckList
+            label="Long Term Borrowing Ledgers (for ROCE)"
+            hint="Tally has no long-term/short-term split — name the specific long-term loan ledgers"
+            options={allLedgerOpts}
+            selected={longTermBorrowingLedgers}
+            onChange={setLongTermBorrowingLedgers}
             loading={loadingOpts}
             showSelectAll
           />

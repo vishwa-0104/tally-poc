@@ -125,6 +125,12 @@ export interface DashboardSettings {
     nonOperatingIncomeLedgers?:      string[]
     nonOperatingInvestmentLedgers?:  string[]
     directorLoanLedgers?:            string[]
+    // ROCE's "Long Term Borrowings" — Tally's "Loans (Liability)" group has
+    // no long-term/short-term split, so name the specific long-term loan
+    // ledgers explicitly. (Debt/Equity's "Total Interest Bearing Loans"
+    // keeps using the whole Loans (Liability) group total — that one
+    // genuinely wants everything, short and long term combined.)
+    longTermBorrowingLedgers?:       string[]
     // Analysis tab's own Sales definition — deliberately separate from
     // today.salesAccounts/salesIncludeVouchers/salesExcludeVouchers so the
     // ratio KPIs (DSO, Net Profit) never silently depend on the Performance

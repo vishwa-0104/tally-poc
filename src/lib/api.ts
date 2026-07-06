@@ -95,6 +95,7 @@ export interface DashboardSnapshotPatch {
   fixedAssets?:        number | null
   totalLoans?:         number | null
   bankOD?:             number | null
+  longTermBorrowings?: number | null
   interestExpenseTotal?:        number | null
   taxPaymentTotal?:             number | null
   nonOperatingIncomeTotal?:     number | null

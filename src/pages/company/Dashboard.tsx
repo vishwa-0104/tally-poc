@@ -635,6 +635,9 @@ interface AnalysisInputs {
   bankOD:                      number | null
   equity:                      number | null
   totalLoans:                  number | null
+  // ROCE-only "Long Term Borrowings" — distinct from totalLoans above
+  // (Debt/Equity's "Total Interest Bearing Loans", which wants everything).
+  longTermBorrowings:          number | null
   netProfit:                   number | null
   interestExpense:             number | null
   taxPayment:                  number | null
@@ -646,7 +649,7 @@ interface AnalysisInputs {
 const emptyAnalysisInputs: AnalysisInputs = {
   debtors: null, creditors: null, creditSales: null, openingStock: null, closingStock: null,
   purchases: null, directExpenses: null, cash: null, bank: null, investments: null,
-  currentLiabilities: null, bankOD: null, equity: null, totalLoans: null,
+  currentLiabilities: null, bankOD: null, equity: null, totalLoans: null, longTermBorrowings: null,
   netProfit: null, interestExpense: null, taxPayment: null, nonOperatingIncome: null,
   nonOperatingInvestment: null, directorLoans: null,
 }
@@ -696,8 +699,8 @@ function computeRatios(i: AnalysisInputs): RatioResults {
   const ebit = i.netProfit != null && i.interestExpense != null && i.taxPayment != null
     ? i.netProfit - i.interestExpense - i.taxPayment : null
   const roceNumerator = ebit != null && i.nonOperatingIncome != null ? ebit - i.nonOperatingIncome : null
-  const roceDenominator = i.equity != null && i.totalLoans != null && i.nonOperatingInvestment != null
-    ? i.equity + i.totalLoans - i.nonOperatingInvestment : null
+  const roceDenominator = i.equity != null && i.longTermBorrowings != null && i.nonOperatingInvestment != null
+    ? i.equity + i.longTermBorrowings - i.nonOperatingInvestment : null
   const roce = roceNumerator != null && roceDenominator ? (roceNumerator / roceDenominator) * 100 : null
 
   // ROE's own borrowings/intangible-assets sub-buckets have no standard Tally
@@ -1318,6 +1321,26 @@ export default function Dashboard() {
         console.log(`[Analysis][DB] Quick Ratio — numerator: ${quickNum} | denominator: ${quickDen} | ratio: ${quickRatioVal}`)
       }
 
+      // ROCE = (EBIT − Non-Operating Income) / (Equity + Long Term Borrowings − Non-Operating Investment) * 100
+      // EBIT = Net Profit − Interest Expense − Tax Payment
+      {
+        const dbEquity             = isCurrent ? (snapshot?.equity ?? null) : null
+        const dbLongTermBorrowings = snapshot?.longTermBorrowings ?? null
+        const dbInterestExpense    = snapshot?.interestExpenseTotal ?? null
+        const dbTaxPayment         = snapshot?.taxPaymentTotal ?? null
+        const dbNonOpIncome        = snapshot?.nonOperatingIncomeTotal ?? null
+        const dbNonOpInvestment    = snapshot?.nonOperatingInvestmentTotal ?? null
+        const dbEbit = netProfit != null && dbInterestExpense != null && dbTaxPayment != null
+          ? netProfit - dbInterestExpense - dbTaxPayment : null
+        const roceNum = dbEbit != null && dbNonOpIncome != null ? dbEbit - dbNonOpIncome : null
+        const roceDen = dbEquity != null && dbLongTermBorrowings != null && dbNonOpInvestment != null
+          ? dbEquity + dbLongTermBorrowings - dbNonOpInvestment : null
+        const roceVal = roceNum != null && roceDen ? (roceNum / roceDen) * 100 : null
+        console.log(`[Analysis][DB] ROCE — Net Profit: ${netProfit} | Interest Expense: ${dbInterestExpense} | Tax Payment: ${dbTaxPayment} | EBIT: ${dbEbit}`)
+        console.log(`[Analysis][DB] ROCE — Non-Operating Income: ${dbNonOpIncome} | Equity: ${dbEquity} | Long Term Borrowings: ${dbLongTermBorrowings} | Non-Operating Investment: ${dbNonOpInvestment}`)
+        console.log(`[Analysis][DB] ROCE — numerator: ${roceNum} | denominator: ${roceDen} | ROCE (%): ${roceVal}`)
+      }
+
       setAnalysisInputs({
         debtors:               isCurrent ? (snapshot?.receivables ?? null) : null,
         creditors:             isCurrent ? (snapshot?.payables ?? null) : null,
@@ -1333,6 +1356,7 @@ export default function Dashboard() {
         bankOD:                isCurrent ? (snapshot?.bankOD ?? null) : null,
         equity:                isCurrent ? (snapshot?.equity ?? null) : null,
         totalLoans:            isCurrent ? (snapshot?.totalLoans ?? null) : null,
+        longTermBorrowings:     snapshot?.longTermBorrowings ?? null,
         netProfit,
         interestExpense:        snapshot?.interestExpenseTotal ?? null,
         taxPayment:             snapshot?.taxPaymentTotal ?? null,
@@ -1376,6 +1400,7 @@ export default function Dashboard() {
         daybookResult, stockResult, directExpResult,
         groupBalResult, ledgerBalResult,
         interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal, directorLoansTotal,
+        longTermBorrowingsTotal,
       ] = await Promise.all([
         fetchDaybook(fFrom, fTo, tallyUrl, tallyCompany, {
           // Analysis tab's own Sales definition, not the Performance tab's —
@@ -1412,6 +1437,7 @@ export default function Dashboard() {
         fetchLedgerTotal(dashboardSettings.ytd?.nonOperatingIncomeLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.nonOperatingInvestmentLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.directorLoanLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.longTermBorrowingLedgers),
       ])
 
       const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
@@ -1471,10 +1497,24 @@ export default function Dashboard() {
         console.log(`[Analysis][Live] Quick Ratio — numerator: ${quickNum} | denominator: ${quickDen} | ratio: ${quickRatioVal}`)
       }
 
+      // ROCE = (EBIT − Non-Operating Income) / (Equity + Long Term Borrowings − Non-Operating Investment) * 100
+      // EBIT = Net Profit − Interest Expense − Tax Payment
+      {
+        const ebitVal = netProfit != null && interestExpenseTotal != null && taxPaymentTotal != null
+          ? netProfit - interestExpenseTotal - taxPaymentTotal : null
+        const roceNum = ebitVal != null && nonOperatingIncomeTotal != null ? ebitVal - nonOperatingIncomeTotal : null
+        const roceDen = equity != null && longTermBorrowingsTotal != null && nonOperatingInvestmentTotal != null
+          ? equity + longTermBorrowingsTotal - nonOperatingInvestmentTotal : null
+        const roceVal = roceNum != null && roceDen ? (roceNum / roceDen) * 100 : null
+        console.log(`[Analysis][Live] ROCE — Net Profit: ${netProfit} | Interest Expense: ${interestExpenseTotal} | Tax Payment: ${taxPaymentTotal} | EBIT: ${ebitVal}`)
+        console.log(`[Analysis][Live] ROCE — Non-Operating Income: ${nonOperatingIncomeTotal} | Equity: ${equity} | Long Term Borrowings: ${longTermBorrowingsTotal} | Non-Operating Investment: ${nonOperatingInvestmentTotal}`)
+        console.log(`[Analysis][Live] ROCE — numerator: ${roceNum} | denominator: ${roceDen} | ROCE (%): ${roceVal}`)
+      }
+
       setAnalysisInputs({
         debtors, creditors, creditSales, openingStock, closingStock,
         purchases: purchaseTotal, directExpenses, cash, bank, investments,
-        currentLiabilities, bankOD, equity, totalLoans, netProfit,
+        currentLiabilities, bankOD, equity, totalLoans, longTermBorrowings: longTermBorrowingsTotal, netProfit,
         interestExpense: interestExpenseTotal, taxPayment: taxPaymentTotal,
         nonOperatingIncome: nonOperatingIncomeTotal, nonOperatingInvestment: nonOperatingInvestmentTotal,
         directorLoans: directorLoansTotal,
@@ -1504,6 +1544,7 @@ export default function Dashboard() {
       if (nonOperatingIncomeTotal     != null) snapshotPatch.nonOperatingIncomeTotal     = nonOperatingIncomeTotal
       if (nonOperatingInvestmentTotal != null) snapshotPatch.nonOperatingInvestmentTotal = nonOperatingInvestmentTotal
       if (directorLoansTotal          != null) snapshotPatch.directorLoansTotal          = directorLoansTotal
+      if (longTermBorrowingsTotal     != null) snapshotPatch.longTermBorrowings          = longTermBorrowingsTotal
 
       void saveDashboardSnapshot(companyId, snapshotPatch)
         .catch((err: unknown) => console.error('[Analysis] Failed to persist snapshot:', err))
