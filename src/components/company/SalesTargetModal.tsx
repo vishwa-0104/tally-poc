@@ -677,62 +677,68 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 italic border-t border-gray-100 pt-5 -mb-1">
-            Used for the Analysis tab's ROCE, ROE, and Debt/Equity cards — Tally has no standard
-            group for these, so name the specific ledgers. Any left empty shows "No data available"
-            on that card rather than a guessed number.
-          </p>
-          <SearchCheckList
-            label="Interest Expense Ledgers"
-            hint="e.g. Interest on Loan, Interest on OD"
-            options={allLedgerOpts}
-            selected={interestExpenseLedgers}
-            onChange={setInterestExpenseLedgers}
-            loading={loadingOpts}
-            showSelectAll
-          />
-          <SearchCheckList
-            label="Tax Payment Ledgers"
-            hint="e.g. Income Tax Paid, TDS Paid"
-            options={allLedgerOpts}
-            selected={taxPaymentLedgers}
-            onChange={setTaxPaymentLedgers}
-            loading={loadingOpts}
-            showSelectAll
-          />
-          <SearchCheckList
-            label="Non-Operating Income Ledgers"
-            hint="e.g. Rental Income, Profit on Sale of Asset"
-            options={allLedgerOpts}
-            selected={nonOperatingIncomeLedgers}
-            onChange={setNonOperatingIncomeLedgers}
-            loading={loadingOpts}
-            showSelectAll
-          />
-          <SearchCheckList
-            label="Non-Operating Investment Ledgers"
-            hint="e.g. Fixed Deposits, Mutual Funds held for non-core purposes"
-            options={allLedgerOpts}
-            selected={nonOperatingInvestmentLedgers}
-            onChange={setNonOperatingInvestmentLedgers}
-            loading={loadingOpts}
-            showSelectAll
-          />
+          {/* ── ROCE ── */}
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">ROCE</p>
+            <p className="text-[11px] text-gray-400 italic mb-4">
+              Tally has no standard group for these — name the specific ledgers. Any left empty
+              shows "No data available" on the ROCE card rather than a guessed number.
+            </p>
+            <div className="space-y-5">
+              <SearchCheckList
+                label="Interest Expense Ledgers"
+                hint="e.g. Interest on Loan, Interest on OD"
+                options={allLedgerOpts}
+                selected={interestExpenseLedgers}
+                onChange={setInterestExpenseLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Tax Payment Ledgers"
+                hint="e.g. Income Tax Paid, TDS Paid"
+                options={allLedgerOpts}
+                selected={taxPaymentLedgers}
+                onChange={setTaxPaymentLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Non-Operating Income Ledgers"
+                hint="e.g. Rental Income, Profit on Sale of Asset"
+                options={allLedgerOpts}
+                selected={nonOperatingIncomeLedgers}
+                onChange={setNonOperatingIncomeLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Non-Operating Investment Ledgers"
+                hint="e.g. Fixed Deposits, Mutual Funds held for non-core purposes"
+                options={allLedgerOpts}
+                selected={nonOperatingInvestmentLedgers}
+                onChange={setNonOperatingInvestmentLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Long Term Borrowing Ledgers"
+                hint="Tally has no long-term/short-term split — name the specific long-term loan ledgers"
+                options={allLedgerOpts}
+                selected={longTermBorrowingLedgers}
+                onChange={setLongTermBorrowingLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+            </div>
+          </div>
+
           <SearchCheckList
             label="Loans from Directors"
             hint="Specific unsecured-loan ledgers held by directors/promoters"
             options={allLedgerOpts}
             selected={directorLoanLedgers}
             onChange={setDirectorLoanLedgers}
-            loading={loadingOpts}
-            showSelectAll
-          />
-          <SearchCheckList
-            label="Long Term Borrowing Ledgers (for ROCE)"
-            hint="Tally has no long-term/short-term split — name the specific long-term loan ledgers"
-            options={allLedgerOpts}
-            selected={longTermBorrowingLedgers}
-            onChange={setLongTermBorrowingLedgers}
             loading={loadingOpts}
             showSelectAll
           />
