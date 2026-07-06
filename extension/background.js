@@ -1709,13 +1709,18 @@ async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
   const receivables       = debtors        ? Math.abs(debtors.balance)        : 0
   const payables          = creditors      ? Math.abs(creditors.balance)      : 0
   // Remaining groups: sign varies by group type (asset vs liability), but the
-  // balance's magnitude is what every ratio formula actually needs.
-  const equity            = capitalAccount ? Math.abs(capitalAccount.balance) : 0
-  const investments       = investmentsGrp ? Math.abs(investmentsGrp.balance) : 0
-  const currentLiabilities = currentLiabsGrp ? Math.abs(currentLiabsGrp.balance) : 0
-  const fixedAssets       = fixedAssetsGrp  ? Math.abs(fixedAssetsGrp.balance)  : 0
-  const totalLoans        = loansGrp        ? Math.abs(loansGrp.balance)       : 0
-  const bankOD            = bankOdGrp       ? Math.abs(bankOdGrp.balance)      : 0
+  // balance's magnitude is what every ratio formula actually needs. null (not
+  // 0) when the group wasn't in Tally's response — that means either the TDL
+  // hasn't been reloaded with this group name yet, or the company genuinely
+  // has none, and either way a fabricated 0 would silently break any ratio
+  // dividing by this figure (e.g. Quick Ratio's Current Liabilities − Bank OD
+  // denominator) instead of correctly showing "No data available".
+  const equity            = capitalAccount ? Math.abs(capitalAccount.balance) : null
+  const investments       = investmentsGrp ? Math.abs(investmentsGrp.balance) : null
+  const currentLiabilities = currentLiabsGrp ? Math.abs(currentLiabsGrp.balance) : null
+  const fixedAssets       = fixedAssetsGrp  ? Math.abs(fixedAssetsGrp.balance)  : null
+  const totalLoans        = loansGrp        ? Math.abs(loansGrp.balance)       : null
+  const bankOD            = bankOdGrp       ? Math.abs(bankOdGrp.balance)      : null
 
   console.log(`[GroupBalances] asOfDate=${toDateRaw} | all groups from Tally:`, groups.map(g => `${g.name}=${g.balance}`))
   console.log('[GroupBalances] mapped:', { receivables, payables, equity, investments, currentLiabilities, fixedAssets, totalLoans, bankOD })

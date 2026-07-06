@@ -1365,12 +1365,24 @@ export default function Dashboard() {
           salesAccounts:                  dashboardSettings.ytd?.analysisSalesAccounts,
           salesIncludeVouchers:           dashboardSettings.ytd?.analysisSalesIncludeVouchers,
           salesExcludeVouchers:           dashboardSettings.ytd?.analysisSalesExcludeVouchers,
+          // Everything below must mirror the Performance tab's fetchData
+          // exactly (same settings keys) — this fetchDaybook result gets
+          // persisted via saveVouchers into the SAME shared vouchers table
+          // Performance tab reads, so omitting any of these silently wipes
+          // that flag (e.g. purchaseLedger) for every voucher in this date
+          // range until Performance tab does its own live re-fetch.
+          cashInflowLedgers:              dashboardSettings.today?.cashInflowLedgers,
+          bankLedgers:                    dashboardSettings.today?.bankLedgers,
+          purchaseAccounts:               dashboardSettings.ytd?.purchaseAccounts,
           indirectExpenseLedgers:         dashboardSettings.ytd?.indirectExpenseLedgers,
           indirectExpenseIncludeVouchers: dashboardSettings.ytd?.indirectExpenseIncludeVouchers,
           indirectExpenseExcludeVouchers: dashboardSettings.ytd?.indirectExpenseExcludeVouchers,
           indirectIncomeLedgers:          dashboardSettings.ytd?.indirectIncomeLedgers,
           indirectIncomeIncludeVouchers:  dashboardSettings.ytd?.indirectIncomeIncludeVouchers,
           indirectIncomeExcludeVouchers:  dashboardSettings.ytd?.indirectIncomeExcludeVouchers,
+          ebitdaLedgers:                  dashboardSettings.ytd?.ebitdaLedgers,
+          ebitdaIncludeVouchers:          dashboardSettings.ytd?.ebitdaIncludeVouchers,
+          ebitdaExcludeVouchers:          dashboardSettings.ytd?.ebitdaExcludeVouchers,
         }),
         fetchStockValue(fFrom, fTo, tallyUrl, tallyCompany),
         fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, dashboardSettings.ytd?.directExpenseLedgers),

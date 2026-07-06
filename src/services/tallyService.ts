@@ -317,12 +317,15 @@ export async function fetchLedgerBalances(
 export interface GroupBalances {
   receivables:        number
   payables:           number
-  equity:             number
-  investments:        number
-  currentLiabilities: number
-  fixedAssets:        number
-  totalLoans:         number
-  bankOD:             number
+  // null = group not found in Tally's response (TDL not reloaded yet, or the
+  // company genuinely has none) — never fabricated as 0, since these all
+  // feed ratio denominators (e.g. Quick Ratio's Current Liabilities − Bank OD).
+  equity:             number | null
+  investments:        number | null
+  currentLiabilities: number | null
+  fixedAssets:        number | null
+  totalLoans:         number | null
+  bankOD:             number | null
 }
 
 export async function fetchGroupBalances(
