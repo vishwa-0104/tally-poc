@@ -131,6 +131,10 @@ export interface DashboardSettings {
     // keeps using the whole Loans (Liability) group total — that one
     // genuinely wants everything, short and long term combined.)
     longTermBorrowingLedgers?:       string[]
+    // ROCE's own Equity figure — deliberately separate from the
+    // Capital-Account-group `equity` value Debt/Equity uses, per the
+    // "each ratio gets its own settings" rule.
+    equityLedgers?:                  string[]
     // Analysis tab's own Sales definition — deliberately separate from
     // today.salesAccounts/salesIncludeVouchers/salesExcludeVouchers so the
     // ratio KPIs (DSO, Net Profit) never silently depend on the Performance

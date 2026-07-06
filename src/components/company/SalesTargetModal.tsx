@@ -194,6 +194,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [nonOperatingInvestmentLedgers, setNonOperatingInvestmentLedgers] = useState<string[]>([])
   const [directorLoanLedgers,           setDirectorLoanLedgers]           = useState<string[]>([])
   const [longTermBorrowingLedgers,      setLongTermBorrowingLedgers]      = useState<string[]>([])
+  const [equityLedgers,                 setEquityLedgers]                 = useState<string[]>([])
   // Analysis tab's own Sales definition — deliberately separate from the
   // Today tab's Sales Accounts/Include/Exclude below.
   const [analysisSalesAccounts,        setAnalysisSalesAccounts]        = useState<string[]>([])
@@ -254,6 +255,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setNonOperatingInvestmentLedgers(s.ytd?.nonOperatingInvestmentLedgers ?? [])
         setDirectorLoanLedgers(s.ytd?.directorLoanLedgers ?? [])
         setLongTermBorrowingLedgers(s.ytd?.longTermBorrowingLedgers ?? [])
+        setEquityLedgers(s.ytd?.equityLedgers ?? [])
         setAnalysisSalesAccounts(s.ytd?.analysisSalesAccounts ?? [])
         setAnalysisSalesIncludeVouchers(s.ytd?.analysisSalesIncludeVouchers ?? [])
         setAnalysisSalesExcludeVouchers(s.ytd?.analysisSalesExcludeVouchers ?? [])
@@ -313,6 +315,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         nonOperatingInvestmentLedgers:  nonOperatingInvestmentLedgers.length > 0 ? nonOperatingInvestmentLedgers : undefined,
         directorLoanLedgers:            directorLoanLedgers.length           > 0 ? directorLoanLedgers           : undefined,
         longTermBorrowingLedgers:       longTermBorrowingLedgers.length       > 0 ? longTermBorrowingLedgers       : undefined,
+        equityLedgers:                  equityLedgers.length                  > 0 ? equityLedgers                  : undefined,
         analysisSalesAccounts:          analysisSalesAccounts.length          > 0 ? analysisSalesAccounts          : undefined,
         analysisSalesIncludeVouchers:   analysisSalesIncludeVouchers.length   > 0 ? analysisSalesIncludeVouchers   : undefined,
         analysisSalesExcludeVouchers:   analysisSalesExcludeVouchers.length   > 0 ? analysisSalesExcludeVouchers   : undefined,
@@ -727,6 +730,15 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
                 options={allLedgerOpts}
                 selected={longTermBorrowingLedgers}
                 onChange={setLongTermBorrowingLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Equity Ledgers"
+                hint="e.g. Share Capital, Reserves & Surplus — separate from Debt/Equity's Capital Account figure"
+                options={allLedgerOpts}
+                selected={equityLedgers}
+                onChange={setEquityLedgers}
                 loading={loadingOpts}
                 showSelectAll
               />
