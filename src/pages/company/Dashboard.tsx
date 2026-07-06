@@ -1,10 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import {
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar, Cell,
-} from 'recharts'
-import {
   TrendingUp, TrendingDown, AlertCircle,
   Lightbulb, AlertTriangle, CheckCircle,
   ArrowUpRight, ArrowDownRight, RefreshCw, Settings, Wallet, Building2,
@@ -162,15 +158,7 @@ function computeTargetForPeriod(
   return sum > 0 ? sum : null
 }
 
-// ── Static data for Analysis + CFO tabs ───────────────────────────────────────
-
-const dummySalesByCategory = [
-  { name: 'Electronics', value: 4200 },
-  { name: 'FMCG',        value: 3100 },
-  { name: 'Apparel',     value: 2200 },
-  { name: 'Pharma',      value: 1800 },
-  { name: 'Others',      value: 900  },
-]
+// ── Static data for CFO tab ───────────────────────────────────────────────────
 
 const cfoSuggestions = [
   {
@@ -281,18 +269,6 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function BarTip({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow px-3 py-2 text-xs space-y-0.5">
-      <p className="font-semibold text-gray-600 mb-1">{label}</p>
-      {payload.map((p, i) => (
-        <p key={i} className="text-gray-700">{p.name}: {formatCurrency(p.value)}</p>
-      ))}
     </div>
   )
 }
@@ -1284,17 +1260,20 @@ export default function Dashboard() {
       ])
 
       const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
-      // Analysis tab's own Sales definition — deliberately independent of the
-      // Performance tab's `today.salesAccounts`/include/exclude settings.
+      // DSO's Credit Sales split deliberately uses the Analysis tab's own
+      // Sales setting (independent of Performance tab). Total Sales — which
+      // feeds Net Profit/ROCE/ROE — deliberately does NOT: Net Profit must be
+      // the same number on both tabs, so it stays on the Performance tab's
+      // Today-tab Sales setting.
       const analysisSalesFilter: SalesFilterSettings = {
         salesAccounts:        dashboardSettings.ytd?.analysisSalesAccounts,
         salesIncludeVouchers: dashboardSettings.ytd?.analysisSalesIncludeVouchers,
         salesExcludeVouchers: dashboardSettings.ytd?.analysisSalesExcludeVouchers,
       }
       const creditSales   = computeCreditSalesTotal(all, analysisSalesFilter)
-      const totalSales    = computeSalesTotal(all, analysisSalesFilter)
-      console.log('[Analysis][DB] Sales settings:', analysisSalesFilter)
-      console.log(`[Analysis][DB] Total Sales: ${totalSales} | Credit Sales (for DSO): ${creditSales} | vouchers in range: ${all.length}`)
+      const totalSales    = computeSalesTotal(all, dashboardSettings.today)
+      console.log('[Analysis][DB] DSO Sales settings:', analysisSalesFilter)
+      console.log(`[Analysis][DB] Total Sales (Net Profit, uses Performance tab setting): ${totalSales} | Credit Sales (for DSO): ${creditSales} | vouchers in range: ${all.length}`)
 
       let netProfit: number | null = null
       if (snapshot?.openingStock != null && snapshot?.closingStock != null && snapshot?.directExpenseTotal != null) {
@@ -1511,17 +1490,20 @@ export default function Dashboard() {
 
       const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
       const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
-      // Analysis tab's own Sales definition — deliberately independent of the
-      // Performance tab's `today.salesAccounts`/include/exclude settings.
+      // DSO's Credit Sales split deliberately uses the Analysis tab's own
+      // Sales setting (independent of Performance tab). Total Sales — which
+      // feeds Net Profit/ROCE/ROE — deliberately does NOT: Net Profit must be
+      // the same number on both tabs, so it stays on the Performance tab's
+      // Today-tab Sales setting.
       const analysisSalesFilter: SalesFilterSettings = {
         salesAccounts:        dashboardSettings.ytd?.analysisSalesAccounts,
         salesIncludeVouchers: dashboardSettings.ytd?.analysisSalesIncludeVouchers,
         salesExcludeVouchers: dashboardSettings.ytd?.analysisSalesExcludeVouchers,
       }
       const creditSales   = computeCreditSalesTotal(all, analysisSalesFilter)
-      const totalSales    = computeSalesTotal(all, analysisSalesFilter)
-      console.log('[Analysis][Live] Sales settings:', analysisSalesFilter)
-      console.log(`[Analysis][Live] Total Sales: ${totalSales} | Credit Sales (for DSO): ${creditSales} | vouchers in range: ${all.length}`)
+      const totalSales    = computeSalesTotal(all, dashboardSettings.today)
+      console.log('[Analysis][Live] DSO Sales settings:', analysisSalesFilter)
+      console.log(`[Analysis][Live] Total Sales (Net Profit, uses Performance tab setting): ${totalSales} | Credit Sales (for DSO): ${creditSales} | vouchers in range: ${all.length}`)
 
       const { openingStock, closingStock } = stockResult
       const directExpenses = directExpResult
@@ -2164,28 +2146,6 @@ export default function Dashboard() {
                   </>
                 )
               })()}
-            </div>
-
-            <div className="grid grid-cols-1 gap-5">
-
-              {/* Sales by Category */}
-              <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-4">Sales by Category</p>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={dummySalesByCategory} barCategoryGap="32%">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#9CA3AF' }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} tickLine={false} axisLine={false} width={44}
-                      tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip content={<BarTip />} />
-                    <Bar dataKey="value" name="Sales" radius={[4, 4, 0, 0]}>
-                      {dummySalesByCategory.map((_, i) => (
-                        <Cell key={i} fill={['#1D4ED8','#2563EB','#3B82F6','#60A5FA','#93C5FD'][i]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
             </div>
 
           </div>
