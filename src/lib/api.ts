@@ -97,6 +97,13 @@ export interface DashboardSnapshotPatch {
   bankOD?:             number | null
   longTermBorrowings?: number | null
   roceEquity?:         number | null
+  roeEquity?:          number | null
+  internalBorrowings?: number | null
+  intangibleAssets?:   number | null
+  debtEquityLoans?:    number | null
+  debtEquityCash?:     number | null
+  debtEquityBank?:     number | null
+  debtEquityEquity?:   number | null
   interestExpenseTotal?:        number | null
   taxPaymentTotal?:             number | null
   nonOperatingIncomeTotal?:     number | null

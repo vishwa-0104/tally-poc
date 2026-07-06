@@ -127,14 +127,24 @@ export interface DashboardSettings {
     directorLoanLedgers?:            string[]
     // ROCE's "Long Term Borrowings" — Tally's "Loans (Liability)" group has
     // no long-term/short-term split, so name the specific long-term loan
-    // ledgers explicitly. (Debt/Equity's "Total Interest Bearing Loans"
-    // keeps using the whole Loans (Liability) group total — that one
-    // genuinely wants everything, short and long term combined.)
+    // ledgers explicitly.
     longTermBorrowingLedgers?:       string[]
-    // ROCE's own Equity figure — deliberately separate from the
-    // Capital-Account-group `equity` value Debt/Equity uses, per the
-    // "each ratio gets its own settings" rule.
+    // ROCE's own Equity figure — every ratio below has its own dedicated
+    // Equity/Loans/Cash/Bank settings rather than sharing one figure, per
+    // the "each ratio gets its own settings" rule.
     equityLedgers?:                  string[]
+    // ROE — Net Profit is reused from the existing YTD figure (no setting),
+    // but the denominator's 3 pieces are each their own ledger list.
+    roeEquityLedgers?:               string[]
+    internalBorrowingLedgers?:       string[]
+    intangibleAssetLedgers?:         string[]
+    // Debt/Equity — every component of (Loans − Cash − Bank) / (Equity +
+    // Director Loans) gets its own dedicated ledger list. directorLoanLedgers
+    // above is reused here (it was already Debt/Equity-only).
+    debtEquityLoanLedgers?:          string[]
+    debtEquityCashLedgers?:          string[]
+    debtEquityBankLedgers?:          string[]
+    debtEquityEquityLedgers?:        string[]
     // Analysis tab's own Sales definition — deliberately separate from
     // today.salesAccounts/salesIncludeVouchers/salesExcludeVouchers so the
     // ratio KPIs (DSO, Net Profit) never silently depend on the Performance

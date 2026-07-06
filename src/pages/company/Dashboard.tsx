@@ -633,13 +633,10 @@ interface AnalysisInputs {
   investments:                 number | null
   currentLiabilities:          number | null
   bankOD:                      number | null
-  equity:                      number | null
-  totalLoans:                  number | null
-  // ROCE-only "Long Term Borrowings" — distinct from totalLoans above
-  // (Debt/Equity's "Total Interest Bearing Loans", which wants everything).
+  // ROCE-only "Long Term Borrowings" and Equity — every ratio below has its
+  // own dedicated figures rather than sharing one Capital-Account/Loans-
+  // (Liability) group value.
   longTermBorrowings:          number | null
-  // ROCE-only Equity — distinct from `equity` above (Capital Account group,
-  // used by Debt/Equity).
   roceEquity:                  number | null
   netProfit:                   number | null
   interestExpense:             number | null
@@ -647,14 +644,25 @@ interface AnalysisInputs {
   nonOperatingIncome:          number | null
   nonOperatingInvestment:      number | null
   directorLoans:               number | null
+  // ROE
+  roeEquity:                   number | null
+  internalBorrowings:          number | null
+  intangibleAssets:            number | null
+  // Debt/Equity
+  debtEquityLoans:             number | null
+  debtEquityCash:              number | null
+  debtEquityBank:              number | null
+  debtEquityEquity:            number | null
 }
 
 const emptyAnalysisInputs: AnalysisInputs = {
   debtors: null, creditors: null, creditSales: null, openingStock: null, closingStock: null,
   purchases: null, directExpenses: null, cash: null, bank: null, investments: null,
-  currentLiabilities: null, bankOD: null, equity: null, totalLoans: null, longTermBorrowings: null, roceEquity: null,
+  currentLiabilities: null, bankOD: null, longTermBorrowings: null, roceEquity: null,
   netProfit: null, interestExpense: null, taxPayment: null, nonOperatingIncome: null,
   nonOperatingInvestment: null, directorLoans: null,
+  roeEquity: null, internalBorrowings: null, intangibleAssets: null,
+  debtEquityLoans: null, debtEquityCash: null, debtEquityBank: null, debtEquityEquity: null,
 }
 
 interface RatioResults {
@@ -713,17 +721,23 @@ function computeRatios(i: AnalysisInputs): RatioResults {
     ? i.roceEquity + (i.longTermBorrowings ?? 0) - (i.nonOperatingInvestment ?? 0) : null
   const roce = roceNumerator != null && roceDenominator ? (roceNumerator / roceDenominator) * 100 : null
 
-  // ROE's own borrowings/intangible-assets sub-buckets have no standard Tally
-  // source (see plan) — deliberately left out rather than substituting Total
-  // Loans/Total Fixed Assets under a different label, so ROE always shows
-  // "No data available" for now rather than a number computed from the wrong
-  // inputs.
-  const roe: number | null = null
+  // ROE numerator reuses the existing Net Profit (YTD) figure — no separate
+  // setting. Internal Borrowings/Intangible Assets default to 0 when
+  // unconfigured (commonly genuinely zero); Equity stays required.
+  const roeDenominator = i.roeEquity != null
+    ? i.roeEquity + (i.internalBorrowings ?? 0) - (i.intangibleAssets ?? 0) : null
+  const roe = i.netProfit != null && roeDenominator ? i.netProfit / roeDenominator : null
 
-  const debtEquityNumerator = i.totalLoans != null && i.cash != null && i.bank != null
-    ? i.totalLoans - i.cash - i.bank : null
-  const debtEquityDenominator = i.equity != null && i.directorLoans != null
-    ? i.equity + i.directorLoans : null
+  // Every Debt/Equity component is its own dedicated setting now (Loans,
+  // Cash, Bank, Equity, Director Loans) — independent of the shared
+  // group-balance cash/bank/equity/totalLoans figures used elsewhere. Loans
+  // and Equity are the two figures that define what this ratio even means,
+  // so they stay required; Cash/Bank/Director Loans default to 0 since many
+  // companies genuinely have none to net out.
+  const debtEquityNumerator = i.debtEquityLoans != null
+    ? i.debtEquityLoans - (i.debtEquityCash ?? 0) - (i.debtEquityBank ?? 0) : null
+  const debtEquityDenominator = i.debtEquityEquity != null
+    ? i.debtEquityEquity + (i.directorLoans ?? 0) : null
   const debtEquity = debtEquityNumerator != null && debtEquityDenominator
     ? debtEquityNumerator / debtEquityDenominator : null
 
@@ -1351,6 +1365,35 @@ export default function Dashboard() {
         console.log(`[Analysis][DB] ROCE — numerator: ${roceNum} | denominator: ${roceDen} | ROCE (%): ${roceVal}`)
       }
 
+      // ROE = Net Profit / (Equity + Internal Borrowings − Intangible Assets)
+      {
+        const dbRoeEquity          = snapshot?.roeEquity ?? null
+        const dbInternalBorrowings = snapshot?.internalBorrowings ?? null
+        const dbIntangibleAssets   = snapshot?.intangibleAssets ?? null
+        const roeDen = dbRoeEquity != null
+          ? dbRoeEquity + (dbInternalBorrowings ?? 0) - (dbIntangibleAssets ?? 0) : null
+        const roeVal = netProfit != null && roeDen ? netProfit / roeDen : null
+        console.log(`[Analysis][DB] ROE — Net Profit: ${netProfit} | Equity: ${dbRoeEquity} | Internal Borrowings: ${dbInternalBorrowings} | Intangible Assets: ${dbIntangibleAssets}`)
+        console.log(`[Analysis][DB] ROE — denominator: ${roeDen} | ROE: ${roeVal}`)
+      }
+
+      // Debt/Equity = (Loans − Cash − Bank) / (Equity + Director Loans)
+      {
+        const dbDebtEquityLoans  = snapshot?.debtEquityLoans ?? null
+        const dbDebtEquityCash   = snapshot?.debtEquityCash ?? null
+        const dbDebtEquityBank   = snapshot?.debtEquityBank ?? null
+        const dbDebtEquityEquity = snapshot?.debtEquityEquity ?? null
+        const dbDirectorLoans    = snapshot?.directorLoansTotal ?? null
+        const deNum = dbDebtEquityLoans != null
+          ? dbDebtEquityLoans - (dbDebtEquityCash ?? 0) - (dbDebtEquityBank ?? 0) : null
+        const deDen = dbDebtEquityEquity != null
+          ? dbDebtEquityEquity + (dbDirectorLoans ?? 0) : null
+        const deVal = deNum != null && deDen ? deNum / deDen : null
+        console.log(`[Analysis][DB] Debt/Equity — Loans: ${dbDebtEquityLoans} | Cash: ${dbDebtEquityCash} | Bank: ${dbDebtEquityBank}`)
+        console.log(`[Analysis][DB] Debt/Equity — Equity: ${dbDebtEquityEquity} | Director Loans: ${dbDirectorLoans}`)
+        console.log(`[Analysis][DB] Debt/Equity — numerator: ${deNum} | denominator: ${deDen} | ratio: ${deVal}`)
+      }
+
       setAnalysisInputs({
         debtors:               isCurrent ? (snapshot?.receivables ?? null) : null,
         creditors:             isCurrent ? (snapshot?.payables ?? null) : null,
@@ -1364,8 +1407,6 @@ export default function Dashboard() {
         investments:           isCurrent ? (snapshot?.investments ?? null) : null,
         currentLiabilities:    isCurrent ? (snapshot?.currentLiabilities ?? null) : null,
         bankOD:                isCurrent ? (snapshot?.bankOD ?? null) : null,
-        equity:                isCurrent ? (snapshot?.equity ?? null) : null,
-        totalLoans:            isCurrent ? (snapshot?.totalLoans ?? null) : null,
         longTermBorrowings:     snapshot?.longTermBorrowings ?? null,
         roceEquity:             snapshot?.roceEquity ?? null,
         netProfit,
@@ -1374,6 +1415,13 @@ export default function Dashboard() {
         nonOperatingIncome:     snapshot?.nonOperatingIncomeTotal ?? null,
         nonOperatingInvestment: snapshot?.nonOperatingInvestmentTotal ?? null,
         directorLoans:          snapshot?.directorLoansTotal ?? null,
+        roeEquity:              snapshot?.roeEquity ?? null,
+        internalBorrowings:     snapshot?.internalBorrowings ?? null,
+        intangibleAssets:       snapshot?.intangibleAssets ?? null,
+        debtEquityLoans:        snapshot?.debtEquityLoans ?? null,
+        debtEquityCash:         snapshot?.debtEquityCash ?? null,
+        debtEquityBank:         snapshot?.debtEquityBank ?? null,
+        debtEquityEquity:       snapshot?.debtEquityEquity ?? null,
       })
       setAnalysisActivePeriod({ from, to })
       setAnalysisFetched(true)
@@ -1412,6 +1460,8 @@ export default function Dashboard() {
         groupBalResult, ledgerBalResult,
         interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal, directorLoansTotal,
         longTermBorrowingsTotal, roceEquityTotal,
+        roeEquityTotal, internalBorrowingsTotal, intangibleAssetsTotal,
+        debtEquityLoansTotal, debtEquityCashTotal, debtEquityBankTotal, debtEquityEquityTotal,
       ] = await Promise.all([
         fetchDaybook(fFrom, fTo, tallyUrl, tallyCompany, {
           // Analysis tab's own Sales definition, not the Performance tab's —
@@ -1450,6 +1500,13 @@ export default function Dashboard() {
         fetchLedgerTotal(dashboardSettings.ytd?.directorLoanLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.longTermBorrowingLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.equityLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.roeEquityLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.internalBorrowingLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.intangibleAssetLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.debtEquityLoanLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.debtEquityCashLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.debtEquityBankLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.debtEquityEquityLedgers),
       ])
 
       const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
@@ -1493,8 +1550,6 @@ export default function Dashboard() {
       const investments         = isCurrent && groupBalResult ? groupBalResult.investments : null
       const currentLiabilities  = isCurrent && groupBalResult ? groupBalResult.currentLiabilities : null
       const bankOD              = isCurrent && groupBalResult ? groupBalResult.bankOD : null
-      const equity              = isCurrent && groupBalResult ? groupBalResult.equity : null
-      const totalLoans          = isCurrent && groupBalResult ? groupBalResult.totalLoans : null
 
       // Quick Ratio = (Cash + Bank + Investments + Debtors) / (Current Liabilities − Bank OD)
       {
@@ -1523,14 +1578,38 @@ export default function Dashboard() {
         console.log(`[Analysis][Live] ROCE — numerator: ${roceNum} | denominator: ${roceDen} | ROCE (%): ${roceVal}`)
       }
 
+      // ROE = Net Profit / (Equity + Internal Borrowings − Intangible Assets)
+      {
+        const roeDen = roeEquityTotal != null
+          ? roeEquityTotal + (internalBorrowingsTotal ?? 0) - (intangibleAssetsTotal ?? 0) : null
+        const roeVal = netProfit != null && roeDen ? netProfit / roeDen : null
+        console.log(`[Analysis][Live] ROE — Net Profit: ${netProfit} | Equity: ${roeEquityTotal} | Internal Borrowings: ${internalBorrowingsTotal} | Intangible Assets: ${intangibleAssetsTotal}`)
+        console.log(`[Analysis][Live] ROE — denominator: ${roeDen} | ROE: ${roeVal}`)
+      }
+
+      // Debt/Equity = (Loans − Cash − Bank) / (Equity + Director Loans)
+      {
+        const deNum = debtEquityLoansTotal != null
+          ? debtEquityLoansTotal - (debtEquityCashTotal ?? 0) - (debtEquityBankTotal ?? 0) : null
+        const deDen = debtEquityEquityTotal != null
+          ? debtEquityEquityTotal + (directorLoansTotal ?? 0) : null
+        const deVal = deNum != null && deDen ? deNum / deDen : null
+        console.log(`[Analysis][Live] Debt/Equity — Loans: ${debtEquityLoansTotal} | Cash: ${debtEquityCashTotal} | Bank: ${debtEquityBankTotal}`)
+        console.log(`[Analysis][Live] Debt/Equity — Equity: ${debtEquityEquityTotal} | Director Loans: ${directorLoansTotal}`)
+        console.log(`[Analysis][Live] Debt/Equity — numerator: ${deNum} | denominator: ${deDen} | ratio: ${deVal}`)
+      }
+
       setAnalysisInputs({
         debtors, creditors, creditSales, openingStock, closingStock,
         purchases: purchaseTotal, directExpenses, cash, bank, investments,
-        currentLiabilities, bankOD, equity, totalLoans, longTermBorrowings: longTermBorrowingsTotal,
+        currentLiabilities, bankOD, longTermBorrowings: longTermBorrowingsTotal,
         roceEquity: roceEquityTotal, netProfit,
         interestExpense: interestExpenseTotal, taxPayment: taxPaymentTotal,
         nonOperatingIncome: nonOperatingIncomeTotal, nonOperatingInvestment: nonOperatingInvestmentTotal,
         directorLoans: directorLoansTotal,
+        roeEquity: roeEquityTotal, internalBorrowings: internalBorrowingsTotal, intangibleAssets: intangibleAssetsTotal,
+        debtEquityLoans: debtEquityLoansTotal, debtEquityCash: debtEquityCashTotal,
+        debtEquityBank: debtEquityBankTotal, debtEquityEquity: debtEquityEquityTotal,
       })
       setAnalysisActivePeriod({ from, to })
       setAnalysisFetched(true)
@@ -1549,8 +1628,6 @@ export default function Dashboard() {
         snapshotPatch.investments        = investments
         snapshotPatch.currentLiabilities = currentLiabilities
         snapshotPatch.bankOD             = bankOD
-        snapshotPatch.equity             = equity
-        snapshotPatch.totalLoans         = totalLoans
       }
       if (interestExpenseTotal        != null) snapshotPatch.interestExpenseTotal        = interestExpenseTotal
       if (taxPaymentTotal             != null) snapshotPatch.taxPaymentTotal             = taxPaymentTotal
@@ -1559,6 +1636,13 @@ export default function Dashboard() {
       if (directorLoansTotal          != null) snapshotPatch.directorLoansTotal          = directorLoansTotal
       if (longTermBorrowingsTotal     != null) snapshotPatch.longTermBorrowings          = longTermBorrowingsTotal
       if (roceEquityTotal             != null) snapshotPatch.roceEquity                  = roceEquityTotal
+      if (roeEquityTotal              != null) snapshotPatch.roeEquity                   = roeEquityTotal
+      if (internalBorrowingsTotal     != null) snapshotPatch.internalBorrowings          = internalBorrowingsTotal
+      if (intangibleAssetsTotal       != null) snapshotPatch.intangibleAssets            = intangibleAssetsTotal
+      if (debtEquityLoansTotal        != null) snapshotPatch.debtEquityLoans             = debtEquityLoansTotal
+      if (debtEquityCashTotal         != null) snapshotPatch.debtEquityCash              = debtEquityCashTotal
+      if (debtEquityBankTotal         != null) snapshotPatch.debtEquityBank              = debtEquityBankTotal
+      if (debtEquityEquityTotal       != null) snapshotPatch.debtEquityEquity            = debtEquityEquityTotal
 
       void saveDashboardSnapshot(companyId, snapshotPatch)
         .catch((err: unknown) => console.error('[Analysis] Failed to persist snapshot:', err))

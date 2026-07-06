@@ -195,6 +195,15 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
   const [directorLoanLedgers,           setDirectorLoanLedgers]           = useState<string[]>([])
   const [longTermBorrowingLedgers,      setLongTermBorrowingLedgers]      = useState<string[]>([])
   const [equityLedgers,                 setEquityLedgers]                 = useState<string[]>([])
+  // ROE
+  const [roeEquityLedgers,         setRoeEquityLedgers]         = useState<string[]>([])
+  const [internalBorrowingLedgers, setInternalBorrowingLedgers] = useState<string[]>([])
+  const [intangibleAssetLedgers,   setIntangibleAssetLedgers]   = useState<string[]>([])
+  // Debt/Equity
+  const [debtEquityLoanLedgers,   setDebtEquityLoanLedgers]   = useState<string[]>([])
+  const [debtEquityCashLedgers,   setDebtEquityCashLedgers]   = useState<string[]>([])
+  const [debtEquityBankLedgers,   setDebtEquityBankLedgers]   = useState<string[]>([])
+  const [debtEquityEquityLedgers, setDebtEquityEquityLedgers] = useState<string[]>([])
   // Analysis tab's own Sales definition — deliberately separate from the
   // Today tab's Sales Accounts/Include/Exclude below.
   const [analysisSalesAccounts,        setAnalysisSalesAccounts]        = useState<string[]>([])
@@ -256,6 +265,13 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         setDirectorLoanLedgers(s.ytd?.directorLoanLedgers ?? [])
         setLongTermBorrowingLedgers(s.ytd?.longTermBorrowingLedgers ?? [])
         setEquityLedgers(s.ytd?.equityLedgers ?? [])
+        setRoeEquityLedgers(s.ytd?.roeEquityLedgers ?? [])
+        setInternalBorrowingLedgers(s.ytd?.internalBorrowingLedgers ?? [])
+        setIntangibleAssetLedgers(s.ytd?.intangibleAssetLedgers ?? [])
+        setDebtEquityLoanLedgers(s.ytd?.debtEquityLoanLedgers ?? [])
+        setDebtEquityCashLedgers(s.ytd?.debtEquityCashLedgers ?? [])
+        setDebtEquityBankLedgers(s.ytd?.debtEquityBankLedgers ?? [])
+        setDebtEquityEquityLedgers(s.ytd?.debtEquityEquityLedgers ?? [])
         setAnalysisSalesAccounts(s.ytd?.analysisSalesAccounts ?? [])
         setAnalysisSalesIncludeVouchers(s.ytd?.analysisSalesIncludeVouchers ?? [])
         setAnalysisSalesExcludeVouchers(s.ytd?.analysisSalesExcludeVouchers ?? [])
@@ -316,6 +332,13 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
         directorLoanLedgers:            directorLoanLedgers.length           > 0 ? directorLoanLedgers           : undefined,
         longTermBorrowingLedgers:       longTermBorrowingLedgers.length       > 0 ? longTermBorrowingLedgers       : undefined,
         equityLedgers:                  equityLedgers.length                  > 0 ? equityLedgers                  : undefined,
+        roeEquityLedgers:               roeEquityLedgers.length               > 0 ? roeEquityLedgers               : undefined,
+        internalBorrowingLedgers:       internalBorrowingLedgers.length       > 0 ? internalBorrowingLedgers       : undefined,
+        intangibleAssetLedgers:         intangibleAssetLedgers.length         > 0 ? intangibleAssetLedgers         : undefined,
+        debtEquityLoanLedgers:          debtEquityLoanLedgers.length          > 0 ? debtEquityLoanLedgers          : undefined,
+        debtEquityCashLedgers:          debtEquityCashLedgers.length          > 0 ? debtEquityCashLedgers          : undefined,
+        debtEquityBankLedgers:          debtEquityBankLedgers.length          > 0 ? debtEquityBankLedgers          : undefined,
+        debtEquityEquityLedgers:        debtEquityEquityLedgers.length        > 0 ? debtEquityEquityLedgers        : undefined,
         analysisSalesAccounts:          analysisSalesAccounts.length          > 0 ? analysisSalesAccounts          : undefined,
         analysisSalesIncludeVouchers:   analysisSalesIncludeVouchers.length   > 0 ? analysisSalesIncludeVouchers   : undefined,
         analysisSalesExcludeVouchers:   analysisSalesExcludeVouchers.length   > 0 ? analysisSalesExcludeVouchers   : undefined,
@@ -735,7 +758,7 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
               />
               <SearchCheckList
                 label="Equity Ledgers"
-                hint="e.g. Share Capital, Reserves & Surplus — separate from Debt/Equity's Capital Account figure"
+                hint="e.g. Share Capital, Reserves & Surplus"
                 options={allLedgerOpts}
                 selected={equityLedgers}
                 onChange={setEquityLedgers}
@@ -745,15 +768,101 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
             </div>
           </div>
 
-          <SearchCheckList
-            label="Loans from Directors"
-            hint="Specific unsecured-loan ledgers held by directors/promoters"
-            options={allLedgerOpts}
-            selected={directorLoanLedgers}
-            onChange={setDirectorLoanLedgers}
-            loading={loadingOpts}
-            showSelectAll
-          />
+          {/* ── ROE ── */}
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">ROE</p>
+            <p className="text-[11px] text-gray-400 italic mb-4">
+              Numerator reuses the existing Net Profit (YTD) figure — no setting needed for that.
+              These 3 make up the denominator. Any left empty defaults to 0 for Internal Borrowings/
+              Intangible Assets (commonly zero); Equity must be set for ROE to compute at all.
+            </p>
+            <div className="space-y-5">
+              <SearchCheckList
+                label="Equity Ledgers"
+                hint="e.g. Share Capital, Reserves & Surplus"
+                options={allLedgerOpts}
+                selected={roeEquityLedgers}
+                onChange={setRoeEquityLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Internal Borrowing Ledgers"
+                hint="Related-party/internal loans not already captured elsewhere"
+                options={allLedgerOpts}
+                selected={internalBorrowingLedgers}
+                onChange={setInternalBorrowingLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Intangible Asset Ledgers"
+                hint="e.g. Goodwill, Patents, Software"
+                options={allLedgerOpts}
+                selected={intangibleAssetLedgers}
+                onChange={setIntangibleAssetLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+            </div>
+          </div>
+
+          {/* ── Debt/Equity ── */}
+          <div className="border-t border-gray-100 pt-5">
+            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Debt/Equity</p>
+            <p className="text-[11px] text-gray-400 italic mb-4">
+              (Total Interest Bearing Loans − Cash − Bank) / (Equity + Loans from Directors) — every
+              component here is its own setting, independent of Cash/Bank/Equity used elsewhere.
+              Loans and Equity must be set for this to compute; Cash/Bank/Director Loans default to 0.
+            </p>
+            <div className="space-y-5">
+              <SearchCheckList
+                label="Total Interest Bearing Loans Ledgers"
+                hint="All secured + unsecured loan ledgers"
+                options={allLedgerOpts}
+                selected={debtEquityLoanLedgers}
+                onChange={setDebtEquityLoanLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Cash Balance Ledgers"
+                hint="e.g. Cash-in-Hand ledgers"
+                options={allLedgerOpts}
+                selected={debtEquityCashLedgers}
+                onChange={setDebtEquityCashLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Bank Balance Ledgers"
+                hint="e.g. Bank Account ledgers"
+                options={allLedgerOpts}
+                selected={debtEquityBankLedgers}
+                onChange={setDebtEquityBankLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Equity Ledgers"
+                hint="e.g. Share Capital, Reserves & Surplus"
+                options={allLedgerOpts}
+                selected={debtEquityEquityLedgers}
+                onChange={setDebtEquityEquityLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+              <SearchCheckList
+                label="Loans from Directors"
+                hint="Specific unsecured-loan ledgers held by directors/promoters"
+                options={allLedgerOpts}
+                selected={directorLoanLedgers}
+                onChange={setDirectorLoanLedgers}
+                loading={loadingOpts}
+                showSelectAll
+              />
+            </div>
+          </div>
         </div>
       )}
 

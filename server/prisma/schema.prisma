@@ -374,9 +374,20 @@ model DashboardSnapshot {
   // ledgers (like equity/totalLoans above, an "as of now" figure, not a
   // period-scoped flow), since Tally has no long-term/short-term group split.
   longTermBorrowings Float?
-  // ROCE's own Equity figure — distinct from `equity` above (Capital Account
-  // group, used by Debt/Equity), per the "each ratio gets its own settings" rule.
+  // ROCE's own Equity figure — every ratio has its own dedicated Equity/
+  // Loans/Cash/Bank settings rather than sharing one figure.
   roceEquity         Float?
+  // ROE denominator pieces (Net Profit reuses the existing YTD figure, no
+  // column needed for that).
+  roeEquity          Float?
+  internalBorrowings Float?
+  intangibleAssets   Float?
+  // Debt/Equity — every component of its own formula, independent of
+  // Cash/Bank/Equity/Loans used by other cards.
+  debtEquityLoans    Float?
+  debtEquityCash     Float?
+  debtEquityBank     Float?
+  debtEquityEquity   Float?
   // Period-scoped ledger-list totals (same convention as directExpenseTotal
   // above — latest fetched period's total, not literally "as of now").
   interestExpenseTotal       Float?
