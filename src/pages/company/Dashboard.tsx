@@ -690,8 +690,10 @@ function computeRatios(i: AnalysisInputs): RatioResults {
   // strictly null-gated ("No data available") since a real company is never
   // actually zero on those, and silently defaulting them to 0 would badly
   // distort ROCE rather than just omitting it.
+  // EBIT = Net Profit + Interest Expense + Tax Payment (Net Profit is after
+  // interest/tax are deducted, so they're added back, not subtracted again)
   const ebit = i.netProfit != null && i.interestExpense != null
-    ? i.netProfit - i.interestExpense - (i.taxPayment ?? 0) : null
+    ? i.netProfit + i.interestExpense + (i.taxPayment ?? 0) : null
   const roceNumerator = ebit != null && i.nonOperatingIncome != null ? ebit - i.nonOperatingIncome : null
   const roceDenominator = i.roceEquity != null
     ? i.roceEquity + (i.longTermBorrowings ?? 0) - (i.nonOperatingInvestment ?? 0) : null
@@ -1348,12 +1350,13 @@ export default function Dashboard() {
       }
 
       // ROCE = (EBIT − Non-Operating Income) / (Equity + Long Term Borrowings − Non-Operating Investment) * 100
-      // EBIT = Net Profit − Interest Expense − Tax Payment
+      // EBIT = Net Profit + Interest Expense + Tax Payment (Net Profit is after
+      // interest/tax are deducted, so they're added back, not subtracted again)
       {
         const dbRoceEquity         = snapshot?.roceEquity ?? null
         const dbLongTermBorrowings = snapshot?.longTermBorrowings ?? null
         const dbEbit = netProfit != null && dbInterestExpense != null
-          ? netProfit - dbInterestExpense - (dbTaxPayment ?? 0) : null
+          ? netProfit + dbInterestExpense + (dbTaxPayment ?? 0) : null
         const roceNum = dbEbit != null && dbNonOpIncome != null ? dbEbit - dbNonOpIncome : null
         const roceDen = dbRoceEquity != null
           ? dbRoceEquity + (dbLongTermBorrowings ?? 0) - (dbNonOpInvestment ?? 0) : null
@@ -1591,14 +1594,15 @@ export default function Dashboard() {
       }
 
       // ROCE = (EBIT − Non-Operating Income) / (Equity + Long Term Borrowings − Non-Operating Investment) * 100
-      // EBIT = Net Profit − Interest Expense − Tax Payment
+      // EBIT = Net Profit + Interest Expense + Tax Payment (added back, not
+      // subtracted again — Net Profit is already after interest/tax)
       // Mirrors computeRatios exactly: Tax Payment/Long Term Borrowings/Non-
       // Operating Investment default to 0 when unconfigured, and a zero-or-
       // negative denominator (e.g. genuinely negative Equity) blocks the
       // ratio rather than producing a misleadingly inverted number.
       {
         const ebitVal = netProfit != null && interestExpenseTotal != null
-          ? netProfit - interestExpenseTotal - (taxPaymentTotal ?? 0) : null
+          ? netProfit + interestExpenseTotal + (taxPaymentTotal ?? 0) : null
         const roceNum = ebitVal != null && nonOperatingIncomeTotal != null ? ebitVal - nonOperatingIncomeTotal : null
         const roceDen = roceEquityTotal != null
           ? roceEquityTotal + (longTermBorrowingsTotal ?? 0) - (nonOperatingInvestmentTotal ?? 0) : null
