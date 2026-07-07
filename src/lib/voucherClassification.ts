@@ -27,6 +27,10 @@ export interface ClassifyVouchersResult {
   indExpTotal:   number
   indIncTotal:   number
   ebitdaAddback: number
+  interestExpenseTotal:        number
+  taxPaymentTotal:             number
+  nonOperatingIncomeTotal:     number
+  nonOperatingInvestmentTotal: number
 }
 
 export function classifyVouchers(
@@ -52,6 +56,14 @@ export function classifyVouchers(
   const ebitdaSet           = toSet(options.ebitdaLedgers)
   const ebitdaIncSet        = toSet(options.ebitdaIncludeVouchers)
   const ebitdaExcSet        = toSet(options.ebitdaExcludeVouchers)
+  // ROCE/ROE period-flow ledgers — magnitude only (no include/exclude-voucher
+  // filtering, mirroring the FETCH_LEDGER_AMOUNTS path these replace), so raw
+  // signed amounts are netted first and Math.abs()'d once at the very end
+  // rather than using indExp/indInc's directional +=/-=.
+  const interestExpenseSet        = toSet(options.interestExpenseLedgers)
+  const taxPaymentSet             = toSet(options.taxPaymentLedgers)
+  const nonOperatingIncomeSet     = toSet(options.nonOperatingIncomeLedgers)
+  const nonOperatingInvestmentSet = toSet(options.nonOperatingInvestmentLedgers)
 
   const salesIncludeVouchers = options.salesIncludeVouchers ?? []
   const salesExcludeVouchers = options.salesExcludeVouchers ?? []
@@ -59,6 +71,10 @@ export function classifyVouchers(
   let indExpTotal   = 0
   let indIncTotal   = 0
   let ebitdaAddback = 0
+  let interestExpenseRaw       = 0
+  let taxPaymentRaw            = 0
+  let nonOperatingIncomeRaw    = 0
+  let nonOperatingInvestmentRaw = 0
 
   for (const voucher of vouchers) {
     const { date, type, hasSalesLedger } = voucher
@@ -84,6 +100,10 @@ export function classifyVouchers(
         const passesExc = !ebitdaExcSet || !ebitdaExcSet.has(typeLower)
         if (passesInc && passesExc) ebitdaAddback -= leAmt // same sign as expenses: Dr=negative → addback positive
       }
+      if (interestExpenseSet?.has(ledgerLower)) interestExpenseRaw += leAmt
+      if (taxPaymentSet?.has(ledgerLower)) taxPaymentRaw += leAmt
+      if (nonOperatingIncomeSet?.has(ledgerLower)) nonOperatingIncomeRaw += leAmt
+      if (nonOperatingInvestmentSet?.has(ledgerLower)) nonOperatingInvestmentRaw += leAmt
 
       const isInflowLedger  = inflowSet  ? inflowSet.has(ledgerLower)  : CASH_RE.test(le.ledgerName)
       const isOutflowLedger = outflowSet ? outflowSet.has(ledgerLower) : CASH_RE.test(le.ledgerName)
@@ -126,7 +146,13 @@ export function classifyVouchers(
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 10)
 
-  return { cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback }
+  return {
+    cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback,
+    interestExpenseTotal:        Math.abs(interestExpenseRaw),
+    taxPaymentTotal:             Math.abs(taxPaymentRaw),
+    nonOperatingIncomeTotal:     Math.abs(nonOperatingIncomeRaw),
+    nonOperatingInvestmentTotal: Math.abs(nonOperatingInvestmentRaw),
+  }
 }
 
 // Credit vs Cash sales split, for DSO. Sundry Debtors party ⇒ credit sale,

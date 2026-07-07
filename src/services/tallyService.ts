@@ -255,6 +255,25 @@ export interface DaybookOptions {
   ebitdaLedgers?:                  string[]
   ebitdaIncludeVouchers?:          string[]
   ebitdaExcludeVouchers?:          string[]
+  interestExpenseLedgers?:         string[]
+  taxPaymentLedgers?:              string[]
+  nonOperatingIncomeLedgers?:      string[]
+  nonOperatingInvestmentLedgers?:  string[]
+}
+
+export interface DaybookResult {
+  vouchers: TallyVoucher[]
+  rawXml: string
+  cashFlow: CashBankFlow
+  bankFlow: CashBankFlow
+  topItems: TopItem[]
+  indExpTotal: number
+  indIncTotal: number
+  ebitdaAddback: number
+  interestExpenseTotal: number
+  taxPaymentTotal: number
+  nonOperatingIncomeTotal: number
+  nonOperatingInvestmentTotal: number
 }
 
 export async function fetchDaybook(
@@ -263,8 +282,8 @@ export async function fetchDaybook(
   tallyUrl: string,
   tallyCompany?: string,
   options: DaybookOptions = {},
-): Promise<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[]; indExpTotal: number; indIncTotal: number; ebitdaAddback: number }> {
-  const result = await sendToExtension<{ vouchers: TallyVoucher[]; rawXml: string; cashFlow: CashBankFlow; bankFlow: CashBankFlow; topItems: TopItem[]; indExpTotal: number; indIncTotal: number; ebitdaAddback: number }>('FETCH_DAYBOOK', {
+): Promise<DaybookResult> {
+  const result = await sendToExtension<DaybookResult>('FETCH_DAYBOOK', {
     fromDate, toDate, tallyUrl, tallyCompany,
     salesAccounts:           options.salesAccounts           ?? [],
     salesIncludeVouchers:    options.salesIncludeVouchers    ?? [],
@@ -281,6 +300,10 @@ export async function fetchDaybook(
     ebitdaLedgers:                  options.ebitdaLedgers                  ?? [],
     ebitdaIncludeVouchers:          options.ebitdaIncludeVouchers          ?? [],
     ebitdaExcludeVouchers:          options.ebitdaExcludeVouchers          ?? [],
+    interestExpenseLedgers:         options.interestExpenseLedgers         ?? [],
+    taxPaymentLedgers:              options.taxPaymentLedgers              ?? [],
+    nonOperatingIncomeLedgers:      options.nonOperatingIncomeLedgers      ?? [],
+    nonOperatingInvestmentLedgers:  options.nonOperatingInvestmentLedgers  ?? [],
   })
   return result
 }

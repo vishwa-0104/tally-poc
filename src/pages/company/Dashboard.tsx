@@ -1282,22 +1282,38 @@ export default function Dashboard() {
       console.log('[Analysis][DB] DSO Sales settings:', analysisSalesFilter)
       console.log(`[Analysis][DB] Total Sales (Net Profit, uses Performance tab setting): ${totalSales} | Credit Sales (for DSO): ${creditSales} | vouchers in range: ${all.length}`)
 
+      const classifyResult = classifyVouchers(
+        all,
+        {
+          indirectExpenseLedgers:         dashboardSettings.ytd?.indirectExpenseLedgers,
+          indirectExpenseIncludeVouchers: dashboardSettings.ytd?.indirectExpenseIncludeVouchers,
+          indirectExpenseExcludeVouchers: dashboardSettings.ytd?.indirectExpenseExcludeVouchers,
+          indirectIncomeLedgers:          dashboardSettings.ytd?.indirectIncomeLedgers,
+          indirectIncomeIncludeVouchers:  dashboardSettings.ytd?.indirectIncomeIncludeVouchers,
+          indirectIncomeExcludeVouchers:  dashboardSettings.ytd?.indirectIncomeExcludeVouchers,
+          interestExpenseLedgers:         dashboardSettings.ytd?.interestExpenseLedgers,
+          taxPaymentLedgers:              dashboardSettings.ytd?.taxPaymentLedgers,
+          nonOperatingIncomeLedgers:      dashboardSettings.ytd?.nonOperatingIncomeLedgers,
+          nonOperatingInvestmentLedgers:  dashboardSettings.ytd?.nonOperatingInvestmentLedgers,
+        },
+        from, to,
+      )
+
+      // null (not 0) when the ledger list isn't configured — same contract as
+      // the live-fetch path's fetchLedgerTotal.
+      const dbInterestExpense    = dashboardSettings.ytd?.interestExpenseLedgers?.length
+        ? classifyResult.interestExpenseTotal : null
+      const dbTaxPayment         = dashboardSettings.ytd?.taxPaymentLedgers?.length
+        ? classifyResult.taxPaymentTotal : null
+      const dbNonOpIncome        = dashboardSettings.ytd?.nonOperatingIncomeLedgers?.length
+        ? classifyResult.nonOperatingIncomeTotal : null
+      const dbNonOpInvestment    = dashboardSettings.ytd?.nonOperatingInvestmentLedgers?.length
+        ? classifyResult.nonOperatingInvestmentTotal : null
+
       let netProfit: number | null = null
       if (snapshot?.openingStock != null && snapshot?.closingStock != null && snapshot?.directExpenseTotal != null) {
-        const { indExpTotal, indIncTotal } = classifyVouchers(
-          all,
-          {
-            indirectExpenseLedgers:         dashboardSettings.ytd?.indirectExpenseLedgers,
-            indirectExpenseIncludeVouchers: dashboardSettings.ytd?.indirectExpenseIncludeVouchers,
-            indirectExpenseExcludeVouchers: dashboardSettings.ytd?.indirectExpenseExcludeVouchers,
-            indirectIncomeLedgers:          dashboardSettings.ytd?.indirectIncomeLedgers,
-            indirectIncomeIncludeVouchers:  dashboardSettings.ytd?.indirectIncomeIncludeVouchers,
-            indirectIncomeExcludeVouchers:  dashboardSettings.ytd?.indirectIncomeExcludeVouchers,
-          },
-          from, to,
-        )
         const gm = (totalSales + snapshot.closingStock) - (snapshot.openingStock + purchaseTotal + snapshot.directExpenseTotal)
-        netProfit = gm - indExpTotal + indIncTotal
+        netProfit = gm - classifyResult.indExpTotal + classifyResult.indIncTotal
       }
 
       // DIO = Closing Stock / COGS * 365, COGS = Opening Stock + Purchases + Direct Expenses − Closing Stock
@@ -1336,10 +1352,6 @@ export default function Dashboard() {
       {
         const dbRoceEquity         = snapshot?.roceEquity ?? null
         const dbLongTermBorrowings = snapshot?.longTermBorrowings ?? null
-        const dbInterestExpense    = snapshot?.interestExpenseTotal ?? null
-        const dbTaxPayment         = snapshot?.taxPaymentTotal ?? null
-        const dbNonOpIncome        = snapshot?.nonOperatingIncomeTotal ?? null
-        const dbNonOpInvestment    = snapshot?.nonOperatingInvestmentTotal ?? null
         const dbEbit = netProfit != null && dbInterestExpense != null
           ? netProfit - dbInterestExpense - (dbTaxPayment ?? 0) : null
         const roceNum = dbEbit != null && dbNonOpIncome != null ? dbEbit - dbNonOpIncome : null
@@ -1396,10 +1408,10 @@ export default function Dashboard() {
         longTermBorrowings:     snapshot?.longTermBorrowings ?? null,
         roceEquity:             snapshot?.roceEquity ?? null,
         netProfit,
-        interestExpense:        snapshot?.interestExpenseTotal ?? null,
-        taxPayment:             snapshot?.taxPaymentTotal ?? null,
-        nonOperatingIncome:     snapshot?.nonOperatingIncomeTotal ?? null,
-        nonOperatingInvestment: snapshot?.nonOperatingInvestmentTotal ?? null,
+        interestExpense:        dbInterestExpense,
+        taxPayment:             dbTaxPayment,
+        nonOperatingIncome:     dbNonOpIncome,
+        nonOperatingInvestment: dbNonOpInvestment,
         directorLoans:          snapshot?.directorLoansTotal ?? null,
         roeEquity:              snapshot?.roeEquity ?? null,
         internalBorrowings:     snapshot?.internalBorrowings ?? null,
@@ -1458,7 +1470,7 @@ export default function Dashboard() {
       const [
         daybookResult, stockResult, directExpResult,
         groupBalResult, ledgerBalResult,
-        interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal, directorLoansTotal,
+        directorLoansTotal,
         longTermBorrowingsTotal, roceEquityTotal,
         roeEquityTotal, internalBorrowingsTotal, intangibleAssetsTotal,
         debtEquityLoansTotal, debtEquityCashTotal, debtEquityBankTotal, debtEquityEquityTotal,
@@ -1488,15 +1500,15 @@ export default function Dashboard() {
           ebitdaLedgers:                  dashboardSettings.ytd?.ebitdaLedgers,
           ebitdaIncludeVouchers:          dashboardSettings.ytd?.ebitdaIncludeVouchers,
           ebitdaExcludeVouchers:          dashboardSettings.ytd?.ebitdaExcludeVouchers,
+          interestExpenseLedgers:         dashboardSettings.ytd?.interestExpenseLedgers,
+          taxPaymentLedgers:              dashboardSettings.ytd?.taxPaymentLedgers,
+          nonOperatingIncomeLedgers:      dashboardSettings.ytd?.nonOperatingIncomeLedgers,
+          nonOperatingInvestmentLedgers:  dashboardSettings.ytd?.nonOperatingInvestmentLedgers,
         }),
         fetchStockValue(fFrom, fTo, tallyUrl, tallyCompany),
         fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, dashboardSettings.ytd?.directExpenseLedgers),
         isCurrent ? fetchGroupBalances(tallyUrl, tallyCompany) : Promise.resolve(null),
         isCurrent ? fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr())) : Promise.resolve(null),
-        fetchLedgerTotal(dashboardSettings.ytd?.interestExpenseLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.taxPaymentLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.nonOperatingIncomeLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.nonOperatingInvestmentLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.directorLoanLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.longTermBorrowingLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.equityLedgers, 'equity'),
@@ -1510,6 +1522,17 @@ export default function Dashboard() {
       ])
 
       const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
+      // null (not 0) when the ledger list isn't configured — 0 would be
+      // indistinguishable from "genuinely no interest/tax/non-op this period"
+      // and would let ROCE compute a misleading number instead of hiding it.
+      const interestExpenseTotal        = dashboardSettings.ytd?.interestExpenseLedgers?.length
+        ? daybookResult.interestExpenseTotal : null
+      const taxPaymentTotal             = dashboardSettings.ytd?.taxPaymentLedgers?.length
+        ? daybookResult.taxPaymentTotal : null
+      const nonOperatingIncomeTotal     = dashboardSettings.ytd?.nonOperatingIncomeLedgers?.length
+        ? daybookResult.nonOperatingIncomeTotal : null
+      const nonOperatingInvestmentTotal = dashboardSettings.ytd?.nonOperatingInvestmentLedgers?.length
+        ? daybookResult.nonOperatingInvestmentTotal : null
       const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
       // DSO's Credit Sales split deliberately uses the Analysis tab's own
       // Sales setting (independent of Performance tab). Total Sales — which
@@ -1636,10 +1659,6 @@ export default function Dashboard() {
         snapshotPatch.currentLiabilities = currentLiabilities
         snapshotPatch.bankOD             = bankOD
       }
-      if (interestExpenseTotal        != null) snapshotPatch.interestExpenseTotal        = interestExpenseTotal
-      if (taxPaymentTotal             != null) snapshotPatch.taxPaymentTotal             = taxPaymentTotal
-      if (nonOperatingIncomeTotal     != null) snapshotPatch.nonOperatingIncomeTotal     = nonOperatingIncomeTotal
-      if (nonOperatingInvestmentTotal != null) snapshotPatch.nonOperatingInvestmentTotal = nonOperatingInvestmentTotal
       if (directorLoansTotal          != null) snapshotPatch.directorLoansTotal          = directorLoansTotal
       if (longTermBorrowingsTotal     != null) snapshotPatch.longTermBorrowings          = longTermBorrowingsTotal
       if (roceEquityTotal             != null) snapshotPatch.roceEquity                  = roceEquityTotal

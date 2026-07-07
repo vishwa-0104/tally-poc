@@ -119,6 +119,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         payload.ebitdaLedgers                  || [],
         payload.ebitdaIncludeVouchers          || [],
         payload.ebitdaExcludeVouchers          || [],
+        payload.interestExpenseLedgers         || [],
+        payload.taxPaymentLedgers              || [],
+        payload.nonOperatingIncomeLedgers      || [],
+        payload.nonOperatingInvestmentLedgers  || [],
       )
         .then(sendResponse)
         .catch((err) => sendResponse({ vouchers: [], rawXml: '', cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
@@ -657,7 +661,7 @@ async function handleFetchSalesParty(tallyUrl, tallyCompany, fromDate, toDate) {
 // SVFROMDATE/SVTODATE tell Tally which period to scope to.
 // JS date filter applied after parsing as a safety net.
 
-async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], bankLedgers = [], purchaseAccounts = [], indirectExpenseLedgers = [], indirectIncomeLedgers = [], indirectExpenseIncludeVouchers = [], indirectExpenseExcludeVouchers = [], indirectIncomeIncludeVouchers = [], indirectIncomeExcludeVouchers = [], ebitdaLedgers = [], ebitdaIncludeVouchers = [], ebitdaExcludeVouchers = []) {
+async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], bankLedgers = [], purchaseAccounts = [], indirectExpenseLedgers = [], indirectIncomeLedgers = [], indirectExpenseIncludeVouchers = [], indirectExpenseExcludeVouchers = [], indirectIncomeIncludeVouchers = [], indirectIncomeExcludeVouchers = [], ebitdaLedgers = [], ebitdaIncludeVouchers = [], ebitdaExcludeVouchers = [], interestExpenseLedgers = [], taxPaymentLedgers = [], nonOperatingIncomeLedgers = [], nonOperatingInvestmentLedgers = []) {
   console.log('[BankDebug] handleFetchDaybook received bankLedgers:', bankLedgers)
   const from = toTallyDisplayDate(fromDate)
   const to   = toTallyDisplayDate(toDate)
@@ -686,11 +690,17 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, sale
   const fromISO = `${fromDate.slice(0,4)}-${fromDate.slice(4,6)}-${fromDate.slice(6,8)}`
   const toISO   = `${toDate.slice(0,4)}-${toDate.slice(4,6)}-${toDate.slice(6,8)}`
 
-  const { vouchers: allVouchers, cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback } = parseVouchers(responseText, salesAccounts, salesIncludeVouchers, salesExcludeVouchers, cashInflowLedgers, fromISO, toISO, bankLedgers, purchaseAccounts, indirectExpenseLedgers, indirectIncomeLedgers, indirectExpenseIncludeVouchers, indirectExpenseExcludeVouchers, indirectIncomeIncludeVouchers, indirectIncomeExcludeVouchers, ebitdaLedgers, ebitdaIncludeVouchers, ebitdaExcludeVouchers)
+  const {
+    vouchers: allVouchers, cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback,
+    interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal,
+  } = parseVouchers(responseText, salesAccounts, salesIncludeVouchers, salesExcludeVouchers, cashInflowLedgers, fromISO, toISO, bankLedgers, purchaseAccounts, indirectExpenseLedgers, indirectIncomeLedgers, indirectExpenseIncludeVouchers, indirectExpenseExcludeVouchers, indirectIncomeIncludeVouchers, indirectIncomeExcludeVouchers, ebitdaLedgers, ebitdaIncludeVouchers, ebitdaExcludeVouchers, interestExpenseLedgers, taxPaymentLedgers, nonOperatingIncomeLedgers, nonOperatingInvestmentLedgers)
 
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
-  return { vouchers, cashFlow, bankFlow, topItems, rawXml: responseText, indExpTotal, indIncTotal, ebitdaAddback }
+  return {
+    vouchers, cashFlow, bankFlow, topItems, rawXml: responseText, indExpTotal, indIncTotal, ebitdaAddback,
+    interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal,
+  }
 }
 
 // ── Slow / inactive stock ────────────────────────────────────────────────────
@@ -764,7 +774,7 @@ function matchAllLedgerEntries(block) {
   return [...block.matchAll(/<ALLLEDGERENTRIES(?!\.LIST)[^>]*>([\s\S]*?)<\/ALLLEDGERENTRIES>/gi)]
 }
 
-function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = [], purchaseAccounts = [], indirectExpenseLedgers = [], indirectIncomeLedgers = [], indirectExpenseIncludeVouchers = [], indirectExpenseExcludeVouchers = [], indirectIncomeIncludeVouchers = [], indirectIncomeExcludeVouchers = [], ebitdaLedgers = [], ebitdaIncludeVouchers = [], ebitdaExcludeVouchers = []) {
+function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], salesExcludeVouchers = [], cashInflowLedgers = [], fromISO = '', toISO = '', bankLedgers = [], purchaseAccounts = [], indirectExpenseLedgers = [], indirectIncomeLedgers = [], indirectExpenseIncludeVouchers = [], indirectExpenseExcludeVouchers = [], indirectIncomeIncludeVouchers = [], indirectIncomeExcludeVouchers = [], ebitdaLedgers = [], ebitdaIncludeVouchers = [], ebitdaExcludeVouchers = [], interestExpenseLedgers = [], taxPaymentLedgers = [], nonOperatingIncomeLedgers = [], nonOperatingInvestmentLedgers = []) {
   const vouchers = []
   const cashFlow = { inflow: 0, outflow: 0 }
   const bankFlow = { inflow: 0, outflow: 0 }
@@ -785,10 +795,23 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
   const ebitdaSet           = ebitdaLedgers.length                   ? new Set(ebitdaLedgers.map(n => n.toLowerCase()))                   : null
   const ebitdaIncSet        = ebitdaIncludeVouchers.length           ? new Set(ebitdaIncludeVouchers.map(n => n.toLowerCase()))           : null
   const ebitdaExcSet        = ebitdaExcludeVouchers.length           ? new Set(ebitdaExcludeVouchers.map(n => n.toLowerCase()))           : null
+  // ROCE/ROE period-flow ledgers — magnitude only (no include/exclude-voucher
+  // filtering, mirroring the FETCH_LEDGER_AMOUNTS path these replace), so raw
+  // signed amounts are netted first and Math.abs()'d once at the very end
+  // rather than using indExp/indInc's directional +=/-= (which encodes a
+  // known Dr/Cr normal-balance per category that we don't need here).
+  const interestExpenseSet          = interestExpenseLedgers.length          ? new Set(interestExpenseLedgers.map(n => n.toLowerCase()))          : null
+  const taxPaymentSet               = taxPaymentLedgers.length               ? new Set(taxPaymentLedgers.map(n => n.toLowerCase()))               : null
+  const nonOperatingIncomeSet       = nonOperatingIncomeLedgers.length       ? new Set(nonOperatingIncomeLedgers.map(n => n.toLowerCase()))       : null
+  const nonOperatingInvestmentSet   = nonOperatingInvestmentLedgers.length   ? new Set(nonOperatingInvestmentLedgers.map(n => n.toLowerCase()))   : null
 
   let indExpTotal   = 0
   let indIncTotal   = 0
   let ebitdaAddback = 0
+  let interestExpenseRaw        = 0
+  let taxPaymentRaw              = 0
+  let nonOperatingIncomeRaw      = 0
+  let nonOperatingInvestmentRaw  = 0
 
   const blocks = [...xml.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)]
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").trim()
@@ -970,6 +993,10 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
         const passesExc = !ebitdaExcSet || !ebitdaExcSet.has(typeLower)
         if (passesInc && passesExc) ebitdaAddback -= leAmt  // same sign as expenses: Dr=negative → addback positive
       }
+      if (interestExpenseSet && interestExpenseSet.has(ledgerLower)) interestExpenseRaw += leAmt
+      if (taxPaymentSet && taxPaymentSet.has(ledgerLower)) taxPaymentRaw += leAmt
+      if (nonOperatingIncomeSet && nonOperatingIncomeSet.has(ledgerLower)) nonOperatingIncomeRaw += leAmt
+      if (nonOperatingInvestmentSet && nonOperatingInvestmentSet.has(ledgerLower)) nonOperatingInvestmentRaw += leAmt
 
       // Determine if this ledger counts as cash inflow/outflow or bank inflow/outflow
       const isInflowLedger  = inflowSet ? inflowSet.has(ledgerLower)  : CASH_RE.test(ledgerName)
@@ -1174,7 +1201,13 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 10)
 
-  return { vouchers, cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback }
+  return {
+    vouchers, cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback,
+    interestExpenseTotal:        Math.abs(interestExpenseRaw),
+    taxPaymentTotal:             Math.abs(taxPaymentRaw),
+    nonOperatingIncomeTotal:     Math.abs(nonOperatingIncomeRaw),
+    nonOperatingInvestmentTotal: Math.abs(nonOperatingInvestmentRaw),
+  }
 }
 
 // ── Sync voucher XML to Tally ────────────────────────────────────────────────
