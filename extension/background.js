@@ -1622,7 +1622,12 @@ async function handleFetchLedgerAmounts(tallyUrl, tallyCompany, fromDate, toDate
 
   const from   = toTallyDisplayDate(fromDate)
   const to     = toTallyDisplayDate(toDate)
-  const filter = ledgerNames.map(n => `$Name = "${n}"`).join(' OR ')
+  // Ledger names go straight into the XML body (unlike ledgerNames used as
+  // TDL string-literal comparisons elsewhere, which are pre-escaped) — an
+  // unescaped "&" in a name like "Interest & Bank Charges" breaks the FILTER
+  // formula's XML, silently matching 0 ledgers and returning total: 0.
+  const esc    = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const filter = ledgerNames.map(n => `$Name = "${esc(n)}"`).join(' OR ')
 
   const xml = `<ENVELOPE>
   <HEADER>
