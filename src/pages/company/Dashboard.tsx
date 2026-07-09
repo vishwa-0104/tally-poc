@@ -791,6 +791,9 @@ export default function Dashboard() {
   const [prevDaySales,      setPrevDaySales]      = useState<number | null>(null)
   const [slowStock,         setSlowStock]         = useState<SlowStockItem[]>([])
   const [exportingSlowStock, setExportingSlowStock] = useState(false)
+  const [exportingItems,     setExportingItems]     = useState(false)
+  const [exportingDebtors,   setExportingDebtors]   = useState(false)
+  const [exportingPurchases, setExportingPurchases] = useState(false)
   const [purchaseVouchers,  setPurchaseVouchers]  = useState<(TallyVoucher & { role: 'Included' | 'Excluded' })[]>([])
   const [loading,       setLoading]       = useState(false)
   const [fetched,       setFetched]       = useState(false)
@@ -1841,51 +1844,75 @@ export default function Dashboard() {
     URL.revokeObjectURL(url)
   }
 
-  const exportPurchasesToXls = () => {
+  // Row-building for a full year's data is synchronous CPU work — for large
+  // exports (e.g. thousands of purchase vouchers over a YTD range) that can
+  // take long enough to notice, and being synchronous it would otherwise
+  // block the spinner from ever painting. Yielding one tick first lets React
+  // commit the "exporting…" state before the heavy string-building runs.
+  const yieldToPaint = () => new Promise(resolve => setTimeout(resolve, 0))
+
+  const exportPurchasesToXls = async () => {
     if (purchaseVouchers.length === 0) { toast.error('No purchase vouchers to export'); return }
-
-    const rows = [
-      ['Date', 'Voucher No', 'Voucher Type', 'Party', 'Role', 'Total Amount (with GST)', 'Taxable Amount', 'GST Amount'],
-      ...purchaseVouchers.map(v => [
-        v.date,
-        v.voucherNo,
-        v.type,
-        v.party,
-        v.role,
-        v.amount.toFixed(2),
-        v.taxableAmount.toFixed(2),
-        (v.amount - v.taxableAmount).toFixed(2),
-      ]),
-      [],
-      ['', '', '', '', 'TOTAL',
-        purchaseVouchers.reduce((s, v) => s + v.amount, 0).toFixed(2),
-        purchaseVouchers.reduce((s, v) => s + v.taxableAmount, 0).toFixed(2),
-        purchaseVouchers.reduce((s, v) => s + (v.amount - v.taxableAmount), 0).toFixed(2),
-      ],
-    ]
-    downloadXls(rows, 'vouchers')
+    setExportingPurchases(true)
+    try {
+      await yieldToPaint()
+      const rows = [
+        ['Date', 'Voucher No', 'Voucher Type', 'Party', 'Role', 'Total Amount (with GST)', 'Taxable Amount', 'GST Amount'],
+        ...purchaseVouchers.map(v => [
+          v.date,
+          v.voucherNo,
+          v.type,
+          v.party,
+          v.role,
+          v.amount.toFixed(2),
+          v.taxableAmount.toFixed(2),
+          (v.amount - v.taxableAmount).toFixed(2),
+        ]),
+        [],
+        ['', '', '', '', 'TOTAL',
+          purchaseVouchers.reduce((s, v) => s + v.amount, 0).toFixed(2),
+          purchaseVouchers.reduce((s, v) => s + v.taxableAmount, 0).toFixed(2),
+          purchaseVouchers.reduce((s, v) => s + (v.amount - v.taxableAmount), 0).toFixed(2),
+        ],
+      ]
+      downloadXls(rows, 'vouchers')
+    } finally {
+      setExportingPurchases(false)
+    }
   }
 
-  const exportTopItemsToXls = () => {
+  const exportTopItemsToXls = async () => {
     if (topItems.length === 0) { toast.error('No items to export'); return }
-    const rows = [
-      ['Description', 'Qty', 'Amt (₹)'],
-      ...topItems.map(item => [
-        item.name,
-        `${item.qty % 1 === 0 ? item.qty : item.qty.toFixed(2)}${item.unit ? ' ' + item.unit : ''}`,
-        item.amount.toFixed(2),
-      ]),
-    ]
-    downloadXls(rows, 'top_items')
+    setExportingItems(true)
+    try {
+      await yieldToPaint()
+      const rows = [
+        ['Description', 'Qty', 'Amt (₹)'],
+        ...topItems.map(item => [
+          item.name,
+          `${item.qty % 1 === 0 ? item.qty : item.qty.toFixed(2)}${item.unit ? ' ' + item.unit : ''}`,
+          item.amount.toFixed(2),
+        ]),
+      ]
+      downloadXls(rows, 'top_items')
+    } finally {
+      setExportingItems(false)
+    }
   }
 
-  const exportTopDebtorsToXls = () => {
+  const exportTopDebtorsToXls = async () => {
     if (topDebtors.length === 0) { toast.error('No debtors to export'); return }
-    const rows = [
-      ['Party', 'Amt (₹)'],
-      ...topDebtors.map(d => [d.name, d.amount.toFixed(2)]),
-    ]
-    downloadXls(rows, 'top_debtors')
+    setExportingDebtors(true)
+    try {
+      await yieldToPaint()
+      const rows = [
+        ['Party', 'Amt (₹)'],
+        ...topDebtors.map(d => [d.name, d.amount.toFixed(2)]),
+      ]
+      downloadXls(rows, 'top_debtors')
+    } finally {
+      setExportingDebtors(false)
+    }
   }
 
   const exportSlowStockToXls = async () => {
@@ -2031,10 +2058,13 @@ export default function Dashboard() {
               {fetched && purchaseVouchers.length > 0 && (
                 <button
                   onClick={exportPurchasesToXls}
+                  disabled={exportingPurchases}
                   title={`Export ${purchaseVouchers.length} vouchers to CSV`}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50"
                 >
-                  <Download className="w-3 h-3" />
+                  {exportingPurchases
+                    ? <RefreshCw className="w-3 h-3 animate-spin" />
+                    : <Download className="w-3 h-3" />}
                   Export ({purchaseVouchers.length})
                 </button>
               )}
@@ -2112,6 +2142,7 @@ export default function Dashboard() {
               <DataTableCard
                 title="Top Performing Items"
                 onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
+                downloadPending={exportingItems}
                 columns={[
                   { label: 'Description' },
                   { label: 'Qty',     right: true },
@@ -2133,6 +2164,7 @@ export default function Dashboard() {
               <DataTableCard
                 title="Top Performing Debtors"
                 onDownload={fetched && topDebtors.length > 0 ? exportTopDebtorsToXls : undefined}
+                downloadPending={exportingDebtors}
                 columns={[
                   { label: 'Party' },
                   { label: 'Amt (₹)', right: true },
