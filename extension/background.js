@@ -297,6 +297,8 @@ async function handleFetchStockItems(tallyUrl, tallyCompany) {
             <NATIVEMETHOD>Name</NATIVEMETHOD>
             <NATIVEMETHOD>Parent</NATIVEMETHOD>
             <NATIVEMETHOD>BaseUnits</NATIVEMETHOD>
+            <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
+            <NATIVEMETHOD>ClosingValue</NATIVEMETHOD>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -328,7 +330,13 @@ function parseStockItems(xml) {
       ?? ''
     )
     const unit = decode(block.match(/<BASEUNITS[^>]*>([^<]+)<\/BASEUNITS>/i)?.[1]) || undefined
-    items.push({ name, group, unit })
+
+    const closingBalRaw = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '')
+    const closingQty     = closingBalRaw ? parseFloat(closingBalRaw.replace(/,/g, '')) || 0 : undefined
+    const closingValRaw = decode(block.match(/<CLOSINGVALUE[^>]*>([^<]+)<\/CLOSINGVALUE>/i)?.[1] ?? '')
+    const closingValue   = closingValRaw ? parseFloat(closingValRaw.replace(/,/g, '')) || 0 : undefined
+
+    items.push({ name, group, unit, closingQty, closingValue })
   }
   return items
 }

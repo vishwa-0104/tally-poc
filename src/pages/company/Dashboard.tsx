@@ -7,7 +7,7 @@ import {
   Users, Store, Download, Zap,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore, useDaybookSyncStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, fetchTallyStockItems, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
 import {
   fetchSalesTargets, fetchDashboardSettings,
   fetchCachedVouchers, saveVouchers, fetchDashboardSnapshot, saveDashboardSnapshot,
@@ -524,16 +524,34 @@ function DataTableCard({
   columns,
   rows,
   loading = false,
+  onDownload,
+  downloadPending = false,
 }: {
   title:   string
   columns: { label: string; right?: boolean }[]
   rows?:   { cells: (string | React.ReactNode)[]; dim?: boolean }[]
   loading?: boolean
+  onDownload?: () => void
+  downloadPending?: boolean
 }) {
   const showSkeleton = loading || !rows || rows.length === 0
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <p className="text-xs font-bold text-gray-700 mb-3">{title}</p>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-bold text-gray-700">{title}</p>
+        {onDownload && (
+          <button
+            onClick={onDownload}
+            disabled={downloadPending}
+            title={`Download ${title} as CSV`}
+            className="text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+          >
+            {downloadPending
+              ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              : <Download className="w-3.5 h-3.5" />}
+          </button>
+        )}
+      </div>
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-gray-100">
@@ -772,6 +790,7 @@ export default function Dashboard() {
   const [total,             setTotal]             = useState(0)
   const [prevDaySales,      setPrevDaySales]      = useState<number | null>(null)
   const [slowStock,         setSlowStock]         = useState<SlowStockItem[]>([])
+  const [exportingSlowStock, setExportingSlowStock] = useState(false)
   const [purchaseVouchers,  setPurchaseVouchers]  = useState<(TallyVoucher & { role: 'Included' | 'Excluded' })[]>([])
   const [loading,       setLoading]       = useState(false)
   const [fetched,       setFetched]       = useState(false)
@@ -1796,6 +1815,32 @@ export default function Dashboard() {
     fetchData(filterPreset, customFrom, customTo)
   }
 
+  // Shared by every export below — the filename period always reflects
+  // activePeriod (the currently-applied Today/YTD/Custom filter), so a
+  // download always matches what's on screen.
+  //
+  // A real, properly-quoted CSV — not a tab-separated file wearing an .xls
+  // extension. The old trick (TSV + .xls) only opens correctly in Windows
+  // Excel, which sniffs the content; Excel/Numbers on Mac trust the
+  // extension, expect the real OLE2/xlsx binary format, and fail back to
+  // splitting on commas only — which is why everything landed in column A.
+  const csvCell = (cell: string | number) => {
+    const s = String(cell)
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+
+  const downloadXls = (rows: (string | number)[][], filenamePrefix: string) => {
+    const csv  = rows.map(r => r.map(csvCell).join(',')).join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    const period = activePeriod ? `${activePeriod.from}_${activePeriod.to}` : 'export'
+    a.href     = url
+    a.download = `${filenamePrefix}_${period}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const exportPurchasesToXls = () => {
     if (purchaseVouchers.length === 0) { toast.error('No purchase vouchers to export'); return }
 
@@ -1818,16 +1863,56 @@ export default function Dashboard() {
         purchaseVouchers.reduce((s, v) => s + (v.amount - v.taxableAmount), 0).toFixed(2),
       ],
     ]
+    downloadXls(rows, 'vouchers')
+  }
 
-    const tsv = rows.map(r => r.join('\t')).join('\n')
-    const blob = new Blob(['﻿' + tsv], { type: 'application/vnd.ms-excel;charset=utf-8' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    const period = activePeriod ? `${activePeriod.from}_${activePeriod.to}` : 'export'
-    a.href     = url
-    a.download = `vouchers_${period}.xls`
-    a.click()
-    URL.revokeObjectURL(url)
+  const exportTopItemsToXls = () => {
+    if (topItems.length === 0) { toast.error('No items to export'); return }
+    const rows = [
+      ['Description', 'Qty', 'Amt (₹)'],
+      ...topItems.map(item => [
+        item.name,
+        `${item.qty % 1 === 0 ? item.qty : item.qty.toFixed(2)}${item.unit ? ' ' + item.unit : ''}`,
+        item.amount.toFixed(2),
+      ]),
+    ]
+    downloadXls(rows, 'top_items')
+  }
+
+  const exportTopDebtorsToXls = () => {
+    if (topDebtors.length === 0) { toast.error('No debtors to export'); return }
+    const rows = [
+      ['Party', 'Amt (₹)'],
+      ...topDebtors.map(d => [d.name, d.amount.toFixed(2)]),
+    ]
+    downloadXls(rows, 'top_debtors')
+  }
+
+  const exportSlowStockToXls = async () => {
+    if (slowStock.length === 0) { toast.error('No slow-moving items to export'); return }
+    setExportingSlowStock(true)
+    try {
+      const stockItems = await fetchTallyStockItems(tallyUrl, tallyCompany)
+      const byName = new Map(stockItems.map(s => [s.name, s]))
+      const rows = [
+        ['Stock', 'Last Sale Date', 'Days Since Sale', 'Closing Qty', 'Closing Value (₹)'],
+        ...slowStock.map(item => {
+          const match = byName.get(item.name)
+          return [
+            item.name,
+            item.lastSaleDate,
+            item.daysSince,
+            match?.closingQty != null ? match.closingQty.toFixed(2) : 'N/A',
+            match?.closingValue != null ? match.closingValue.toFixed(2) : 'N/A',
+          ]
+        }),
+      ]
+      downloadXls(rows, 'slow_moving_stock')
+    } catch {
+      toast.error('Could not fetch current stock qty/value from Tally.')
+    } finally {
+      setExportingSlowStock(false)
+    }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1946,7 +2031,7 @@ export default function Dashboard() {
               {fetched && purchaseVouchers.length > 0 && (
                 <button
                   onClick={exportPurchasesToXls}
-                  title={`Export ${purchaseVouchers.length} vouchers to XLS`}
+                  title={`Export ${purchaseVouchers.length} vouchers to CSV`}
                   className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700"
                 >
                   <Download className="w-3 h-3" />
@@ -2026,6 +2111,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-3 gap-4">
               <DataTableCard
                 title="Top Performing Items"
+                onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
                 columns={[
                   { label: 'Description' },
                   { label: 'Qty',     right: true },
@@ -2046,6 +2132,7 @@ export default function Dashboard() {
               />
               <DataTableCard
                 title="Top Performing Debtors"
+                onDownload={fetched && topDebtors.length > 0 ? exportTopDebtorsToXls : undefined}
                 columns={[
                   { label: 'Party' },
                   { label: 'Amt (₹)', right: true },
@@ -2064,6 +2151,8 @@ export default function Dashboard() {
               />
               <DataTableCard
                 title="Slow Moving Stocks"
+                onDownload={fetched && slowStock.length > 0 ? exportSlowStockToXls : undefined}
+                downloadPending={exportingSlowStock}
                 columns={[
                   { label: 'Stocks' },
                   { label: 'Days', right: true },

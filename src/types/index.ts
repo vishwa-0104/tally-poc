@@ -313,6 +313,8 @@ export interface TallyStockItem {
   name: string
   unit?: string
   group?: string
+  closingQty?: number
+  closingValue?: number
 }
 
 export interface TallyStockGroup {
