@@ -711,20 +711,77 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, sale
   }
 }
 
+// Stock Item closing quantity per item, "as of" a given display-date
+// (dd-Mon-yyyy) — or today if asOfDisplayDate is omitted. Same technique
+// handleFetchStockValue already uses for the aggregate opening/closing stock
+// KPI (SVTODATE reframes what "ClosingBalance" means), just per-item here.
+async function fetchStockItemBalances(tallyUrl, tallyCompany, asOfDisplayDate) {
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&#39;/g, "'").trim()
+  const toDateLine = asOfDisplayDate ? `\n        <SVTODATE>${asOfDisplayDate}</SVTODATE>` : ''
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSStockItemBalances</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${toDateLine}${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSStockItemBalances" ISMODIFY="No">
+            <TYPE>Stock Item</TYPE>
+            <NATIVEMETHOD>Name</NATIVEMETHOD>
+            <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  const balances = new Map()
+  for (const m of responseText.matchAll(/<STOCKITEM\b[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)) {
+    const block = m[0]
+    let name = decode(block.match(/<STOCKITEM\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+    if (!name) continue
+    const balRaw = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
+    balances.set(name, parseFloat(balRaw.replace(/,/g, '')) || 0)
+  }
+  return balances
+}
+
 // ── Slow / inactive stock ────────────────────────────────────────────────────
-// Scans the full financial year of sales vouchers to find the last sale date
-// for each stock item. Returns all items with closing stock sorted by
-// daysSince desc (never-sold / oldest sale first).
+// Scans the current financial year's sales vouchers to find the last sale
+// date for each stock item that sold this year. Items carried into this FY
+// (opening or closing qty > 0) that haven't sold at all this year used to be
+// silently dropped here — they'd have no entry in that scan and just vanish
+// from the report, which is backwards: those are the most slow-moving items
+// of all. They're now included too, defaulted to 31-Mar (the day before this
+// FY started) per product decision — we don't chase their real last-sale
+// date if it's from an earlier FY.
 
 async function handleFetchSlowStock(tallyUrl, tallyCompany) {
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
   const pad    = (n) => String(n).padStart(2, '0')
 
-  // Full financial year (Apr 1 → today) to capture complete sale history
+  // Full financial year (Apr 1 → today)
   const today  = new Date()
   const fyYear = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
   const fyFrom = toTallyDisplayDate(`${fyYear}0401`)
   const fyTo   = toTallyDisplayDate(`${today.getFullYear()}${pad(today.getMonth()+1)}${pad(today.getDate())}`)
+
+  // 31-Mar of the current FY — the default "last sale date" for carried-forward
+  // items that haven't sold this year at all.
+  const marchEnd     = new Date(fyYear, 3, 1) // Apr 1
+  marchEnd.setDate(marchEnd.getDate() - 1)
+  const marchEndISO     = `${marchEnd.getFullYear()}-${pad(marchEnd.getMonth()+1)}-${pad(marchEnd.getDate())}`
+  const marchEndDisplay = toTallyDisplayDate(`${marchEnd.getFullYear()}${pad(marchEnd.getMonth()+1)}${pad(marchEnd.getDate())}`)
 
   const makeXml = (id, from, to) => `<ENVELOPE>
   <HEADER>
@@ -745,9 +802,13 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
   </BODY>
 </ENVELOPE>`
 
-  const movementText = await postToTally(makeXml('TBSInventoryMovement', fyFrom, fyTo), tallyUrl)
+  const [movementText, openingBalances, closingBalances] = await Promise.all([
+    postToTally(makeXml('TBSInventoryMovement', fyFrom, fyTo), tallyUrl),
+    fetchStockItemBalances(tallyUrl, tallyCompany, marchEndDisplay),
+    fetchStockItemBalances(tallyUrl, tallyCompany, undefined),
+  ])
 
-  // Build lastSaleDate map: itemName → most recent sale date
+  // Build lastSaleDate map: itemName → most recent sale date (this FY only)
   const lastSaleMap = {}
   for (const vMatch of movementText.matchAll(/<VOUCHER\b[^>]*>([\s\S]*?)<\/VOUCHER>/gi)) {
     const block = vMatch[0]
@@ -763,10 +824,24 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
   }
 
   const todayISO = today.toISOString().slice(0, 10)
-  const items = Object.entries(lastSaleMap).map(([name, lastSaleDate]) => {
+  const marchEndDaysSince = Math.floor((new Date(todayISO) - new Date(marchEndISO)) / 86400000)
+  const items = []
+  const seen  = new Set()
+
+  for (const [name, lastSaleDate] of Object.entries(lastSaleMap)) {
     const daysSince = Math.floor((new Date(todayISO) - new Date(lastSaleDate)) / 86400000)
-    return { name, lastSaleDate, daysSince }
-  })
+    items.push({ name, lastSaleDate, daysSince })
+    seen.add(name)
+  }
+
+  // Carried-forward items with zero sales this FY — previously dropped entirely.
+  const allItemNames = new Set([...openingBalances.keys(), ...closingBalances.keys()])
+  for (const name of allItemNames) {
+    if (seen.has(name)) continue
+    const hadStock = (openingBalances.get(name) ?? 0) !== 0 || (closingBalances.get(name) ?? 0) !== 0
+    if (!hadStock) continue
+    items.push({ name, lastSaleDate: marchEndISO, daysSince: marchEndDaysSince })
+  }
 
   items.sort((a, b) => b.daysSince - a.daysSince)
 
