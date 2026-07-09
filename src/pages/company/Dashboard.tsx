@@ -578,11 +578,12 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'cfo',         label: 'CFO Suggestions' },
 ]
 
+// 'ytd' (monthly view) and 'custom' tabs are hidden for now — keep the
+// underlying logic/state intact, just don't render the buttons.
 const FILTERS: { key: FilterPreset; label: string }[] = [
   { key: 'today',   label: 'Today'        },
-  { key: 'quarter', label: 'This Quarter' },
   { key: 'ytd',     label: 'YTD'          },
-  { key: 'custom',  label: 'Custom'       },
+  { key: 'custom',  label: 'Custom'       }
 ]
 
 // Analysis tab's own filter — independent of the Performance tab's FILTERS/
@@ -590,7 +591,6 @@ const FILTERS: { key: FilterPreset; label: string }[] = [
 const ANALYSIS_FILTERS: { key: FilterPreset; label: string }[] = [
   { key: 'today',  label: 'Today'  },
   { key: 'ytd',    label: 'YTD'    },
-  { key: 'custom', label: 'Custom' },
 ]
 
 // Raw inputs behind the 9 ratio KPIs. null = genuinely unavailable (never a
