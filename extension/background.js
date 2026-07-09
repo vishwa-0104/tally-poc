@@ -807,6 +807,7 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
     fetchStockItemBalances(tallyUrl, tallyCompany, marchEndDisplay),
     fetchStockItemBalances(tallyUrl, tallyCompany, undefined),
   ])
+  console.log(`[SlowStock] opening (as of ${marchEndDisplay}) balances found: ${openingBalances.size} | closing (today) balances found: ${closingBalances.size}`)
 
   // Build lastSaleDate map: itemName → most recent sale date (this FY only)
   const lastSaleMap = {}
@@ -836,12 +837,15 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 
   // Carried-forward items with zero sales this FY — previously dropped entirely.
   const allItemNames = new Set([...openingBalances.keys(), ...closingBalances.keys()])
+  let carriedForwardCount = 0
   for (const name of allItemNames) {
     if (seen.has(name)) continue
     const hadStock = (openingBalances.get(name) ?? 0) !== 0 || (closingBalances.get(name) ?? 0) !== 0
     if (!hadStock) continue
     items.push({ name, lastSaleDate: marchEndISO, daysSince: marchEndDaysSince })
+    carriedForwardCount++
   }
+  console.log(`[SlowStock] sold-this-FY items: ${seen.size} | carried-forward unsold items added: ${carriedForwardCount} | total: ${items.length}`)
 
   items.sort((a, b) => b.daysSince - a.daysSince)
 
