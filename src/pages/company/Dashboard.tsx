@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
+import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip as RechartsTooltip, type TooltipContentProps } from 'recharts'
 import {
   TrendingUp, TrendingDown, AlertCircle,
   Lightbulb, AlertTriangle, CheckCircle,
@@ -110,6 +111,37 @@ function computeSalesTotal(vouchers: TallyVoucher[], sf: SalesFilterSettings | u
        - excluded.reduce((s, v) => s + v.taxableAmount, 0)
 }
 
+// Apr(fyYear) .. current month — each bucket is that month's sales so far
+// (the current month is naturally partial since `vouchers` only runs to today).
+function bucketSalesTrendMonthly(vouchers: TallyVoucher[], sf: SalesFilterSettings | undefined, fyYear: number): { label: string; amount: number }[] {
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const currentYM = todayStr().slice(0, 7)
+  const result: { label: string; amount: number }[] = []
+  for (let i = 0; i < 12; i++) {
+    const y        = i < 9 ? fyYear : fyYear + 1 // Apr..Dec → fyYear, Jan..Mar → fyYear+1
+    const monthIdx = (3 + i) % 12
+    const ym       = `${y}-${String(monthIdx + 1).padStart(2, '0')}`
+    if (ym > currentYM) break
+    result.push({ label: monthNames[monthIdx], amount: computeSalesTotal(vouchers.filter(v => v.date.startsWith(ym)), sf) })
+  }
+  return result
+}
+
+// Last `days` calendar days ending today, one bucket per day even if a day has
+// no vouchers at all (shows as a zero bar rather than skipping the day).
+function bucketSalesTrendDaily(vouchers: TallyVoucher[], sf: SalesFilterSettings | undefined, days: number): { label: string; amount: number }[] {
+  const result: { label: string; amount: number }[] = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d   = new Date()
+    d.setDate(d.getDate() - i)
+    const iso = fmt(d)
+    result.push({
+      label:  d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+      amount: computeSalesTotal(vouchers.filter(v => v.date === iso), sf),
+    })
+  }
+  return result
+}
 
 // ── Target helpers ────────────────────────────────────────────────────────────
 
@@ -189,7 +221,19 @@ const cfoSuggestions = [
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = false, targetInfo, prevValue }: {
+// Single-series bar chart tooltip — value leads (bold, high-contrast), the
+// bucket label follows, matching the KPI card's own value/label hierarchy.
+function SalesTrendTooltip({ active, payload, label }: TooltipContentProps) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-2 py-1.5">
+      <p className="text-[11px] font-semibold text-gray-900">{formatCurrency(Number(payload[0].value ?? 0))}</p>
+      <p className="text-[10px] text-gray-400">{label}</p>
+    </div>
+  )
+}
+
+function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = false, targetInfo, prevValue, trendData }: {
   title: string
   value: string | number
   subtitle: string
@@ -198,6 +242,7 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
   placeholder?: boolean
   targetInfo?: { target: number; achieved: number } | null
   prevValue?: { amount: number; current: number } | null
+  trendData?: { label: string; amount: number }[]
 }) {
   const DisplayIcon = targetInfo
     ? targetInfo.achieved >= 100 ? CheckCircle
@@ -266,6 +311,25 @@ function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = fals
               ? <ArrowUpRight className="w-3 h-3 text-green-500" />
               : <ArrowDownRight className="w-3 h-3 text-red-400" />}
             <span className="text-[11px] text-gray-600 font-medium">{formatCurrency(prevValue.amount)}</span>
+          </div>
+        </div>
+      )}
+      {trendData && trendData.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          <div className="h-14 -mx-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={trendData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }} barCategoryGap={2}>
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 9, fill: '#9ca3af' }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                />
+                <RechartsTooltip content={(props) => <SalesTrendTooltip {...props} />} cursor={{ fill: '#f3f4f6' }} />
+                <Bar dataKey="amount" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={18} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
@@ -789,6 +853,7 @@ export default function Dashboard() {
 
   const [total,             setTotal]             = useState(0)
   const [prevDaySales,      setPrevDaySales]      = useState<number | null>(null)
+  const [salesTrend,        setSalesTrend]        = useState<{ label: string; amount: number }[]>([])
   const [slowStock,         setSlowStock]         = useState<SlowStockItem[]>([])
   const [exportingSlowStock, setExportingSlowStock] = useState(false)
   const [exportingItems,     setExportingItems]     = useState(false)
@@ -810,6 +875,31 @@ export default function Dashboard() {
   const [analysisUncachedRange, setAnalysisUncachedRange] = useState(false)
   const [analysisActivePeriod, setAnalysisActivePeriod] = useState<{ from: string; to: string } | null>(null)
   const [analysisInputs,       setAnalysisInputs]       = useState<AnalysisInputs>(emptyAnalysisInputs)
+
+  // Sales-card trend chart. YTD buckets the already-fetched `all` vouchers by
+  // month — no extra call. Today needs history beyond the single day already
+  // in scope, so it reads the last 10 days from the DB cache only (same
+  // "comparison data never needs a live Tally call" reasoning as prevDaySales
+  // in loadFromDb) — it'll fill in day by day as the cache accumulates.
+  // Custom is left alone for now.
+  const updateSalesTrend = useCallback(async (preset: FilterPreset, all: TallyVoucher[], sf: SalesFilterSettings | undefined) => {
+    if (preset === 'ytd') {
+      setSalesTrend(bucketSalesTrendMonthly(all, sf, getCurrentFyYear()))
+      return
+    }
+    if (preset === 'today' && companyId) {
+      const start = new Date()
+      start.setDate(start.getDate() - 9)
+      try {
+        const { vouchers: trendVouchers } = await fetchCachedVouchers(companyId, fmt(start), todayStr())
+        setSalesTrend(bucketSalesTrendDaily(trendVouchers, sf, 10))
+      } catch {
+        setSalesTrend([])
+      }
+      return
+    }
+    setSalesTrend([])
+  }, [companyId])
 
   const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string, settingsOverride?: DashboardSettings) => {
     const settings = settingsOverride ?? dashboardSettings
@@ -872,6 +962,7 @@ export default function Dashboard() {
       const todaySalesTotal = computeSalesTotal(all, salesSettings)
       setTotal(todaySalesTotal)
       setActivePeriod({ from, to })
+      void updateSalesTrend(preset, all, salesSettings)
 
       const purchaseTotal = preset === 'ytd' ? computePurchaseTotal(all, settings.ytd) : 0
 
@@ -1125,7 +1216,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }, [connected, tallyUrl, tallyCompany, dashboardSettings])
+  }, [connected, tallyUrl, tallyCompany, dashboardSettings, updateSalesTrend])
 
   // Reads whatever's cached in the DB for the given range — never touches
   // Tally. Used for every tab/filter switch; Apply and the initial mount's
@@ -1184,6 +1275,7 @@ export default function Dashboard() {
       const totalSales = computeSalesTotal(all, salesSettings)
       setTotal(totalSales)
       setActivePeriod({ from, to })
+      void updateSalesTrend(preset, all, salesSettings)
 
       const purchaseTotal = preset === 'ytd' ? computePurchaseTotal(all, dashboardSettings.ytd) : 0
 
@@ -1270,7 +1362,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }, [companyId, dashboardSettings])
+  }, [companyId, dashboardSettings, updateSalesTrend])
 
   // ── Analysis tab — DB-only read, mirrors loadFromDb above but for the 9
   // ratio KPIs. Never touches Tally. Balance-sheet inputs (debtors, creditors,
@@ -2097,6 +2189,7 @@ export default function Dashboard() {
                     prevValue={filterPreset === 'today' && fetched && prevDaySales !== null
                       ? { amount: prevDaySales, current: total }
                       : null}
+                    trendData={fetched ? salesTrend : undefined}
                   />
                 )
               })()}
