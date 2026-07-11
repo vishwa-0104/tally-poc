@@ -391,6 +391,10 @@ export interface GroupBalances {
   fixedAssets:        number | null
   totalLoans:         number | null
   bankOD:             number | null
+  // Every group Tally returned (raw signed balance) — lets Current Ratio/
+  // Quick Ratio sum whichever groups the user picked in Settings, without a
+  // second fetch.
+  allGroups: { name: string; balance: number }[]
 }
 
 export async function fetchGroupBalances(

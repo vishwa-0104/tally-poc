@@ -156,14 +156,14 @@ export interface DashboardSettings {
     debtEquityCashLedgers?:          string[]
     debtEquityBankLedgers?:          string[]
     debtEquityEquityLedgers?:        string[]
-    // Current Ratio / Quick Ratio — replaced the fixed Tally group-balance
-    // calculation (Stock+Debtors/Creditors, Cash+Bank+Investments+Debtors/
-    // (CurrentLiabilities-BankOD)) with user-picked ledger lists, same
-    // numerator/denominator convention as every other ratio here.
-    currentRatioAssetsLedgers?:      string[]
-    currentRatioLiabilitiesLedgers?: string[]
-    quickRatioAssetsLedgers?:        string[]
-    quickRatioLiabilitiesLedgers?:   string[]
+    // Current Ratio / Quick Ratio — user-picked Tally GROUP names (e.g.
+    // "Sundry Debtors", "Stock-in-Hand"), summed via each group's own native
+    // closing balance rollup (already includes everything nested under it,
+    // however deep — no per-ledger tree-walking needed on our side).
+    currentRatioAssetsGroups?:      string[]
+    currentRatioLiabilitiesGroups?: string[]
+    quickRatioAssetsGroups?:        string[]
+    quickRatioLiabilitiesGroups?:   string[]
     // DSO/DIO/DPO's days multiplier — 'ytd' (days elapsed since FY start,
     // the default) or the traditional fixed '365'.
     dsoDaysMode?: 'ytd' | '365'

@@ -268,12 +268,13 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
   const [debtEquityCashLedgers,   setDebtEquityCashLedgers]   = useState<string[]>([])
   const [debtEquityBankLedgers,   setDebtEquityBankLedgers]   = useState<string[]>([])
   const [debtEquityEquityLedgers, setDebtEquityEquityLedgers] = useState<string[]>([])
-  // Current Ratio / Quick Ratio — replaced the fixed Tally group-balance
-  // figures with user-picked numerator/denominator ledger lists.
-  const [currentRatioAssetsLedgers,      setCurrentRatioAssetsLedgers]      = useState<string[]>([])
-  const [currentRatioLiabilitiesLedgers, setCurrentRatioLiabilitiesLedgers] = useState<string[]>([])
-  const [quickRatioAssetsLedgers,        setQuickRatioAssetsLedgers]        = useState<string[]>([])
-  const [quickRatioLiabilitiesLedgers,   setQuickRatioLiabilitiesLedgers]   = useState<string[]>([])
+  // Current Ratio / Quick Ratio — user-picked Tally GROUP names (e.g.
+  // "Sundry Debtors"), not individual ledgers — a group's own closing
+  // balance already rolls up everything nested under it.
+  const [currentRatioAssetsGroups,      setCurrentRatioAssetsGroups]      = useState<string[]>([])
+  const [currentRatioLiabilitiesGroups, setCurrentRatioLiabilitiesGroups] = useState<string[]>([])
+  const [quickRatioAssetsGroups,        setQuickRatioAssetsGroups]        = useState<string[]>([])
+  const [quickRatioLiabilitiesGroups,   setQuickRatioLiabilitiesGroups]   = useState<string[]>([])
   // DSO/DIO/DPO's days multiplier — 'ytd' (default) or fixed '365'.
   const [dsoDaysMode, setDsoDaysMode] = useState<'ytd' | '365'>('ytd')
   const [dioDaysMode, setDioDaysMode] = useState<'ytd' | '365'>('ytd')
@@ -289,6 +290,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
 
   // Options fetched from Tally
   const [allLedgerOpts,   setAllLedgerOpts]   = useState<string[]>([])
+  const [allGroupOpts,    setAllGroupOpts]    = useState<string[]>([])
   const [voucherTypeOpts, setVoucherTypeOpts] = useState<string[]>([])
   const [cashLedgerOpts,  setCashLedgerOpts]  = useState<string[]>([])
   const [bankLedgerOpts,  setBankLedgerOpts]  = useState<string[]>([])
@@ -353,10 +355,10 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         setDebtEquityCashLedgers(s.ytd?.debtEquityCashLedgers ?? [])
         setDebtEquityBankLedgers(s.ytd?.debtEquityBankLedgers ?? [])
         setDebtEquityEquityLedgers(s.ytd?.debtEquityEquityLedgers ?? [])
-        setCurrentRatioAssetsLedgers(s.ytd?.currentRatioAssetsLedgers ?? [])
-        setCurrentRatioLiabilitiesLedgers(s.ytd?.currentRatioLiabilitiesLedgers ?? [])
-        setQuickRatioAssetsLedgers(s.ytd?.quickRatioAssetsLedgers ?? [])
-        setQuickRatioLiabilitiesLedgers(s.ytd?.quickRatioLiabilitiesLedgers ?? [])
+        setCurrentRatioAssetsGroups(s.ytd?.currentRatioAssetsGroups ?? [])
+        setCurrentRatioLiabilitiesGroups(s.ytd?.currentRatioLiabilitiesGroups ?? [])
+        setQuickRatioAssetsGroups(s.ytd?.quickRatioAssetsGroups ?? [])
+        setQuickRatioLiabilitiesGroups(s.ytd?.quickRatioLiabilitiesGroups ?? [])
         setDsoDaysMode(s.ytd?.dsoDaysMode ?? 'ytd')
         setDioDaysMode(s.ytd?.dioDaysMode ?? 'ytd')
         setDpoDaysMode(s.ytd?.dpoDaysMode ?? 'ytd')
@@ -383,6 +385,17 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
       setAllLedgerOpts(all.map(l => l.name).sort())
       setCashLedgerOpts(all.filter(l => l.group.toLowerCase().includes('cash')).map(l => l.name).sort())
       setBankLedgerOpts(all.filter(l => l.group.toLowerCase().includes('bank')).map(l => l.name).sort())
+      // Groups that have at least one ledger directly under them — good
+      // enough for Current Ratio/Quick Ratio's group pickers, since a real
+      // top-level group like Sundry Debtors/Creditors/Stock-in-Hand always
+      // has direct ledgers in practice, and its own closing balance already
+      // rolls up everything nested under it regardless. Excludes Tally's own
+      // "Primary" root group (exported with a leading control-character
+      // entity, e.g. "&#4; Primary") — picking it would mean "the entire
+      // chart of accounts," never a meaningful ratio component.
+      setAllGroupOpts([...new Set(
+        all.map(l => l.group).filter(g => g && !/primary$/i.test(g.trim()))
+      )].sort())
     }).finally(() => setLoadingOpts(false))
   }, [open, companyId, fyYear, fetchVoucherTypesFromDb, fetchLedgersFromDb, getVoucherTypes, getLedgers])
 
@@ -436,10 +449,10 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         debtEquityCashLedgers:          debtEquityCashLedgers.length          > 0 ? debtEquityCashLedgers          : undefined,
         debtEquityBankLedgers:          debtEquityBankLedgers.length          > 0 ? debtEquityBankLedgers          : undefined,
         debtEquityEquityLedgers:        debtEquityEquityLedgers.length        > 0 ? debtEquityEquityLedgers        : undefined,
-        currentRatioAssetsLedgers:      currentRatioAssetsLedgers.length      > 0 ? currentRatioAssetsLedgers      : undefined,
-        currentRatioLiabilitiesLedgers: currentRatioLiabilitiesLedgers.length > 0 ? currentRatioLiabilitiesLedgers : undefined,
-        quickRatioAssetsLedgers:        quickRatioAssetsLedgers.length        > 0 ? quickRatioAssetsLedgers        : undefined,
-        quickRatioLiabilitiesLedgers:   quickRatioLiabilitiesLedgers.length   > 0 ? quickRatioLiabilitiesLedgers   : undefined,
+        currentRatioAssetsGroups:      currentRatioAssetsGroups.length      > 0 ? currentRatioAssetsGroups      : undefined,
+        currentRatioLiabilitiesGroups: currentRatioLiabilitiesGroups.length > 0 ? currentRatioLiabilitiesGroups : undefined,
+        quickRatioAssetsGroups:        quickRatioAssetsGroups.length        > 0 ? quickRatioAssetsGroups        : undefined,
+        quickRatioLiabilitiesGroups:   quickRatioLiabilitiesGroups.length   > 0 ? quickRatioLiabilitiesGroups   : undefined,
         dsoDaysMode, dioDaysMode, dpoDaysMode,
         analysisSalesAccounts:          analysisSalesAccounts.length          > 0 ? analysisSalesAccounts          : undefined,
         analysisSalesIncludeVouchers:   analysisSalesIncludeVouchers.length   > 0 ? analysisSalesIncludeVouchers   : undefined,
@@ -941,26 +954,27 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Current Ratio</p>
               <p className="text-[11px] text-gray-400 italic mb-4">
-                Current Ratio = Σ(Current Assets Ledgers) / Σ(Current Liabilities Ledgers) — both
-                fully company-specific; there's no default group fallback, so leaving either empty
+                Current Ratio = Σ(Current Assets Groups) / Σ(Current Liabilities Groups) — pick Tally
+                GROUPS, not individual ledgers; each group's own closing balance already includes
+                everything nested under it. There's no default fallback, so leaving either empty
                 shows "No data available" on the card rather than guessing.
               </p>
               <div className="space-y-5">
                 <SearchCheckList
-                  label="Current Assets Ledgers"
-                  hint="e.g. Stock-in-Hand, Sundry Debtors, Cash, Bank"
-                  options={allLedgerOpts}
-                  selected={currentRatioAssetsLedgers}
-                  onChange={setCurrentRatioAssetsLedgers}
+                  label="Current Assets Groups"
+                  hint="e.g. Stock-in-Hand, Sundry Debtors, Cash-in-Hand, Bank Accounts"
+                  options={allGroupOpts}
+                  selected={currentRatioAssetsGroups}
+                  onChange={setCurrentRatioAssetsGroups}
                   loading={loadingOpts}
                   showSelectAll
                 />
                 <SearchCheckList
-                  label="Current Liabilities Ledgers"
-                  hint="e.g. Sundry Creditors, short-term provisions"
-                  options={allLedgerOpts}
-                  selected={currentRatioLiabilitiesLedgers}
-                  onChange={setCurrentRatioLiabilitiesLedgers}
+                  label="Current Liabilities Groups"
+                  hint="e.g. Sundry Creditors, Provisions"
+                  options={allGroupOpts}
+                  selected={currentRatioLiabilitiesGroups}
+                  onChange={setCurrentRatioLiabilitiesGroups}
                   loading={loadingOpts}
                   showSelectAll
                 />
@@ -973,26 +987,27 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Quick Ratio</p>
               <p className="text-[11px] text-gray-400 italic mb-4">
-                Quick Ratio = Σ(Quick Assets Ledgers) / Σ(Quick Liabilities Ledgers) — both fully
-                company-specific; there's no default group fallback, so leaving either empty shows
-                "No data available" on the card rather than guessing.
+                Quick Ratio = Σ(Quick Assets Groups) / Σ(Quick Liabilities Groups) — pick Tally
+                GROUPS, not individual ledgers; each group's own closing balance already includes
+                everything nested under it. There's no default fallback, so leaving either empty
+                shows "No data available" on the card rather than guessing.
               </p>
               <div className="space-y-5">
                 <SearchCheckList
-                  label="Quick Assets Ledgers"
-                  hint="e.g. Cash, Bank, Investments, Sundry Debtors — exclude Stock-in-Hand"
-                  options={allLedgerOpts}
-                  selected={quickRatioAssetsLedgers}
-                  onChange={setQuickRatioAssetsLedgers}
+                  label="Quick Assets Groups"
+                  hint="e.g. Cash-in-Hand, Bank Accounts, Investments, Sundry Debtors — exclude Stock-in-Hand"
+                  options={allGroupOpts}
+                  selected={quickRatioAssetsGroups}
+                  onChange={setQuickRatioAssetsGroups}
                   loading={loadingOpts}
                   showSelectAll
                 />
                 <SearchCheckList
-                  label="Quick Liabilities Ledgers"
-                  hint="e.g. Sundry Creditors, Bank OD/OCC accounts"
-                  options={allLedgerOpts}
-                  selected={quickRatioLiabilitiesLedgers}
-                  onChange={setQuickRatioLiabilitiesLedgers}
+                  label="Quick Liabilities Groups"
+                  hint="e.g. Sundry Creditors, Bank OD A/c"
+                  options={allGroupOpts}
+                  selected={quickRatioLiabilitiesGroups}
+                  onChange={setQuickRatioLiabilitiesGroups}
                   loading={loadingOpts}
                   showSelectAll
                 />

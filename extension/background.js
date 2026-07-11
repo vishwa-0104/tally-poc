@@ -1877,7 +1877,10 @@ async function handleFetchGroupBalances(tallyUrl, tallyCompany, asOfDate) {
   console.log(`[GroupBalances] asOfDate=${toDateRaw} | all groups from Tally:`, groups.map(g => `${g.name}=${g.balance}`))
   console.log('[GroupBalances] mapped:', { receivables, payables, equity, investments, currentLiabilities, fixedAssets, totalLoans, bankOD })
 
-  return { receivables, payables, equity, investments, currentLiabilities, fixedAssets, totalLoans, bankOD }
+  // allGroups: the FULL parsed list (every group Tally returned, raw signed
+  // balance) — used by Current Ratio/Quick Ratio to sum whichever groups the
+  // user picked in Settings, instead of the fixed 8 names hardcoded above.
+  return { receivables, payables, equity, investments, currentLiabilities, fixedAssets, totalLoans, bankOD, allGroups: groups }
 }
 
 function parseGroupBalances(xml) {

@@ -149,6 +149,23 @@ function getCurrentFyYear() {
   return today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
 }
 
+// Current Ratio / Quick Ratio — sum the user-picked Tally GROUP names' own
+// closing balances (magnitude, same convention as every other "how much"
+// ledger-list setting here) out of the full group list already fetched by
+// fetchGroupBalances. null when the setting itself is empty (never guess);
+// a picked name Tally doesn't return just contributes 0, matching how an
+// unmatched ledger name in fetchLedgerAmounts silently contributes nothing.
+function sumGroupBalances(
+  allGroups: { name: string; balance: number }[] | undefined,
+  groupNames: string[] | undefined,
+): number | null {
+  if (!groupNames?.length || !allGroups) return null
+  return groupNames.reduce((sum, name) => {
+    const match = allGroups.find(g => g.name.toLowerCase() === name.toLowerCase())
+    return sum + (match ? Math.abs(match.balance) : 0)
+  }, 0)
+}
+
 // DSO/DIO/DPO's "YTD days" multiplier option — days elapsed since the FY
 // start (1-Apr) as of the given date, inclusive of both ends (e.g. 12-Jul
 // in an Apr-start FY = 103 days).
@@ -1628,8 +1645,6 @@ export default function Dashboard() {
         longTermBorrowingsTotal, roceEquityTotal,
         roeEquityTotal, internalBorrowingsTotal, intangibleAssetsTotal,
         debtEquityLoansTotal, debtEquityCashTotal, debtEquityBankTotal, debtEquityEquityTotal,
-        currentRatioAssetsTotal, currentRatioLiabilitiesTotal,
-        quickRatioAssetsTotal, quickRatioLiabilitiesTotal,
       ] = await Promise.all([
         fetchDaybook(fFrom, fTo, tallyUrl, tallyCompany, {
           // Analysis tab's own Sales definition, not the Performance tab's —
@@ -1675,11 +1690,16 @@ export default function Dashboard() {
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityCashLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityBankLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityEquityLedgers, 'equity'),
-        fetchLedgerTotal(dashboardSettings.ytd?.currentRatioAssetsLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.currentRatioLiabilitiesLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.quickRatioAssetsLedgers),
-        fetchLedgerTotal(dashboardSettings.ytd?.quickRatioLiabilitiesLedgers),
       ])
+
+      // Current Ratio / Quick Ratio — sum whichever Tally GROUPS the user
+      // picked, from the full group list groupBalResult already fetched
+      // above (no separate request needed; a group's own closing balance
+      // already rolls up everything nested under it).
+      const currentRatioAssetsTotal      = sumGroupBalances(groupBalResult?.allGroups, dashboardSettings.ytd?.currentRatioAssetsGroups)
+      const currentRatioLiabilitiesTotal = sumGroupBalances(groupBalResult?.allGroups, dashboardSettings.ytd?.currentRatioLiabilitiesGroups)
+      const quickRatioAssetsTotal        = sumGroupBalances(groupBalResult?.allGroups, dashboardSettings.ytd?.quickRatioAssetsGroups)
+      const quickRatioLiabilitiesTotal   = sumGroupBalances(groupBalResult?.allGroups, dashboardSettings.ytd?.quickRatioLiabilitiesGroups)
 
       const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
       // null (not 0) when the ledger list isn't configured — 0 would be
