@@ -321,6 +321,18 @@ export async function fetchSlowMovingStock(
   return sendToExtension<{ items: SlowStockItem[] }>('FETCH_SLOW_STOCK', { tallyUrl, tallyCompany })
 }
 
+export interface DebtorBalance {
+  name:    string
+  balance: number  // Dr (positive) — what the party currently owes
+}
+
+export async function fetchDebtorBalances(
+  tallyUrl: string,
+  tallyCompany?: string,
+): Promise<{ balances: DebtorBalance[] }> {
+  return sendToExtension<{ balances: DebtorBalance[] }>('FETCH_DEBTOR_BALANCES', { tallyUrl, tallyCompany })
+}
+
 export interface RawLedger {
   name:    string
   group:   string

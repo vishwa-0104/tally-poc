@@ -363,6 +363,7 @@ model DashboardSnapshot {
   closingStock       Float?
   directExpenseTotal Float?
   slowStockItems     Json?
+  debtorBalances     Json?
   // Analysis-tab ratio KPIs — same "as of now" limitation as the fields above.
   equity             Float?
   investments        Float?

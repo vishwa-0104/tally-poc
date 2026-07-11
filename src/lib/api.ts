@@ -1,6 +1,6 @@
 import axios from 'axios'
 import type { DashboardSettings } from '@/types'
-import type { TallyVoucher, SlowStockItem } from '@/services/tallyService'
+import type { TallyVoucher, SlowStockItem, DebtorBalance } from '@/services/tallyService'
 
 export const api = axios.create({ baseURL: '/api' })
 
@@ -89,6 +89,7 @@ export interface DashboardSnapshotPatch {
   closingStock?:       number | null
   directExpenseTotal?: number | null
   slowStockItems?:     SlowStockItem[]
+  debtorBalances?:     DebtorBalance[]
   equity?:             number | null
   investments?:        number | null
   currentLiabilities?: number | null

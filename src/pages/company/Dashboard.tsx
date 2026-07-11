@@ -8,7 +8,7 @@ import {
   Users, Store, Download, Zap,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore, useDaybookSyncStore } from '@/store'
-import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, fetchTallyStockItems, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow } from '@/services/tallyService'
+import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, fetchTallyStockItems, fetchDebtorBalances, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow, type DebtorBalance } from '@/services/tallyService'
 import {
   fetchSalesTargets, fetchDashboardSettings,
   fetchCachedVouchers, saveVouchers, fetchDashboardSnapshot, saveDashboardSnapshot,
@@ -856,6 +856,8 @@ export default function Dashboard() {
   const [salesTrend,        setSalesTrend]        = useState<{ label: string; amount: number }[]>([])
   const [slowStock,         setSlowStock]         = useState<SlowStockItem[]>([])
   const [exportingSlowStock, setExportingSlowStock] = useState(false)
+  const [debtorBalances,     setDebtorBalances]     = useState<DebtorBalance[]>([])
+  const [exportingDebtorBalances, setExportingDebtorBalances] = useState(false)
   const [exportingItems,     setExportingItems]     = useState(false)
   const [exportingDebtors,   setExportingDebtors]   = useState(false)
   const [exportingPurchases, setExportingPurchases] = useState(false)
@@ -1038,10 +1040,11 @@ export default function Dashboard() {
       // Captured in outer-scoped lets (not just state) so the DB-persist block below
       // can use the freshly-fetched values — reading state here would race, since
       // setState doesn't apply synchronously within the same function execution.
-      let latestCashInHand:  number | null = null
-      let latestBankBalance: number | null = null
-      let latestReceivables: number | null = null
-      let latestPayables:    number | null = null
+      let latestCashInHand:    number | null = null
+      let latestBankBalance:   number | null = null
+      let latestReceivables:   number | null = null
+      let latestPayables:      number | null = null
+      let latestDebtorBalances: DebtorBalance[] = []
       if (to === todayStr()) {
         try {
           const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr()))
@@ -1077,11 +1080,22 @@ export default function Dashboard() {
           setReceivables(null)
           setPayables(null)
         }
+
+        try {
+          const { balances } = await fetchDebtorBalances(tallyUrl, tallyCompany)
+          console.log('[DebtorBalances] parties:', balances.length)
+          setDebtorBalances(balances)
+          latestDebtorBalances = balances
+        } catch (err) {
+          console.error('[DebtorBalances] fetchDebtorBalances failed:', err)
+          setDebtorBalances([])
+        }
       } else {
         setCashInHand(null)
         setBankBalance(null)
         setReceivables(null)
         setPayables(null)
+        setDebtorBalances([])
       }
 
       setFetched(true)
@@ -1198,10 +1212,11 @@ export default function Dashboard() {
         slowStockItems: slowResult.status === 'fulfilled' ? slowResult.value.items : [],
       }
       if (to === todayStr()) {
-        snapshotPatch.cashInHand  = latestCashInHand
-        snapshotPatch.bankBalance = latestBankBalance
-        snapshotPatch.receivables = latestReceivables
-        snapshotPatch.payables    = latestPayables
+        snapshotPatch.cashInHand      = latestCashInHand
+        snapshotPatch.bankBalance     = latestBankBalance
+        snapshotPatch.receivables     = latestReceivables
+        snapshotPatch.payables        = latestPayables
+        snapshotPatch.debtorBalances  = latestDebtorBalances
       }
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         snapshotPatch.openingStock       = stockResult.value.openingStock
@@ -1310,11 +1325,13 @@ export default function Dashboard() {
         setBankBalance(snapshot?.bankBalance ?? null)
         setReceivables(snapshot?.receivables ?? null)
         setPayables(snapshot?.payables ?? null)
+        setDebtorBalances(snapshot?.debtorBalances ?? [])
       } else {
         setCashInHand(null)
         setBankBalance(null)
         setReceivables(null)
         setPayables(null)
+        setDebtorBalances([])
       }
       setSlowStock(snapshot?.slowStockItems ?? [])
 
@@ -2034,6 +2051,21 @@ export default function Dashboard() {
     }
   }
 
+  const exportDebtorBalancesToXls = async () => {
+    if (debtorBalances.length === 0) { toast.error('No debtor balances to export'); return }
+    setExportingDebtorBalances(true)
+    try {
+      await yieldToPaint()
+      const rows = [
+        ['Party', 'Balance (₹)'],
+        ...debtorBalances.map(d => [d.name, d.balance.toFixed(2)]),
+      ]
+      downloadXls(rows, 'debtor_balances')
+    } finally {
+      setExportingDebtorBalances(false)
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -2230,8 +2262,8 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Table panels — Top Performing Items | Top Performing Debtors | Slow Moving Stocks */}
-            <div className="grid grid-cols-3 gap-4">
+            {/* Table panels — Top Performing Items | Top Performing Debtors | Slow Moving Stocks | Debtor Balances */}
+            <div className="grid grid-cols-4 gap-4">
               <DataTableCard
                 title="Top Performing Items"
                 onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
@@ -2294,6 +2326,26 @@ export default function Dashboard() {
                     }))
                   : fetched
                     ? [{ cells: ['No slow-moving items found', ''], dim: true }]
+                    : undefined}
+              />
+              <DataTableCard
+                title="Debtor Balances"
+                onDownload={fetched && debtorBalances.length > 0 ? exportDebtorBalancesToXls : undefined}
+                downloadPending={exportingDebtorBalances}
+                columns={[
+                  { label: 'Party' },
+                  { label: 'Balance (₹)', right: true },
+                ]}
+                loading={!fetched}
+                rows={fetched && debtorBalances.length > 0
+                  ? debtorBalances.slice(0, 8).map((d, i) => ({
+                      cells: [
+                        `${i + 1}. ${d.name}`,
+                        formatCurrency(d.balance),
+                      ],
+                    }))
+                  : fetched
+                    ? [{ cells: ['No outstanding balances found', ''], dim: true }]
                     : undefined}
               />
             </div>

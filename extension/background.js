@@ -162,6 +162,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ total: 0, error: err.message }))
       return true
 
+    case 'FETCH_DEBTOR_BALANCES':
+      handleFetchDebtorBalances(payload.tallyUrl, payload.tallyCompany)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ balances: [], error: err.message }))
+      return true
+
 
     default:
       sendResponse({ error: `Unknown message type: ${type}` })
@@ -1972,4 +1978,54 @@ function parseTallyBalance(str) {
   const num  = parseFloat(m[1]) || 0
   const isCr = (m[2] || '').toLowerCase() === 'cr'
   return isCr ? -num : num
+}
+
+// ── Party-wise debtor balances (Debtor Balances card) ────────────────────────
+// Ad-hoc inline collection, scoped with CHILDOF so it also covers any
+// sub-groups nested under Sundry Debtors — no change to the pre-loaded
+// TallySyncBridge.tdl, no reload needed in Tally. Sundry Debtors' closing
+// balance is Dr/positive when a customer owes money (see handleFetchGroupBalances);
+// only positive balances are kept, matching the existing topDebtors filter in
+// Dashboard.tsx (settled/credit-balance parties don't belong in this list).
+async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&#39;/g, "'").trim()
+  const xml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSDebtorBalances</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSDebtorBalances" ISMODIFY="No">
+            <TYPE>Ledger</TYPE>
+            <CHILDOF>Sundry Debtors</CHILDOF>
+            <NATIVEMETHOD>Name</NATIVEMETHOD>
+            <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const responseText = await postToTally(xml, tallyUrl)
+  const balances = []
+  for (const m of responseText.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
+    const block = m[0]
+    let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+    if (!name) continue
+    const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
+    const balance = parseTallyBalance(balRaw)
+    if (balance > 0) balances.push({ name, balance })
+  }
+  balances.sort((a, b) => b.balance - a.balance)
+  return { balances }
 }
