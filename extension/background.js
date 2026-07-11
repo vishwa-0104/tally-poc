@@ -1997,6 +1997,22 @@ function parseTallyBalance(str) {
 // JS to decide whether it's really under Sundry Debtors, however deeply
 // nested. This works regardless of CHILDOF's behavior or nesting depth.
 //
+// IMPORTANT (found 2026-07-12): the first version of this rewrite fetched
+// ClosingBalance for *every* ledger in the company in one shot to avoid
+// depending on CHILDOF at all. That re-triggered the exact hang risk already
+// documented above handleFetchLedgerBalances — "Fetching ClosingBalance for
+// ALL ledgers is O(ledgers × transactions) and causes Tally to hang" — this
+// company's ledger master is large (the nested-subgroup tree under Sundry
+// Debtors alone has 100+ entries). The dashboard kept showing stale cached
+// data because the live fetch never completed. Fixed by splitting into two
+// cheap metadata-only passes (Name+Parent, no ClosingBalance — same NATIVEMETHOD
+// shape as the already-proven handleFetchLedgers) to resolve exactly which
+// ledger names are under Sundry Debtors, THEN a third request that asks Tally
+// for ClosingBalance on only that resolved (much smaller) name list — same
+// scoped-FILTER pattern already proven in handleFetchLedgerAmounts below
+// (`$Name = "..." OR ...`, with the same XML-escaping needed for names
+// containing "&" etc.).
+//
 // Sign convention CONFIRMED against live Tally (2026-07-11): this raw
 // NATIVEMETHOD ClosingBalance has no Dr/Cr suffix at all, and Tally's raw
 // internal sign for it is the OPPOSITE of the human-readable Dr/Cr report
@@ -2009,7 +2025,9 @@ function parseTallyBalance(str) {
 // belong in this list).
 async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&#39;/g, "'").trim()
+  const esc    = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+  // Pass 1 (cheap, metadata-only): every ledger's Name + Parent, no ClosingBalance.
   const ledgersXml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -2028,7 +2046,6 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
             <TYPE>Ledger</TYPE>
             <NATIVEMETHOD>Name</NATIVEMETHOD>
             <NATIVEMETHOD>Parent</NATIVEMETHOD>
-            <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -2036,6 +2053,7 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   </BODY>
 </ENVELOPE>`
 
+  // Pass 2 (cheap, metadata-only): every group's Name + Parent.
   const groupsXml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -2061,10 +2079,12 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   </BODY>
 </ENVELOPE>`
 
+  const t0 = Date.now()
   const [ledgersResponse, groupsResponse] = await Promise.all([
     postToTally(ledgersXml, tallyUrl),
     postToTally(groupsXml, tallyUrl),
   ])
+  console.log(`[DebtorBalances] metadata pass: ${Date.now() - t0}ms, ledgers response ${ledgersResponse.length} chars, groups response ${groupsResponse.length} chars`)
 
   // Build group → immediate-parent map (lowercased keys for case-insensitive lookups).
   const groupParent = new Map()
@@ -2093,7 +2113,7 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
     return false
   }
 
-  const balances = []
+  const debtorNames = []
   for (const m of ledgersResponse.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
     const block = m[0]
     let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
@@ -2104,11 +2124,59 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
       ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
       ?? ''
     )
-    if (!isUnderSundryDebtors(parent)) continue
+    if (isUnderSundryDebtors(parent)) debtorNames.push(name)
+  }
+  console.log(`[DebtorBalances] resolved ${debtorNames.length} ledgers under Sundry Debtors (any nesting depth)`)
+
+  if (debtorNames.length === 0) return { balances: [] }
+
+  // Pass 3: ClosingBalance for ONLY the resolved debtor ledgers — same
+  // scoped-FILTER pattern as handleFetchLedgerAmounts, so Tally never has to
+  // compute ClosingBalance for the rest of the ledger master.
+  const filter = debtorNames.map(n => `$Name = "${esc(n)}"`).join(' OR ')
+  const balancesXml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSDebtorBalances</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSDebtorBalances" ISMODIFY="No">
+            <TYPE>Ledger</TYPE>
+            <NATIVEMETHOD>Name, ClosingBalance</NATIVEMETHOD>
+            <FILTER>IsTargetDebtorLedger</FILTER>
+          </COLLECTION>
+          <SYSTEM TYPE="Formulae" NAME="IsTargetDebtorLedger">
+            ${filter}
+          </SYSTEM>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const t1 = Date.now()
+  const balancesResponse = await postToTally(balancesXml, tallyUrl)
+  console.log(`[DebtorBalances] balances pass: ${Date.now() - t1}ms, response ${balancesResponse.length} chars`)
+
+  const balances = []
+  for (const m of balancesResponse.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
+    const block = m[0]
+    let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+    if (!name) continue
     const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
     const balance = -parseTallyBalance(balRaw)
     if (balance > 0) balances.push({ name, balance })
   }
   balances.sort((a, b) => b.balance - a.balance)
+  console.log(`[DebtorBalances] final: ${balances.length} parties with balance > 0`)
   return { balances }
 }
