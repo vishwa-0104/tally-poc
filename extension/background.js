@@ -1981,9 +1981,21 @@ function parseTallyBalance(str) {
 }
 
 // ── Party-wise debtor balances (Debtor Balances card) ────────────────────────
-// Ad-hoc inline collection, scoped with CHILDOF so it also covers any
-// sub-groups nested under Sundry Debtors — no change to the pre-loaded
-// TallySyncBridge.tdl, no reload needed in Tally.
+// CONFIRMED against live Tally (2026-07-11): scoping the ledger fetch with
+// <CHILDOF>Sundry Debtors</CHILDOF> silently dropped every ledger sitting
+// inside a custom sub-group nested under Sundry Debtors (e.g. a company-
+// created "Software Group", "Advance From Customers" etc.) — CHILDOF did not
+// behave transitively for this ad-hoc HTTP-posted collection the way Tally's
+// TDL docs describe for a persistent/compiled collection. `Parent` (used
+// throughout this file, e.g. handleFetchLedgers) only ever returns the
+// *immediate* parent group too, so a naive Parent-name check has the same
+// blind spot.
+//
+// Fix: don't scope the ledger fetch by group at all. Fetch every ledger's
+// Name/Parent/ClosingBalance, separately fetch every Group's Name/Parent
+// (cheap, metadata-only), then resolve each ledger's full ancestor chain in
+// JS to decide whether it's really under Sundry Debtors, however deeply
+// nested. This works regardless of CHILDOF's behavior or nesting depth.
 //
 // Sign convention CONFIRMED against live Tally (2026-07-11): this raw
 // NATIVEMETHOD ClosingBalance has no Dr/Cr suffix at all, and Tally's raw
@@ -1997,12 +2009,13 @@ function parseTallyBalance(str) {
 // belong in this list).
 async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&#39;/g, "'").trim()
-  const xml = `<ENVELOPE>
+
+  const ledgersXml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
     <TYPE>Collection</TYPE>
-    <ID>TBSDebtorBalances</ID>
+    <ID>TBSDebtorLedgersAll</ID>
   </HEADER>
   <BODY>
     <DESC>
@@ -2011,10 +2024,10 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="TBSDebtorBalances" ISMODIFY="No">
+          <COLLECTION NAME="TBSDebtorLedgersAll" ISMODIFY="No">
             <TYPE>Ledger</TYPE>
-            <CHILDOF>Sundry Debtors</CHILDOF>
             <NATIVEMETHOD>Name</NATIVEMETHOD>
+            <NATIVEMETHOD>Parent</NATIVEMETHOD>
             <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
           </COLLECTION>
         </TDLMESSAGE>
@@ -2023,13 +2036,75 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   </BODY>
 </ENVELOPE>`
 
-  const responseText = await postToTally(xml, tallyUrl)
+  const groupsXml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TBSAllGroups</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>${companyVar(tallyCompany)}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TBSAllGroups" ISMODIFY="No">
+            <TYPE>Group</TYPE>
+            <NATIVEMETHOD>Name</NATIVEMETHOD>
+            <NATIVEMETHOD>Parent</NATIVEMETHOD>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`
+
+  const [ledgersResponse, groupsResponse] = await Promise.all([
+    postToTally(ledgersXml, tallyUrl),
+    postToTally(groupsXml, tallyUrl),
+  ])
+
+  // Build group → immediate-parent map (lowercased keys for case-insensitive lookups).
+  const groupParent = new Map()
+  for (const m of groupsResponse.matchAll(/<GROUP\b[^>]*>([\s\S]*?)<\/GROUP>/gi)) {
+    const block = m[0]
+    let name = decode(block.match(/<GROUP\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+    if (!name) continue
+    const parent = decode(
+      block.match(/<PARENT\.LIST[^>]*>[\s\S]*?<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
+      ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
+      ?? ''
+    )
+    groupParent.set(name.toLowerCase(), parent)
+  }
+
+  // Walk a ledger's immediate parent up the group tree (capped so a bad/cyclic
+  // map can never hang) and check whether "Sundry Debtors" appears anywhere
+  // in the chain — not just as the immediate parent.
+  const isUnderSundryDebtors = (immediateParent) => {
+    let current = immediateParent
+    for (let i = 0; i < 20 && current; i++) {
+      if (current.toLowerCase().includes('sundry debtor')) return true
+      current = groupParent.get(current.toLowerCase())
+    }
+    return false
+  }
+
   const balances = []
-  for (const m of responseText.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
+  for (const m of ledgersResponse.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
     const block = m[0]
     let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
     if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name) continue
+    const parent = decode(
+      block.match(/<PARENT\.LIST[^>]*>[\s\S]*?<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
+      ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
+      ?? ''
+    )
+    if (!isUnderSundryDebtors(parent)) continue
     const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
     const balance = -parseTallyBalance(balRaw)
     if (balance > 0) balances.push({ name, balance })
