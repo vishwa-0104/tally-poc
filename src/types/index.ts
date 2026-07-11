@@ -156,6 +156,14 @@ export interface DashboardSettings {
     debtEquityCashLedgers?:          string[]
     debtEquityBankLedgers?:          string[]
     debtEquityEquityLedgers?:        string[]
+    // Current Ratio / Quick Ratio — replaced the fixed Tally group-balance
+    // calculation (Stock+Debtors/Creditors, Cash+Bank+Investments+Debtors/
+    // (CurrentLiabilities-BankOD)) with user-picked ledger lists, same
+    // numerator/denominator convention as every other ratio here.
+    currentRatioAssetsLedgers?:      string[]
+    currentRatioLiabilitiesLedgers?: string[]
+    quickRatioAssetsLedgers?:        string[]
+    quickRatioLiabilitiesLedgers?:   string[]
     // Analysis tab's own Sales definition — deliberately separate from
     // today.salesAccounts/salesIncludeVouchers/salesExcludeVouchers so the
     // ratio KPIs (DSO, Net Profit) never silently depend on the Performance

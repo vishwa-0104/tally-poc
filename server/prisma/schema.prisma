@@ -392,6 +392,12 @@ model DashboardSnapshot {
   debtEquityCash     Float?
   debtEquityBank     Float?
   debtEquityEquity   Float?
+  // Current Ratio / Quick Ratio — user-picked ledger list sums, same "as of
+  // now" convention as roceEquity/debtEquity* above.
+  currentRatioAssetsTotal      Float?
+  currentRatioLiabilitiesTotal Float?
+  quickRatioAssetsTotal        Float?
+  quickRatioLiabilitiesTotal   Float?
   // Period-scoped ledger-list totals (same convention as directExpenseTotal
   // above — latest fetched period's total, not literally "as of now").
   interestExpenseTotal       Float?

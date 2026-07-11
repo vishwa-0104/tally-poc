@@ -701,13 +701,12 @@ const cfoSuggestionsBody = z.object({
     debtEquity:   z.number().nullable(),
   }),
   figures: z.object({
-    debtors:      z.number().nullable(),
-    creditors:    z.number().nullable(),
-    closingStock: z.number().nullable(),
-    cash:         z.number().nullable(),
-    bank:         z.number().nullable(),
-    netProfit:    z.number().nullable(),
-    creditSales:  z.number().nullable(),
+    debtors:         z.number().nullable(),
+    creditors:       z.number().nullable(),
+    closingStock:    z.number().nullable(),
+    quickRatioAssets: z.number().nullable(),
+    netProfit:       z.number().nullable(),
+    creditSales:     z.number().nullable(),
   }),
 })
 
@@ -781,8 +780,7 @@ SUPPORTING FIGURES (INR):
 - Debtors (Receivables): ${fmt(figures.debtors)}
 - Creditors (Payables): ${fmt(figures.creditors)}
 - Closing Stock: ${fmt(figures.closingStock)}
-- Cash in Hand: ${fmt(figures.cash)}
-- Bank Balance: ${fmt(figures.bank)}
+- Quick/Liquid Assets: ${fmt(figures.quickRatioAssets)}
 - Net Profit (YTD): ${fmt(figures.netProfit)}
 - Credit Sales (YTD): ${fmt(figures.creditSales)}
 

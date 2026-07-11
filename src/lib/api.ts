@@ -106,6 +106,10 @@ export interface DashboardSnapshotPatch {
   debtEquityCash?:     number | null
   debtEquityBank?:     number | null
   debtEquityEquity?:   number | null
+  currentRatioAssetsTotal?:      number | null
+  currentRatioLiabilitiesTotal?: number | null
+  quickRatioAssetsTotal?:        number | null
+  quickRatioLiabilitiesTotal?:   number | null
   interestExpenseTotal?:        number | null
   taxPaymentTotal?:             number | null
   nonOperatingIncomeTotal?:     number | null
@@ -141,13 +145,12 @@ export interface CfoSuggestionRatios {
 }
 
 export interface CfoSuggestionFigures {
-  debtors:      number | null
-  creditors:    number | null
-  closingStock: number | null
-  cash:         number | null
-  bank:         number | null
-  netProfit:    number | null
-  creditSales:  number | null
+  debtors:          number | null
+  creditors:        number | null
+  closingStock:     number | null
+  quickRatioAssets: number | null
+  netProfit:        number | null
+  creditSales:      number | null
 }
 
 export interface CfoSuggestion {

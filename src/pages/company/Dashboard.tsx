@@ -660,11 +660,14 @@ interface AnalysisInputs {
   dioPurchases:                number | null
   dioDirectExpenses:           number | null
   dpoPurchases:                number | null
-  cash:                        number | null
-  bank:                        number | null
-  investments:                 number | null
-  currentLiabilities:          number | null
-  bankOD:                      number | null
+  // Current Ratio / Quick Ratio — user-picked ledger list sums, replacing
+  // the old fixed group-balance figures (Stock/Debtors/Creditors reuse for
+  // Current Ratio, Cash/Bank/Investments/CurrentLiabilities/BankOD for
+  // Quick Ratio). Each ratio gets its own dedicated numerator/denominator.
+  currentRatioAssets:          number | null
+  currentRatioLiabilities:     number | null
+  quickRatioAssets:            number | null
+  quickRatioLiabilities:       number | null
   // ROCE-only "Long Term Borrowings" and Equity — every ratio below has its
   // own dedicated figures rather than sharing one Capital-Account/Loans-
   // (Liability) group value.
@@ -689,8 +692,9 @@ interface AnalysisInputs {
 
 const emptyAnalysisInputs: AnalysisInputs = {
   debtors: null, creditors: null, creditSales: null, openingStock: null, closingStock: null,
-  dioPurchases: null, dioDirectExpenses: null, dpoPurchases: null, cash: null, bank: null, investments: null,
-  currentLiabilities: null, bankOD: null, longTermBorrowings: null, roceEquity: null,
+  dioPurchases: null, dioDirectExpenses: null, dpoPurchases: null,
+  currentRatioAssets: null, currentRatioLiabilities: null, quickRatioAssets: null, quickRatioLiabilities: null,
+  longTermBorrowings: null, roceEquity: null,
   netProfit: null, interestExpense: null, taxPayment: null, nonOperatingIncome: null,
   nonOperatingInvestment: null, directorLoans: null,
   roeEquity: null, internalBorrowings: null, intangibleAssets: null,
@@ -726,18 +730,15 @@ function computeRatios(i: AnalysisInputs): RatioResults {
 
   const ccc = dso != null && dio != null && dpo != null ? dso + dio - dpo : null
 
-  const currentRatio = i.closingStock != null && i.debtors != null && i.creditors
-    ? (i.closingStock + i.debtors) / i.creditors : null
+  // Current Ratio / Quick Ratio — both fully user-configured now (own
+  // Assets/Liabilities ledger lists), replacing the old fixed group-balance
+  // math. Denominator is required (no data → "No data available" rather
+  // than a divide-by-zero or a fabricated number).
+  const currentRatio = i.currentRatioAssets != null && i.currentRatioLiabilities
+    ? i.currentRatioAssets / i.currentRatioLiabilities : null
 
-  // Trade Receivables uses Closing Sundry Debtors (same input as DSO) —
-  // the bill-wise 90-day ageing fetch was never verified against live Tally
-  // and has been dropped in favor of this already-proven figure.
-  const quickNumerator = i.cash != null && i.bank != null && i.investments != null && i.debtors != null
-    ? i.cash + i.bank + i.investments + i.debtors : null
-  const quickDenominator = i.currentLiabilities != null && i.bankOD != null
-    ? i.currentLiabilities - i.bankOD : null
-  const quickRatio = quickNumerator != null && quickDenominator
-    ? quickNumerator / quickDenominator : null
+  const quickRatio = i.quickRatioAssets != null && i.quickRatioLiabilities
+    ? i.quickRatioAssets / i.quickRatioLiabilities : null
 
   // Tax Payment, Long Term Borrowings, and Non-Operating Investment default
   // to 0 when their ledger-list setting is left empty — per the user, these
@@ -1472,23 +1473,19 @@ export default function Dashboard() {
         console.log(`[Analysis][DB] DPO — Purchases: ${dpoPurchaseTotal}`)
       }
 
-      // Quick Ratio = (Cash + Bank + Investments + Debtors) / (Current Liabilities − Bank OD)
+      // Current Ratio / Quick Ratio — both fully user-configured (own
+      // Assets/Liabilities ledger-list totals cached on the snapshot).
       {
-        const dbCash               = isCurrent ? (snapshot?.cashInHand ?? null) : null
-        const dbBank               = isCurrent ? (snapshot?.bankBalance ?? null) : null
-        const dbDebtors            = isCurrent ? (snapshot?.receivables ?? null) : null
-        const dbInvestments        = isCurrent ? (snapshot?.investments ?? null) : null
-        const dbCurrentLiabilities = isCurrent ? (snapshot?.currentLiabilities ?? null) : null
-        const dbBankOD             = isCurrent ? (snapshot?.bankOD ?? null) : null
-        const quickNum = dbCash != null && dbBank != null && dbInvestments != null && dbDebtors != null
-          ? dbCash + dbBank + dbInvestments + dbDebtors : null
-        const quickDen = dbCurrentLiabilities != null && dbBankOD != null
-          ? dbCurrentLiabilities - dbBankOD : null
-        const quickRatioVal = quickNum != null && quickDen ? quickNum / quickDen : null
-        console.log(`[Analysis][DB] Quick Ratio — isCurrent: ${isCurrent} | snapshot: ${snapshot ? 'present' : 'null (never fetched)'}`)
-        console.log(`[Analysis][DB] Quick Ratio — Cash: ${dbCash} | Bank: ${dbBank} | Investments: ${dbInvestments} | Debtors: ${dbDebtors}`)
-        console.log(`[Analysis][DB] Quick Ratio — Current Liabilities: ${dbCurrentLiabilities} | Bank OD: ${dbBankOD}`)
-        console.log(`[Analysis][DB] Quick Ratio — numerator: ${quickNum} | denominator: ${quickDen} | ratio: ${quickRatioVal}`)
+        const dbCurrentRatioAssets      = snapshot?.currentRatioAssetsTotal ?? null
+        const dbCurrentRatioLiabilities = snapshot?.currentRatioLiabilitiesTotal ?? null
+        const dbQuickRatioAssets        = snapshot?.quickRatioAssetsTotal ?? null
+        const dbQuickRatioLiabilities   = snapshot?.quickRatioLiabilitiesTotal ?? null
+        const currentRatioVal = dbCurrentRatioAssets != null && dbCurrentRatioLiabilities
+          ? dbCurrentRatioAssets / dbCurrentRatioLiabilities : null
+        const quickRatioVal = dbQuickRatioAssets != null && dbQuickRatioLiabilities
+          ? dbQuickRatioAssets / dbQuickRatioLiabilities : null
+        console.log(`[Analysis][DB] Current Ratio — Assets: ${dbCurrentRatioAssets} | Liabilities: ${dbCurrentRatioLiabilities} | ratio: ${currentRatioVal}`)
+        console.log(`[Analysis][DB] Quick Ratio — Assets: ${dbQuickRatioAssets} | Liabilities: ${dbQuickRatioLiabilities} | ratio: ${quickRatioVal}`)
       }
 
       // ROCE = (EBIT − Non-Operating Income) / (Equity + Long Term Borrowings − Non-Operating Investment) * 100
@@ -1546,11 +1543,10 @@ export default function Dashboard() {
         dioPurchases:          dioPurchaseTotal,
         dioDirectExpenses:     snapshot?.dioDirectExpenseTotal ?? null,
         dpoPurchases:          dpoPurchaseTotal,
-        cash:                  isCurrent ? (snapshot?.cashInHand ?? null) : null,
-        bank:                  isCurrent ? (snapshot?.bankBalance ?? null) : null,
-        investments:           isCurrent ? (snapshot?.investments ?? null) : null,
-        currentLiabilities:    isCurrent ? (snapshot?.currentLiabilities ?? null) : null,
-        bankOD:                isCurrent ? (snapshot?.bankOD ?? null) : null,
+        currentRatioAssets:      snapshot?.currentRatioAssetsTotal ?? null,
+        currentRatioLiabilities: snapshot?.currentRatioLiabilitiesTotal ?? null,
+        quickRatioAssets:        snapshot?.quickRatioAssetsTotal ?? null,
+        quickRatioLiabilities:   snapshot?.quickRatioLiabilitiesTotal ?? null,
         longTermBorrowings:     snapshot?.longTermBorrowings ?? null,
         roceEquity:             snapshot?.roceEquity ?? null,
         netProfit,
@@ -1615,11 +1611,13 @@ export default function Dashboard() {
     try {
       const [
         daybookResult, stockResult, directExpResult, dioDirectExpResult,
-        groupBalResult, ledgerBalResult,
+        groupBalResult,
         directorLoansTotal,
         longTermBorrowingsTotal, roceEquityTotal,
         roeEquityTotal, internalBorrowingsTotal, intangibleAssetsTotal,
         debtEquityLoansTotal, debtEquityCashTotal, debtEquityBankTotal, debtEquityEquityTotal,
+        currentRatioAssetsTotal, currentRatioLiabilitiesTotal,
+        quickRatioAssetsTotal, quickRatioLiabilitiesTotal,
       ] = await Promise.all([
         fetchDaybook(fFrom, fTo, tallyUrl, tallyCompany, {
           // Analysis tab's own Sales definition, not the Performance tab's —
@@ -1655,7 +1653,6 @@ export default function Dashboard() {
         fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, dashboardSettings.ytd?.directExpenseLedgers),
         fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, dashboardSettings.ytd?.dioDirectExpenseLedgers),
         isCurrent ? fetchGroupBalances(tallyUrl, tallyCompany) : Promise.resolve(null),
-        isCurrent ? fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr())) : Promise.resolve(null),
         fetchLedgerTotal(dashboardSettings.ytd?.directorLoanLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.longTermBorrowingLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.equityLedgers, 'equity'),
@@ -1666,6 +1663,10 @@ export default function Dashboard() {
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityCashLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityBankLedgers),
         fetchLedgerTotal(dashboardSettings.ytd?.debtEquityEquityLedgers, 'equity'),
+        fetchLedgerTotal(dashboardSettings.ytd?.currentRatioAssetsLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.currentRatioLiabilitiesLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.quickRatioAssetsLedgers),
+        fetchLedgerTotal(dashboardSettings.ytd?.quickRatioLiabilitiesLedgers),
       ])
 
       const { vouchers: all, indExpTotal, indIncTotal } = daybookResult
@@ -1725,32 +1726,19 @@ export default function Dashboard() {
         console.log(`[Analysis][Live] DPO — Purchases: ${dpoPurchaseTotal}`)
       }
 
-      let cash: number | null = null
-      let bank: number | null = null
-      if (isCurrent && ledgerBalResult && ledgerBalResult.rawLedgers.length > 0) {
-        const cashLedgers = ledgerBalResult.rawLedgers.filter(l => l.group.toLowerCase().includes('cash'))
-        const bankLedgers = ledgerBalResult.rawLedgers.filter(l => l.group.toLowerCase().includes('bank'))
-        cash = -cashLedgers.reduce((s, l) => s + l.balance, 0)
-        bank = -bankLedgers.reduce((s, l) => s + l.balance, 0)
-      }
-
       const debtors             = isCurrent && groupBalResult ? groupBalResult.receivables : null
       const creditors           = isCurrent && groupBalResult ? groupBalResult.payables : null
-      const investments         = isCurrent && groupBalResult ? groupBalResult.investments : null
-      const currentLiabilities  = isCurrent && groupBalResult ? groupBalResult.currentLiabilities : null
-      const bankOD              = isCurrent && groupBalResult ? groupBalResult.bankOD : null
 
-      // Quick Ratio = (Cash + Bank + Investments + Debtors) / (Current Liabilities − Bank OD)
+      // Current Ratio / Quick Ratio — both fully user-configured (own
+      // Assets/Liabilities ledger-list totals), replacing the old fixed
+      // group-balance math.
       {
-        const quickNum = cash != null && bank != null && investments != null && debtors != null
-          ? cash + bank + investments + debtors : null
-        const quickDen = currentLiabilities != null && bankOD != null
-          ? currentLiabilities - bankOD : null
-        const quickRatioVal = quickNum != null && quickDen ? quickNum / quickDen : null
-        console.log(`[Analysis][Live] Quick Ratio — isCurrent: ${isCurrent} | groupBalResult: ${groupBalResult ? 'fetched' : 'null (fetch skipped or failed)'} | ledgerBalResult: ${ledgerBalResult ? 'fetched' : 'null (fetch skipped or failed)'}`)
-        console.log(`[Analysis][Live] Quick Ratio — Cash: ${cash} | Bank: ${bank} | Investments: ${investments} | Debtors: ${debtors}`)
-        console.log(`[Analysis][Live] Quick Ratio — Current Liabilities: ${currentLiabilities} | Bank OD: ${bankOD}`)
-        console.log(`[Analysis][Live] Quick Ratio — numerator: ${quickNum} | denominator: ${quickDen} | ratio: ${quickRatioVal}`)
+        const currentRatioVal = currentRatioAssetsTotal != null && currentRatioLiabilitiesTotal
+          ? currentRatioAssetsTotal / currentRatioLiabilitiesTotal : null
+        const quickRatioVal = quickRatioAssetsTotal != null && quickRatioLiabilitiesTotal
+          ? quickRatioAssetsTotal / quickRatioLiabilitiesTotal : null
+        console.log(`[Analysis][Live] Current Ratio — Assets: ${currentRatioAssetsTotal} | Liabilities: ${currentRatioLiabilitiesTotal} | ratio: ${currentRatioVal}`)
+        console.log(`[Analysis][Live] Quick Ratio — Assets: ${quickRatioAssetsTotal} | Liabilities: ${quickRatioLiabilitiesTotal} | ratio: ${quickRatioVal}`)
       }
 
       // ROCE = (EBIT − Non-Operating Income) / (Equity + Long Term Borrowings − Non-Operating Investment) * 100
@@ -1796,8 +1784,9 @@ export default function Dashboard() {
       setAnalysisInputs({
         debtors, creditors, creditSales, openingStock, closingStock,
         dioPurchases: dioPurchaseTotal, dioDirectExpenses, dpoPurchases: dpoPurchaseTotal,
-        cash, bank, investments,
-        currentLiabilities, bankOD, longTermBorrowings: longTermBorrowingsTotal,
+        currentRatioAssets: currentRatioAssetsTotal, currentRatioLiabilities: currentRatioLiabilitiesTotal,
+        quickRatioAssets: quickRatioAssetsTotal, quickRatioLiabilities: quickRatioLiabilitiesTotal,
+        longTermBorrowings: longTermBorrowingsTotal,
         roceEquity: roceEquityTotal, netProfit,
         interestExpense: interestExpenseTotal, taxPayment: taxPaymentTotal,
         nonOperatingIncome: nonOperatingIncomeTotal, nonOperatingInvestment: nonOperatingInvestmentTotal,
@@ -1819,12 +1808,11 @@ export default function Dashboard() {
       if (isCurrent) {
         snapshotPatch.receivables        = debtors
         snapshotPatch.payables           = creditors
-        snapshotPatch.cashInHand         = cash
-        snapshotPatch.bankBalance        = bank
-        snapshotPatch.investments        = investments
-        snapshotPatch.currentLiabilities = currentLiabilities
-        snapshotPatch.bankOD             = bankOD
       }
+      if (currentRatioAssetsTotal      != null) snapshotPatch.currentRatioAssetsTotal      = currentRatioAssetsTotal
+      if (currentRatioLiabilitiesTotal != null) snapshotPatch.currentRatioLiabilitiesTotal = currentRatioLiabilitiesTotal
+      if (quickRatioAssetsTotal        != null) snapshotPatch.quickRatioAssetsTotal        = quickRatioAssetsTotal
+      if (quickRatioLiabilitiesTotal   != null) snapshotPatch.quickRatioLiabilitiesTotal   = quickRatioLiabilitiesTotal
       if (directorLoansTotal          != null) snapshotPatch.directorLoansTotal          = directorLoansTotal
       if (longTermBorrowingsTotal     != null) snapshotPatch.longTermBorrowings          = longTermBorrowingsTotal
       if (roceEquityTotal             != null) snapshotPatch.roceEquity                  = roceEquityTotal
@@ -1886,13 +1874,12 @@ export default function Dashboard() {
     setCfoError(false)
     const ratios = computeRatios(analysisInputs)
     const figures = {
-      debtors:      analysisInputs.debtors,
-      creditors:    analysisInputs.creditors,
-      closingStock: analysisInputs.closingStock,
-      cash:         analysisInputs.cash,
-      bank:         analysisInputs.bank,
-      netProfit:    analysisInputs.netProfit,
-      creditSales:  analysisInputs.creditSales,
+      debtors:          analysisInputs.debtors,
+      creditors:        analysisInputs.creditors,
+      closingStock:     analysisInputs.closingStock,
+      quickRatioAssets: analysisInputs.quickRatioAssets,
+      netProfit:        analysisInputs.netProfit,
+      creditSales:      analysisInputs.creditSales,
     }
     fetchCfoSuggestions(companyId, ratios, figures)
       .then(setCfoSuggestions)
@@ -2505,8 +2492,8 @@ export default function Dashboard() {
                     <RatioKpiCard title="DIO" subtitle="Days Inventory Outstanding" icon={Store} value={r.dio} suffix=" days" />
                     <RatioKpiCard title="DPO" subtitle="Days Payables Outstanding" icon={Building2} value={r.dpo} suffix=" days" />
                     <RatioKpiCard title="CCC" subtitle="Cash Conversion Cycle" icon={RefreshCw} value={r.ccc} suffix=" days" />
-                    <RatioKpiCard title="Current Ratio" subtitle="(Inventory + Debtors) / Creditors" icon={CheckCircle} value={r.currentRatio} />
-                    <RatioKpiCard title="Quick Ratio" subtitle="Liquid Assets / Current Liabilities" icon={Zap} value={r.quickRatio} />
+                    <RatioKpiCard title="Current Ratio" subtitle="Current Assets Ledgers / Current Liabilities Ledgers" icon={CheckCircle} value={r.currentRatio} />
+                    <RatioKpiCard title="Quick Ratio" subtitle="Quick Assets Ledgers / Quick Liabilities Ledgers" icon={Zap} value={r.quickRatio} />
                     <RatioKpiCard title="ROCE" subtitle="Return on Capital Employed" icon={TrendingUp} value={r.roce} suffix="%" />
                     <RatioKpiCard title="ROE" subtitle="Return on Equity" icon={Wallet} value={r.roe} suffix="%" />
                     <RatioKpiCard title="Debt/Equity" subtitle="Borrowings vs Equity" icon={AlertTriangle} value={r.debtEquity} />

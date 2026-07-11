@@ -235,6 +235,12 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
   const [debtEquityCashLedgers,   setDebtEquityCashLedgers]   = useState<string[]>([])
   const [debtEquityBankLedgers,   setDebtEquityBankLedgers]   = useState<string[]>([])
   const [debtEquityEquityLedgers, setDebtEquityEquityLedgers] = useState<string[]>([])
+  // Current Ratio / Quick Ratio — replaced the fixed Tally group-balance
+  // figures with user-picked numerator/denominator ledger lists.
+  const [currentRatioAssetsLedgers,      setCurrentRatioAssetsLedgers]      = useState<string[]>([])
+  const [currentRatioLiabilitiesLedgers, setCurrentRatioLiabilitiesLedgers] = useState<string[]>([])
+  const [quickRatioAssetsLedgers,        setQuickRatioAssetsLedgers]        = useState<string[]>([])
+  const [quickRatioLiabilitiesLedgers,   setQuickRatioLiabilitiesLedgers]   = useState<string[]>([])
   // Analysis tab's own Sales definition — deliberately separate from the
   // Today tab's Sales Accounts/Include/Exclude below.
   const [analysisSalesAccounts,        setAnalysisSalesAccounts]        = useState<string[]>([])
@@ -310,6 +316,10 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         setDebtEquityCashLedgers(s.ytd?.debtEquityCashLedgers ?? [])
         setDebtEquityBankLedgers(s.ytd?.debtEquityBankLedgers ?? [])
         setDebtEquityEquityLedgers(s.ytd?.debtEquityEquityLedgers ?? [])
+        setCurrentRatioAssetsLedgers(s.ytd?.currentRatioAssetsLedgers ?? [])
+        setCurrentRatioLiabilitiesLedgers(s.ytd?.currentRatioLiabilitiesLedgers ?? [])
+        setQuickRatioAssetsLedgers(s.ytd?.quickRatioAssetsLedgers ?? [])
+        setQuickRatioLiabilitiesLedgers(s.ytd?.quickRatioLiabilitiesLedgers ?? [])
         setAnalysisSalesAccounts(s.ytd?.analysisSalesAccounts ?? [])
         setAnalysisSalesIncludeVouchers(s.ytd?.analysisSalesIncludeVouchers ?? [])
         setAnalysisSalesExcludeVouchers(s.ytd?.analysisSalesExcludeVouchers ?? [])
@@ -386,6 +396,10 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         debtEquityCashLedgers:          debtEquityCashLedgers.length          > 0 ? debtEquityCashLedgers          : undefined,
         debtEquityBankLedgers:          debtEquityBankLedgers.length          > 0 ? debtEquityBankLedgers          : undefined,
         debtEquityEquityLedgers:        debtEquityEquityLedgers.length        > 0 ? debtEquityEquityLedgers        : undefined,
+        currentRatioAssetsLedgers:      currentRatioAssetsLedgers.length      > 0 ? currentRatioAssetsLedgers      : undefined,
+        currentRatioLiabilitiesLedgers: currentRatioLiabilitiesLedgers.length > 0 ? currentRatioLiabilitiesLedgers : undefined,
+        quickRatioAssetsLedgers:        quickRatioAssetsLedgers.length        > 0 ? quickRatioAssetsLedgers        : undefined,
+        quickRatioLiabilitiesLedgers:   quickRatioLiabilitiesLedgers.length   > 0 ? quickRatioLiabilitiesLedgers   : undefined,
         analysisSalesAccounts:          analysisSalesAccounts.length          > 0 ? analysisSalesAccounts          : undefined,
         analysisSalesIncludeVouchers:   analysisSalesIncludeVouchers.length   > 0 ? analysisSalesIncludeVouchers   : undefined,
         analysisSalesExcludeVouchers:   analysisSalesExcludeVouchers.length   > 0 ? analysisSalesExcludeVouchers   : undefined,
@@ -883,10 +897,30 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Current Ratio</p>
               <p className="text-[11px] text-gray-400 italic mb-4">
-                (Closing Stock + Debtors) / Creditors — every input here comes from Tally's standard
-                closing-balance groups (Stock-in-Hand, Sundry Debtors, Sundry Creditors). No
-                company-specific mapping is needed.
+                Current Ratio = Σ(Current Assets Ledgers) / Σ(Current Liabilities Ledgers) — both
+                fully company-specific; there's no default group fallback, so leaving either empty
+                shows "No data available" on the card rather than guessing.
               </p>
+              <div className="space-y-5">
+                <SearchCheckList
+                  label="Current Assets Ledgers"
+                  hint="e.g. Stock-in-Hand, Sundry Debtors, Cash, Bank"
+                  options={allLedgerOpts}
+                  selected={currentRatioAssetsLedgers}
+                  onChange={setCurrentRatioAssetsLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Current Liabilities Ledgers"
+                  hint="e.g. Sundry Creditors, short-term provisions"
+                  options={allLedgerOpts}
+                  selected={currentRatioLiabilitiesLedgers}
+                  onChange={setCurrentRatioLiabilitiesLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+              </div>
             </div>
           )}
 
@@ -895,10 +929,30 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Quick Ratio</p>
               <p className="text-[11px] text-gray-400 italic mb-4">
-                (Cash + Bank + Investments + Debtors) / (Current Liabilities − Bank OD) — every input
-                here comes from Tally's standard closing-balance groups. No company-specific mapping
-                is needed.
+                Quick Ratio = Σ(Quick Assets Ledgers) / Σ(Quick Liabilities Ledgers) — both fully
+                company-specific; there's no default group fallback, so leaving either empty shows
+                "No data available" on the card rather than guessing.
               </p>
+              <div className="space-y-5">
+                <SearchCheckList
+                  label="Quick Assets Ledgers"
+                  hint="e.g. Cash, Bank, Investments, Sundry Debtors — exclude Stock-in-Hand"
+                  options={allLedgerOpts}
+                  selected={quickRatioAssetsLedgers}
+                  onChange={setQuickRatioAssetsLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Quick Liabilities Ledgers"
+                  hint="e.g. Sundry Creditors, Bank OD/OCC accounts"
+                  options={allLedgerOpts}
+                  selected={quickRatioLiabilitiesLedgers}
+                  onChange={setQuickRatioLiabilitiesLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+              </div>
             </div>
           )}
 
