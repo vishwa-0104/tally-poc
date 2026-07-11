@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { fetchSalesTargets, saveSalesTargets, fetchDashboardSettings, saveDashboardSettings } from '@/lib/api'
-import { fetchTallyVoucherTypes, fetchTallyLedgers } from '@/services/tallyService'
+import { useCompanyStore } from '@/store'
 import type { DashboardSettings } from '@/types'
 
 const FY_MONTHS = [
@@ -30,11 +30,9 @@ function getCurrentFyYear() {
 type SettingsTab = 'today' | 'ytd' | 'ratios' | 'monthly'
 
 interface Props {
-  open:          boolean
-  onClose:       () => void
-  companyId:     string
-  tallyUrl:      string
-  tallyCompany?: string
+  open:      boolean
+  onClose:   () => void
+  companyId: string
 }
 
 // ── Simple checkbox list (short lists like cash/bank ledgers) ─────────────────
@@ -51,10 +49,10 @@ function CheckList({
       <p className="text-xs font-semibold text-gray-700 mb-1.5">{label}</p>
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
-          <Loader2 className="w-3 h-3 animate-spin" /> Fetching from Tally…
+          <Loader2 className="w-3 h-3 animate-spin" /> Loading…
         </div>
       ) : options.length === 0 ? (
-        <p className="text-xs text-gray-400 italic py-1">No options found — is Tally running?</p>
+        <p className="text-xs text-gray-400 italic py-1">No options found — sync ledgers/voucher types from Settings first</p>
       ) : (
         <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-44 overflow-y-auto">
           {options.map(opt => (
@@ -87,6 +85,17 @@ function SearchCheckList({
     onChange(selected.includes(name) ? selected.filter(x => x !== name) : [...selected, name])
   const filtered = options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
   const allSelected = options.length > 0 && selected.length === options.length
+
+  // Companies can have thousands of ledgers — rendering every option as a DOM
+  // node (unvirtualized) is what made switching tabs hang for seconds. Cap
+  // the render count and keep already-selected items visible first so users
+  // can still see/uncheck their picks without needing to search.
+  const MAX_VISIBLE = 150
+  const ordered = search
+    ? filtered
+    : [...filtered.filter(o => selected.includes(o)), ...filtered.filter(o => !selected.includes(o))]
+  const visible = ordered.slice(0, MAX_VISIBLE)
+  const hiddenCount = ordered.length - visible.length
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
@@ -114,10 +123,10 @@ function SearchCheckList({
       </div>
       {loading ? (
         <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
-          <Loader2 className="w-3 h-3 animate-spin" /> Fetching from Tally…
+          <Loader2 className="w-3 h-3 animate-spin" /> Loading…
         </div>
       ) : options.length === 0 ? (
-        <p className="text-xs text-gray-400 italic py-1">No options found — is Tally running?</p>
+        <p className="text-xs text-gray-400 italic py-1">No options found — sync ledgers/voucher types from Settings first</p>
       ) : (
         <>
           <input
@@ -130,13 +139,22 @@ function SearchCheckList({
           <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
             {filtered.length === 0 ? (
               <p className="text-xs text-gray-400 italic px-3 py-2">No matches</p>
-            ) : filtered.map(opt => (
-              <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50">
-                <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)}
-                  className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
-                <span className="text-xs text-gray-700">{opt}</span>
-              </label>
-            ))}
+            ) : (
+              <>
+                {visible.map(opt => (
+                  <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)}
+                      className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
+                    <span className="text-xs text-gray-700">{opt}</span>
+                  </label>
+                ))}
+                {hiddenCount > 0 && (
+                  <p className="text-[11px] text-gray-400 italic px-3 py-1.5">
+                    +{hiddenCount} more — type to search
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </>
       )}
@@ -157,7 +175,8 @@ function SearchCheckList({
 }
 
 // ── Main modal ────────────────────────────────────────────────────────────────
-export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyCompany }: Props) {
+export function SalesTargetModal({ open, onClose, companyId }: Props) {
+  const { getLedgers, fetchLedgersFromDb, getVoucherTypes, fetchVoucherTypesFromDb } = useCompanyStore()
   const fyYear  = getCurrentFyYear()
   const fyLabel = `FY ${fyYear}–${String(fyYear + 1).slice(2)}`
 
@@ -278,23 +297,25 @@ export function SalesTargetModal({ open, onClose, companyId, tallyUrl, tallyComp
       })
       .catch(() => { /* settings optional */ })
 
-    // Fetch Tally options in parallel (best-effort)
+    // Ledgers/voucher types come from the DB cache (already synced whenever
+    // the company last used the "Sync"/"Refresh" buttons on the Settings
+    // page — see CompanySettings.tsx's handleSyncLedgers/handleSyncVoucherTypes),
+    // never a live Tally call from here. This is what lets Admin manage these
+    // settings for a company without Tally open on Admin's machine, and it
+    // also means the company user doesn't need Tally running just to open
+    // this modal.
     setLoadingOpts(true)
     Promise.allSettled([
-      fetchTallyVoucherTypes(tallyUrl, tallyCompany),
-      fetchTallyLedgers(tallyUrl, tallyCompany),
-    ]).then(([vtRes, ledRes]) => {
-      if (vtRes.status === 'fulfilled') setVoucherTypeOpts(vtRes.value.sort())
-      if (ledRes.status === 'fulfilled') {
-        const all  = ledRes.value.map(l => l.name).sort()
-        const cash = ledRes.value.filter(l => l.group?.toLowerCase().includes('cash')).map(l => l.name).sort()
-        const bank = ledRes.value.filter(l => l.group?.toLowerCase().includes('bank')).map(l => l.name).sort()
-        setAllLedgerOpts(all)
-        setCashLedgerOpts(cash)
-        setBankLedgerOpts(bank)
-      }
+      fetchVoucherTypesFromDb(companyId),
+      fetchLedgersFromDb(companyId),
+    ]).then(() => {
+      setVoucherTypeOpts([...getVoucherTypes(companyId)].sort())
+      const all = getLedgers(companyId)
+      setAllLedgerOpts(all.map(l => l.name).sort())
+      setCashLedgerOpts(all.filter(l => l.group.toLowerCase().includes('cash')).map(l => l.name).sort())
+      setBankLedgerOpts(all.filter(l => l.group.toLowerCase().includes('bank')).map(l => l.name).sort())
     }).finally(() => setLoadingOpts(false))
-  }, [open, companyId, fyYear, tallyUrl, tallyCompany])
+  }, [open, companyId, fyYear, fetchVoucherTypesFromDb, fetchLedgersFromDb, getVoucherTypes, getLedgers])
 
   const handleSave = async () => {
     const targets = FY_MONTHS.map(({ month }) => ({

@@ -4,7 +4,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip as RechartsTooltip, 
 import {
   TrendingUp, TrendingDown, AlertCircle,
   Lightbulb, AlertTriangle, CheckCircle,
-  ArrowUpRight, ArrowDownRight, RefreshCw, Settings, Wallet, Building2,
+  ArrowUpRight, ArrowDownRight, RefreshCw, Wallet, Building2,
   Users, Store, Download, Zap,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore, useDaybookSyncStore } from '@/store'
@@ -18,7 +18,6 @@ import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
-import { SalesTargetModal } from '@/components/company/SalesTargetModal'
 import { classifyVouchers, computeCreditSalesTotal } from '@/lib/voucherClassification'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -827,7 +826,6 @@ export default function Dashboard() {
   const [filterPreset,    setFilterPreset]    = useState<FilterPreset>('today')
   const [customFrom,      setCustomFrom]      = useState(todayStr())
   const [customTo,        setCustomTo]        = useState(todayStr())
-  const [showTargetModal, setShowTargetModal] = useState(false)
   const [monthlyTargets,  setMonthlyTargets]  = useState<Record<number, number>>({})
 
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({})
@@ -2093,34 +2091,16 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Right side: connection badge + configure */}
+          {/* Right side: connection badge */}
           <div className="flex items-center gap-2">
             {!connected && (
               <span className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
                 Extension not connected
               </span>
             )}
-            <button
-              onClick={() => setShowTargetModal(true)}
-              title="Configure sales targets"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </div>
-
-      <SalesTargetModal
-        open={showTargetModal}
-        onClose={() => {
-          setShowTargetModal(false)
-          reloadMeta()
-        }}
-        companyId={companyId}
-        tallyUrl={tallyUrl}
-        tallyCompany={tallyCompany}
-      />
 
       {/* ── Page body ── */}
       <div className="px-6 py-5 max-w-6xl w-full mx-auto space-y-5">
