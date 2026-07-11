@@ -683,8 +683,12 @@ interface AnalysisInputs {
   creditSales:                 number | null
   openingStock:                number | null
   closingStock:                number | null
-  purchases:                   number | null
-  directExpenses:              number | null
+  // DIO/DPO each have their own dedicated Purchases figure (and DIO its own
+  // Direct Expenses) — deliberately separate from Gross Margin/Net Profit's
+  // own purchaseTotal/directExpenses local variables elsewhere in this file.
+  dioPurchases:                number | null
+  dioDirectExpenses:           number | null
+  dpoPurchases:                number | null
   cash:                        number | null
   bank:                        number | null
   investments:                 number | null
@@ -714,7 +718,7 @@ interface AnalysisInputs {
 
 const emptyAnalysisInputs: AnalysisInputs = {
   debtors: null, creditors: null, creditSales: null, openingStock: null, closingStock: null,
-  purchases: null, directExpenses: null, cash: null, bank: null, investments: null,
+  dioPurchases: null, dioDirectExpenses: null, dpoPurchases: null, cash: null, bank: null, investments: null,
   currentLiabilities: null, bankOD: null, longTermBorrowings: null, roceEquity: null,
   netProfit: null, interestExpense: null, taxPayment: null, nonOperatingIncome: null,
   nonOperatingInvestment: null, directorLoans: null,
@@ -741,13 +745,13 @@ function computeRatios(i: AnalysisInputs): RatioResults {
   const dso = i.debtors != null && i.creditSales
     ? (i.debtors / i.creditSales) * 365 : null
 
-  const cogs = i.openingStock != null && i.purchases != null && i.directExpenses != null && i.closingStock != null
-    ? i.openingStock + i.purchases + i.directExpenses - i.closingStock : null
+  const cogs = i.openingStock != null && i.dioPurchases != null && i.dioDirectExpenses != null && i.closingStock != null
+    ? i.openingStock + i.dioPurchases + i.dioDirectExpenses - i.closingStock : null
   const dio = i.closingStock != null && cogs
     ? (i.closingStock / cogs) * 365 : null
 
-  const dpo = i.creditors != null && i.purchases
-    ? (i.creditors / i.purchases) * 365 : null
+  const dpo = i.creditors != null && i.dpoPurchases
+    ? (i.creditors / i.dpoPurchases) * 365 : null
 
   const ccc = dso != null && dio != null && dpo != null ? dso + dio - dpo : null
 
@@ -1398,6 +1402,20 @@ export default function Dashboard() {
       ])
 
       const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
+      // DIO/DPO each get their own dedicated Purchases figure, filtered from
+      // the same already-fetched vouchers — deliberately separate from
+      // purchaseTotal above (Gross Margin/Net Profit), so tuning one never
+      // silently moves the other.
+      const dioPurchaseTotal = computePurchaseTotal(all, {
+        purchaseAccounts:        dashboardSettings.ytd?.dioPurchaseAccounts,
+        purchaseIncludeVouchers: dashboardSettings.ytd?.dioPurchaseIncludeVouchers,
+        purchaseExcludeVouchers: dashboardSettings.ytd?.dioPurchaseExcludeVouchers,
+      })
+      const dpoPurchaseTotal = computePurchaseTotal(all, {
+        purchaseAccounts:        dashboardSettings.ytd?.dpoPurchaseAccounts,
+        purchaseIncludeVouchers: dashboardSettings.ytd?.dpoPurchaseIncludeVouchers,
+        purchaseExcludeVouchers: dashboardSettings.ytd?.dpoPurchaseExcludeVouchers,
+      })
       // DSO's Credit Sales split deliberately uses the Analysis tab's own
       // Sales setting (independent of Performance tab). Total Sales — which
       // feeds Net Profit/ROCE/ROE — deliberately does NOT: Net Profit must be
@@ -1451,12 +1469,13 @@ export default function Dashboard() {
       {
         const openingStock   = snapshot?.openingStock ?? null
         const closingStock   = snapshot?.closingStock ?? null
-        const directExpenses = snapshot?.directExpenseTotal ?? null
-        const cogs = openingStock != null && directExpenses != null && closingStock != null
-          ? openingStock + purchaseTotal + directExpenses - closingStock : null
+        const dioDirectExpenses = snapshot?.dioDirectExpenseTotal ?? null
+        const cogs = openingStock != null && dioDirectExpenses != null && closingStock != null
+          ? openingStock + dioPurchaseTotal + dioDirectExpenses - closingStock : null
         const dioDays = closingStock != null && cogs ? (closingStock / cogs) * 365 : null
-        console.log(`[Analysis][DB] DIO — Opening Stock: ${openingStock} | Closing Stock: ${closingStock} | Purchases: ${purchaseTotal} | Direct Expenses: ${directExpenses}`)
+        console.log(`[Analysis][DB] DIO — Opening Stock: ${openingStock} | Closing Stock: ${closingStock} | Purchases: ${dioPurchaseTotal} | Direct Expenses: ${dioDirectExpenses}`)
         console.log(`[Analysis][DB] DIO — COGS: ${cogs} | DIO (days): ${dioDays}`)
+        console.log(`[Analysis][DB] DPO — Purchases: ${dpoPurchaseTotal}`)
       }
 
       // Quick Ratio = (Cash + Bank + Investments + Debtors) / (Current Liabilities − Bank OD)
@@ -1530,8 +1549,9 @@ export default function Dashboard() {
         creditSales,
         openingStock:          snapshot?.openingStock ?? null,
         closingStock:          snapshot?.closingStock ?? null,
-        purchases:             purchaseTotal,
-        directExpenses:        snapshot?.directExpenseTotal ?? null,
+        dioPurchases:          dioPurchaseTotal,
+        dioDirectExpenses:     snapshot?.dioDirectExpenseTotal ?? null,
+        dpoPurchases:          dpoPurchaseTotal,
         cash:                  isCurrent ? (snapshot?.cashInHand ?? null) : null,
         bank:                  isCurrent ? (snapshot?.bankBalance ?? null) : null,
         investments:           isCurrent ? (snapshot?.investments ?? null) : null,
@@ -1600,7 +1620,7 @@ export default function Dashboard() {
     setAnalysisLoading(true)
     try {
       const [
-        daybookResult, stockResult, directExpResult,
+        daybookResult, stockResult, directExpResult, dioDirectExpResult,
         groupBalResult, ledgerBalResult,
         directorLoansTotal,
         longTermBorrowingsTotal, roceEquityTotal,
@@ -1639,6 +1659,7 @@ export default function Dashboard() {
         }),
         fetchStockValue(fFrom, fTo, tallyUrl, tallyCompany),
         fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, dashboardSettings.ytd?.directExpenseLedgers),
+        fetchLedgerAmounts(fFrom, fTo, tallyUrl, tallyCompany, dashboardSettings.ytd?.dioDirectExpenseLedgers),
         isCurrent ? fetchGroupBalances(tallyUrl, tallyCompany) : Promise.resolve(null),
         isCurrent ? fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr())) : Promise.resolve(null),
         fetchLedgerTotal(dashboardSettings.ytd?.directorLoanLedgers),
@@ -1666,6 +1687,20 @@ export default function Dashboard() {
       const nonOperatingInvestmentTotal = dashboardSettings.ytd?.nonOperatingInvestmentLedgers?.length
         ? daybookResult.nonOperatingInvestmentTotal : null
       const purchaseTotal = computePurchaseTotal(all, dashboardSettings.ytd)
+      // DIO/DPO each get their own dedicated Purchases figure, filtered from
+      // the same already-fetched vouchers — deliberately separate from
+      // purchaseTotal above (Gross Margin/Net Profit), so tuning one never
+      // silently moves the other.
+      const dioPurchaseTotal = computePurchaseTotal(all, {
+        purchaseAccounts:        dashboardSettings.ytd?.dioPurchaseAccounts,
+        purchaseIncludeVouchers: dashboardSettings.ytd?.dioPurchaseIncludeVouchers,
+        purchaseExcludeVouchers: dashboardSettings.ytd?.dioPurchaseExcludeVouchers,
+      })
+      const dpoPurchaseTotal = computePurchaseTotal(all, {
+        purchaseAccounts:        dashboardSettings.ytd?.dpoPurchaseAccounts,
+        purchaseIncludeVouchers: dashboardSettings.ytd?.dpoPurchaseIncludeVouchers,
+        purchaseExcludeVouchers: dashboardSettings.ytd?.dpoPurchaseExcludeVouchers,
+      })
       // DSO's Credit Sales split deliberately uses the Analysis tab's own
       // Sales setting (independent of Performance tab). Total Sales — which
       // feeds Net Profit/ROCE/ROE — deliberately does NOT: Net Profit must be
@@ -1683,15 +1718,17 @@ export default function Dashboard() {
 
       const { openingStock, closingStock } = stockResult
       const directExpenses = Math.abs(directExpResult)
+      const dioDirectExpenses = Math.abs(dioDirectExpResult)
       const gm = (totalSales + closingStock) - (openingStock + purchaseTotal + directExpenses)
       const netProfit = gm - indExpTotal + indIncTotal
 
       // DIO = Closing Stock / COGS * 365, COGS = Opening Stock + Purchases + Direct Expenses − Closing Stock
       {
-        const cogs = openingStock + purchaseTotal + directExpenses - closingStock
+        const cogs = openingStock + dioPurchaseTotal + dioDirectExpenses - closingStock
         const dioDays = cogs ? (closingStock / cogs) * 365 : null
-        console.log(`[Analysis][Live] DIO — Opening Stock: ${openingStock} | Closing Stock: ${closingStock} | Purchases: ${purchaseTotal} | Direct Expenses: ${directExpenses}`)
+        console.log(`[Analysis][Live] DIO — Opening Stock: ${openingStock} | Closing Stock: ${closingStock} | Purchases: ${dioPurchaseTotal} | Direct Expenses: ${dioDirectExpenses}`)
         console.log(`[Analysis][Live] DIO — COGS: ${cogs} | DIO (days): ${dioDays}`)
+        console.log(`[Analysis][Live] DPO — Purchases: ${dpoPurchaseTotal}`)
       }
 
       let cash: number | null = null
@@ -1764,7 +1801,8 @@ export default function Dashboard() {
 
       setAnalysisInputs({
         debtors, creditors, creditSales, openingStock, closingStock,
-        purchases: purchaseTotal, directExpenses, cash, bank, investments,
+        dioPurchases: dioPurchaseTotal, dioDirectExpenses, dpoPurchases: dpoPurchaseTotal,
+        cash, bank, investments,
         currentLiabilities, bankOD, longTermBorrowings: longTermBorrowingsTotal,
         roceEquity: roceEquityTotal, netProfit,
         interestExpense: interestExpenseTotal, taxPayment: taxPaymentTotal,
@@ -1782,6 +1820,7 @@ export default function Dashboard() {
 
       const snapshotPatch: DashboardSnapshotPatch = {
         openingStock, closingStock, directExpenseTotal: directExpenses,
+        dioDirectExpenseTotal: dioDirectExpenses,
       }
       if (isCurrent) {
         snapshotPatch.receivables        = debtors

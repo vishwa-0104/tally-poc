@@ -1152,6 +1152,7 @@ companiesRouter.put('/companies/:id/dashboard-snapshot', async (req, res) => {
     openingStock:       z.number().nullable().optional(),
     closingStock:       z.number().nullable().optional(),
     directExpenseTotal: z.number().nullable().optional(),
+    dioDirectExpenseTotal: z.number().nullable().optional(),
     slowStockItems:     z.array(z.record(z.any())).optional(),
     debtorBalances:     z.array(z.record(z.any())).optional(),
     equity:             z.number().nullable().optional(),

@@ -88,6 +88,7 @@ export interface DashboardSnapshotPatch {
   openingStock?:       number | null
   closingStock?:       number | null
   directExpenseTotal?: number | null
+  dioDirectExpenseTotal?: number | null
   slowStockItems?:     SlowStockItem[]
   debtorBalances?:     DebtorBalance[]
   equity?:             number | null

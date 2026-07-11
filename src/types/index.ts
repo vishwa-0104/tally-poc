@@ -108,6 +108,17 @@ export interface DashboardSettings {
     purchaseIncludeVouchers?:   string[]
     purchaseExcludeVouchers?:   string[]
     directExpenseLedgers?:      string[]
+    // DIO's own Purchases/Direct Expenses — deliberately separate from the
+    // purchaseAccounts/directExpenseLedgers above (which feed Gross Margin/
+    // Net Profit), so tuning DIO never silently moves Net Profit/ROCE/ROE.
+    dioPurchaseAccounts?:        string[]
+    dioPurchaseIncludeVouchers?: string[]
+    dioPurchaseExcludeVouchers?: string[]
+    dioDirectExpenseLedgers?:    string[]
+    // DPO's own Purchases — same reasoning as DIO's above.
+    dpoPurchaseAccounts?:        string[]
+    dpoPurchaseIncludeVouchers?: string[]
+    dpoPurchaseExcludeVouchers?: string[]
     indirectExpenseLedgers?:         string[]
     indirectExpenseIncludeVouchers?: string[]
     indirectExpenseExcludeVouchers?: string[]

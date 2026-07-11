@@ -362,6 +362,9 @@ model DashboardSnapshot {
   openingStock       Float?
   closingStock       Float?
   directExpenseTotal Float?
+  // DIO's own Direct Expense total — deliberately separate from
+  // directExpenseTotal above, which feeds Gross Margin/Net Profit.
+  dioDirectExpenseTotal Float?
   slowStockItems     Json?
   debtorBalances     Json?
   // Analysis-tab ratio KPIs — same "as of now" limitation as the fields above.

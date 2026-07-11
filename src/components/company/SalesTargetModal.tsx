@@ -27,7 +27,8 @@ function getCurrentFyYear() {
   return today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
 }
 
-type SettingsTab = 'today' | 'ytd' | 'ratios' | 'monthly'
+type SettingsTab = 'today' | 'ytd' | 'ratios'
+type RatioTab = 'dso' | 'dio' | 'dpo' | 'current' | 'quick' | 'roce' | 'roe' | 'debtEquity'
 
 interface Props {
   open:      boolean
@@ -181,6 +182,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
   const fyLabel = `FY ${fyYear}–${String(fyYear + 1).slice(2)}`
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('today')
+  const [activeRatioTab, setActiveRatioTab] = useState<RatioTab>('dso')
 
   // Budget state
   const [budgetValues,  setBudgetValues]  = useState<Record<number, string>>({})
@@ -196,6 +198,16 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
   const [ytdPurchaseIncludeVouchers, setYtdPurchaseIncludeVouchers] = useState<string[]>([])
   const [ytdPurchaseExcludeVouchers, setYtdPurchaseExcludeVouchers] = useState<string[]>([])
   const [ytdDirectExpenseLedgers,    setYtdDirectExpenseLedgers]    = useState<string[]>([])
+  // DIO/DPO's own dedicated Purchases (and DIO's own Direct Expenses) —
+  // deliberately separate from ytdPurchaseAccounts/ytdDirectExpenseLedgers
+  // above, which feed Gross Margin/Net Profit instead.
+  const [dioPurchaseAccounts,        setDioPurchaseAccounts]        = useState<string[]>([])
+  const [dioPurchaseIncludeVouchers, setDioPurchaseIncludeVouchers] = useState<string[]>([])
+  const [dioPurchaseExcludeVouchers, setDioPurchaseExcludeVouchers] = useState<string[]>([])
+  const [dioDirectExpenseLedgers,    setDioDirectExpenseLedgers]    = useState<string[]>([])
+  const [dpoPurchaseAccounts,        setDpoPurchaseAccounts]        = useState<string[]>([])
+  const [dpoPurchaseIncludeVouchers, setDpoPurchaseIncludeVouchers] = useState<string[]>([])
+  const [dpoPurchaseExcludeVouchers, setDpoPurchaseExcludeVouchers] = useState<string[]>([])
   const [ytdIndirectExpenseLedgers,         setYtdIndirectExpenseLedgers]         = useState<string[]>([])
   const [ytdIndirectExpenseIncludeVouchers, setYtdIndirectExpenseIncludeVouchers] = useState<string[]>([])
   const [ytdIndirectExpenseExcludeVouchers, setYtdIndirectExpenseExcludeVouchers] = useState<string[]>([])
@@ -267,6 +279,13 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         setYtdPurchaseIncludeVouchers(s.ytd?.purchaseIncludeVouchers ?? [])
         setYtdPurchaseExcludeVouchers(s.ytd?.purchaseExcludeVouchers ?? [])
         setYtdDirectExpenseLedgers(s.ytd?.directExpenseLedgers ?? [])
+        setDioPurchaseAccounts(s.ytd?.dioPurchaseAccounts ?? [])
+        setDioPurchaseIncludeVouchers(s.ytd?.dioPurchaseIncludeVouchers ?? [])
+        setDioPurchaseExcludeVouchers(s.ytd?.dioPurchaseExcludeVouchers ?? [])
+        setDioDirectExpenseLedgers(s.ytd?.dioDirectExpenseLedgers ?? [])
+        setDpoPurchaseAccounts(s.ytd?.dpoPurchaseAccounts ?? [])
+        setDpoPurchaseIncludeVouchers(s.ytd?.dpoPurchaseIncludeVouchers ?? [])
+        setDpoPurchaseExcludeVouchers(s.ytd?.dpoPurchaseExcludeVouchers ?? [])
         setYtdIndirectExpenseLedgers(s.ytd?.indirectExpenseLedgers ?? [])
         setYtdIndirectExpenseIncludeVouchers(s.ytd?.indirectExpenseIncludeVouchers ?? [])
         setYtdIndirectExpenseExcludeVouchers(s.ytd?.indirectExpenseExcludeVouchers ?? [])
@@ -336,6 +355,13 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         purchaseIncludeVouchers: ytdPurchaseIncludeVouchers.length > 0 ? ytdPurchaseIncludeVouchers : undefined,
         purchaseExcludeVouchers: ytdPurchaseExcludeVouchers.length > 0 ? ytdPurchaseExcludeVouchers : undefined,
         directExpenseLedgers:    ytdDirectExpenseLedgers.length    > 0 ? ytdDirectExpenseLedgers    : undefined,
+        dioPurchaseAccounts:        dioPurchaseAccounts.length        > 0 ? dioPurchaseAccounts        : undefined,
+        dioPurchaseIncludeVouchers: dioPurchaseIncludeVouchers.length > 0 ? dioPurchaseIncludeVouchers : undefined,
+        dioPurchaseExcludeVouchers: dioPurchaseExcludeVouchers.length > 0 ? dioPurchaseExcludeVouchers : undefined,
+        dioDirectExpenseLedgers:    dioDirectExpenseLedgers.length    > 0 ? dioDirectExpenseLedgers    : undefined,
+        dpoPurchaseAccounts:        dpoPurchaseAccounts.length        > 0 ? dpoPurchaseAccounts        : undefined,
+        dpoPurchaseIncludeVouchers: dpoPurchaseIncludeVouchers.length > 0 ? dpoPurchaseIncludeVouchers : undefined,
+        dpoPurchaseExcludeVouchers: dpoPurchaseExcludeVouchers.length > 0 ? dpoPurchaseExcludeVouchers : undefined,
         indirectExpenseLedgers:         ytdIndirectExpenseLedgers.length         > 0 ? ytdIndirectExpenseLedgers         : undefined,
         indirectExpenseIncludeVouchers: ytdIndirectExpenseIncludeVouchers.length > 0 ? ytdIndirectExpenseIncludeVouchers : undefined,
         indirectExpenseExcludeVouchers: ytdIndirectExpenseExcludeVouchers.length > 0 ? ytdIndirectExpenseExcludeVouchers : undefined,
@@ -387,7 +413,17 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
     { key: 'today',   label: 'Today'   },
     { key: 'ytd',     label: 'YTD'     },
     { key: 'ratios',  label: 'Ratios'  },
-    { key: 'monthly', label: 'Monthly' },
+  ]
+
+  const RATIO_TABS: { key: RatioTab; label: string }[] = [
+    { key: 'dso',        label: 'DSO'          },
+    { key: 'dio',        label: 'DIO'          },
+    { key: 'dpo',        label: 'DPO'          },
+    { key: 'current',    label: 'Current Ratio' },
+    { key: 'quick',      label: 'Quick Ratio'   },
+    { key: 'roce',       label: 'ROCE'          },
+    { key: 'roe',        label: 'ROE'           },
+    { key: 'debtEquity', label: 'Debt/Equity'   },
   ]
 
   return (
@@ -686,214 +722,355 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
       )}
 
       {activeTab === 'ratios' && (
-        <div className="space-y-6">
-          {/* ── Analysis tab's own Sales definition ── */}
-          <div>
-            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Sales (Analysis Tab)</p>
-            <p className="text-[11px] text-gray-400 italic mb-4">
-              Used for DSO and Net Profit on the Analysis tab only — deliberately separate from the
-              Today tab's Sales Accounts, so changing one never affects the other.
-            </p>
-            <div className="space-y-5">
-              <SearchCheckList
-                label="Sales Accounts"
-                hint="Default: all vouchers matching voucher type filter below"
-                options={allLedgerOpts}
-                selected={analysisSalesAccounts}
-                onChange={setAnalysisSalesAccounts}
-                loading={loadingOpts}
-              />
-              <div className="grid grid-cols-2 gap-5">
+        <div>
+          {/* Ratio sub-tab bar */}
+          <div className="flex gap-1 bg-gray-50 border border-gray-100 rounded-lg p-1 mb-5 flex-wrap">
+            {RATIO_TABS.map(rt => (
+              <button
+                key={rt.key}
+                onClick={() => setActiveRatioTab(rt.key)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  activeRatioTab === rt.key
+                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {rt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── DSO ── */}
+          {activeRatioTab === 'dso' && (
+            <div>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Sales (Analysis Tab)</p>
+              <p className="text-[11px] text-gray-400 italic mb-4">
+                Used for DSO and Net Profit on the Analysis tab only — deliberately separate from the
+                Today tab's Sales Accounts, so changing one never affects the other.
+              </p>
+              <div className="space-y-5">
                 <SearchCheckList
-                  label="Sales — Include Vouchers"
-                  hint="Default: voucher types containing 'sales'"
-                  options={voucherTypeOpts}
-                  selected={analysisSalesIncludeVouchers}
-                  onChange={setAnalysisSalesIncludeVouchers}
+                  label="Sales Accounts"
+                  hint="Default: all vouchers matching voucher type filter below"
+                  options={allLedgerOpts}
+                  selected={analysisSalesAccounts}
+                  onChange={setAnalysisSalesAccounts}
                   loading={loadingOpts}
                 />
+                <div className="grid grid-cols-2 gap-5">
+                  <SearchCheckList
+                    label="Sales — Include Vouchers"
+                    hint="Default: voucher types containing 'sales'"
+                    options={voucherTypeOpts}
+                    selected={analysisSalesIncludeVouchers}
+                    onChange={setAnalysisSalesIncludeVouchers}
+                    loading={loadingOpts}
+                  />
+                  <SearchCheckList
+                    label="Sales — Exclude Vouchers"
+                    hint="Default: Credit Note"
+                    options={voucherTypeOpts}
+                    selected={analysisSalesExcludeVouchers}
+                    onChange={setAnalysisSalesExcludeVouchers}
+                    loading={loadingOpts}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 italic">
+                  DSO's Debtors figure uses Tally's standard Sundry Debtors closing balance — no
+                  setting needed for that half.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── DIO ── */}
+          {activeRatioTab === 'dio' && (
+            <div>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Purchases &amp; Direct Expenses (DIO)</p>
+              <p className="text-[11px] text-gray-400 italic mb-4">
+                DIO's own COGS inputs — deliberately separate from the YTD tab's Purchase Accounts/
+                Direct Expense Ledgers (which feed Gross Margin/Net Profit), so tuning DIO never
+                silently moves Net Profit/ROCE/ROE.
+              </p>
+              <div className="space-y-5">
                 <SearchCheckList
-                  label="Sales — Exclude Vouchers"
-                  hint="Default: Credit Note"
-                  options={voucherTypeOpts}
-                  selected={analysisSalesExcludeVouchers}
-                  onChange={setAnalysisSalesExcludeVouchers}
+                  label="Purchase Accounts"
+                  hint="Default: all vouchers matching voucher type filter below"
+                  options={allLedgerOpts}
+                  selected={dioPurchaseAccounts}
+                  onChange={setDioPurchaseAccounts}
                   loading={loadingOpts}
+                />
+                <div className="grid grid-cols-2 gap-5">
+                  <SearchCheckList
+                    label="Purchase — Include Vouchers"
+                    hint="Default: voucher types containing 'purchase'"
+                    options={voucherTypeOpts}
+                    selected={dioPurchaseIncludeVouchers}
+                    onChange={setDioPurchaseIncludeVouchers}
+                    loading={loadingOpts}
+                  />
+                  <SearchCheckList
+                    label="Purchase — Exclude Vouchers"
+                    hint="Default: Debit Note"
+                    options={voucherTypeOpts}
+                    selected={dioPurchaseExcludeVouchers}
+                    onChange={setDioPurchaseExcludeVouchers}
+                    loading={loadingOpts}
+                  />
+                </div>
+                <SearchCheckList
+                  label="Direct Expense Ledgers"
+                  hint="e.g. Freight, Wages, Power — leave empty to exclude direct expenses"
+                  options={allLedgerOpts}
+                  selected={dioDirectExpenseLedgers}
+                  onChange={setDioDirectExpenseLedgers}
+                  loading={loadingOpts}
+                />
+                <p className="text-[11px] text-gray-400 italic">
+                  Opening/Closing Stock use Tally's standard Stock-in-Hand closing balance — no
+                  setting needed for those.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── DPO ── */}
+          {activeRatioTab === 'dpo' && (
+            <div>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Purchases (DPO)</p>
+              <p className="text-[11px] text-gray-400 italic mb-4">
+                DPO's own Purchases figure — deliberately separate from the YTD tab's Purchase
+                Accounts (Gross Margin/Net Profit) and from DIO's own Purchases.
+              </p>
+              <div className="space-y-5">
+                <SearchCheckList
+                  label="Purchase Accounts"
+                  hint="Default: all vouchers matching voucher type filter below"
+                  options={allLedgerOpts}
+                  selected={dpoPurchaseAccounts}
+                  onChange={setDpoPurchaseAccounts}
+                  loading={loadingOpts}
+                />
+                <div className="grid grid-cols-2 gap-5">
+                  <SearchCheckList
+                    label="Purchase — Include Vouchers"
+                    hint="Default: voucher types containing 'purchase'"
+                    options={voucherTypeOpts}
+                    selected={dpoPurchaseIncludeVouchers}
+                    onChange={setDpoPurchaseIncludeVouchers}
+                    loading={loadingOpts}
+                  />
+                  <SearchCheckList
+                    label="Purchase — Exclude Vouchers"
+                    hint="Default: Debit Note"
+                    options={voucherTypeOpts}
+                    selected={dpoPurchaseExcludeVouchers}
+                    onChange={setDpoPurchaseExcludeVouchers}
+                    loading={loadingOpts}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 italic">
+                  Creditors uses Tally's standard Sundry Creditors closing balance — no setting
+                  needed for that half.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Current Ratio ── */}
+          {activeRatioTab === 'current' && (
+            <div>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Current Ratio</p>
+              <p className="text-[11px] text-gray-400 italic mb-4">
+                (Closing Stock + Debtors) / Creditors — every input here comes from Tally's standard
+                closing-balance groups (Stock-in-Hand, Sundry Debtors, Sundry Creditors). No
+                company-specific mapping is needed.
+              </p>
+            </div>
+          )}
+
+          {/* ── Quick Ratio ── */}
+          {activeRatioTab === 'quick' && (
+            <div>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Quick Ratio</p>
+              <p className="text-[11px] text-gray-400 italic mb-4">
+                (Cash + Bank + Investments + Debtors) / (Current Liabilities − Bank OD) — every input
+                here comes from Tally's standard closing-balance groups. No company-specific mapping
+                is needed.
+              </p>
+            </div>
+          )}
+
+          {/* ── ROCE ── */}
+          {activeRatioTab === 'roce' && (
+            <div>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">ROCE</p>
+              <p className="text-[11px] text-gray-400 italic mb-4">
+                Tally has no standard group for these — name the specific ledgers. Any left empty
+                shows "No data available" on the ROCE card rather than a guessed number.
+              </p>
+              <div className="space-y-5">
+                <SearchCheckList
+                  label="Interest Expense Ledgers"
+                  hint="e.g. Interest on Loan, Interest on OD"
+                  options={allLedgerOpts}
+                  selected={interestExpenseLedgers}
+                  onChange={setInterestExpenseLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Tax Payment Ledgers"
+                  hint="e.g. Income Tax Paid, TDS Paid"
+                  options={allLedgerOpts}
+                  selected={taxPaymentLedgers}
+                  onChange={setTaxPaymentLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Non-Operating Income Ledgers"
+                  hint="e.g. Rental Income, Profit on Sale of Asset"
+                  options={allLedgerOpts}
+                  selected={nonOperatingIncomeLedgers}
+                  onChange={setNonOperatingIncomeLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Non-Operating Investment Ledgers"
+                  hint="e.g. Fixed Deposits, Mutual Funds held for non-core purposes"
+                  options={allLedgerOpts}
+                  selected={nonOperatingInvestmentLedgers}
+                  onChange={setNonOperatingInvestmentLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Long Term Borrowing Ledgers"
+                  hint="Tally has no long-term/short-term split — name the specific long-term loan ledgers"
+                  options={allLedgerOpts}
+                  selected={longTermBorrowingLedgers}
+                  onChange={setLongTermBorrowingLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Equity Ledgers"
+                  hint="e.g. Share Capital, Reserves & Surplus"
+                  options={allLedgerOpts}
+                  selected={equityLedgers}
+                  onChange={setEquityLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
                 />
               </div>
             </div>
-          </div>
-
-          {/* ── ROCE ── */}
-          <div className="border-t border-gray-100 pt-5">
-            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">ROCE</p>
-            <p className="text-[11px] text-gray-400 italic mb-4">
-              Tally has no standard group for these — name the specific ledgers. Any left empty
-              shows "No data available" on the ROCE card rather than a guessed number.
-            </p>
-            <div className="space-y-5">
-              <SearchCheckList
-                label="Interest Expense Ledgers"
-                hint="e.g. Interest on Loan, Interest on OD"
-                options={allLedgerOpts}
-                selected={interestExpenseLedgers}
-                onChange={setInterestExpenseLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Tax Payment Ledgers"
-                hint="e.g. Income Tax Paid, TDS Paid"
-                options={allLedgerOpts}
-                selected={taxPaymentLedgers}
-                onChange={setTaxPaymentLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Non-Operating Income Ledgers"
-                hint="e.g. Rental Income, Profit on Sale of Asset"
-                options={allLedgerOpts}
-                selected={nonOperatingIncomeLedgers}
-                onChange={setNonOperatingIncomeLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Non-Operating Investment Ledgers"
-                hint="e.g. Fixed Deposits, Mutual Funds held for non-core purposes"
-                options={allLedgerOpts}
-                selected={nonOperatingInvestmentLedgers}
-                onChange={setNonOperatingInvestmentLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Long Term Borrowing Ledgers"
-                hint="Tally has no long-term/short-term split — name the specific long-term loan ledgers"
-                options={allLedgerOpts}
-                selected={longTermBorrowingLedgers}
-                onChange={setLongTermBorrowingLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Equity Ledgers"
-                hint="e.g. Share Capital, Reserves & Surplus"
-                options={allLedgerOpts}
-                selected={equityLedgers}
-                onChange={setEquityLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-            </div>
-          </div>
+          )}
 
           {/* ── ROE ── */}
-          <div className="border-t border-gray-100 pt-5">
-            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">ROE</p>
-            <p className="text-[11px] text-gray-400 italic mb-4">
-              Numerator reuses the existing Net Profit (YTD) figure — no setting needed for that.
-              These 3 make up the denominator. Any left empty defaults to 0 for Internal Borrowings/
-              Intangible Assets (commonly zero); Equity must be set for ROE to compute at all.
-            </p>
-            <div className="space-y-5">
-              <SearchCheckList
-                label="Equity Ledgers"
-                hint="e.g. Share Capital, Reserves & Surplus"
-                options={allLedgerOpts}
-                selected={roeEquityLedgers}
-                onChange={setRoeEquityLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Internal Borrowing Ledgers"
-                hint="Related-party/internal loans not already captured elsewhere"
-                options={allLedgerOpts}
-                selected={internalBorrowingLedgers}
-                onChange={setInternalBorrowingLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Intangible Asset Ledgers"
-                hint="e.g. Goodwill, Patents, Software"
-                options={allLedgerOpts}
-                selected={intangibleAssetLedgers}
-                onChange={setIntangibleAssetLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
+          {activeRatioTab === 'roe' && (
+            <div>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">ROE</p>
+              <p className="text-[11px] text-gray-400 italic mb-4">
+                Numerator reuses the existing Net Profit (YTD) figure — no setting needed for that.
+                These 3 make up the denominator. Any left empty defaults to 0 for Internal Borrowings/
+                Intangible Assets (commonly zero); Equity must be set for ROE to compute at all.
+              </p>
+              <div className="space-y-5">
+                <SearchCheckList
+                  label="Equity Ledgers"
+                  hint="e.g. Share Capital, Reserves & Surplus"
+                  options={allLedgerOpts}
+                  selected={roeEquityLedgers}
+                  onChange={setRoeEquityLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Internal Borrowing Ledgers"
+                  hint="Related-party/internal loans not already captured elsewhere"
+                  options={allLedgerOpts}
+                  selected={internalBorrowingLedgers}
+                  onChange={setInternalBorrowingLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Intangible Asset Ledgers"
+                  hint="e.g. Goodwill, Patents, Software"
+                  options={allLedgerOpts}
+                  selected={intangibleAssetLedgers}
+                  onChange={setIntangibleAssetLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* ── Debt/Equity ── */}
-          <div className="border-t border-gray-100 pt-5">
-            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Debt/Equity</p>
-            <p className="text-[11px] text-gray-400 italic mb-4">
-              (Total Interest Bearing Loans − Cash − Bank) / (Equity + Loans from Directors) — every
-              component here is its own setting, independent of Cash/Bank/Equity used elsewhere.
-              Loans and Equity must be set for this to compute; Cash/Bank/Director Loans default to 0.
-            </p>
-            <div className="space-y-5">
-              <SearchCheckList
-                label="Total Interest Bearing Loans Ledgers"
-                hint="All secured + unsecured loan ledgers"
-                options={allLedgerOpts}
-                selected={debtEquityLoanLedgers}
-                onChange={setDebtEquityLoanLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Cash Balance Ledgers"
-                hint="e.g. Cash-in-Hand ledgers"
-                options={allLedgerOpts}
-                selected={debtEquityCashLedgers}
-                onChange={setDebtEquityCashLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Bank Balance Ledgers"
-                hint="e.g. Bank Account ledgers"
-                options={allLedgerOpts}
-                selected={debtEquityBankLedgers}
-                onChange={setDebtEquityBankLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Equity Ledgers"
-                hint="e.g. Share Capital, Reserves & Surplus"
-                options={allLedgerOpts}
-                selected={debtEquityEquityLedgers}
-                onChange={setDebtEquityEquityLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <SearchCheckList
-                label="Loans from Directors"
-                hint="Specific unsecured-loan ledgers held by directors/promoters"
-                options={allLedgerOpts}
-                selected={directorLoanLedgers}
-                onChange={setDirectorLoanLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
+          {activeRatioTab === 'debtEquity' && (
+            <div>
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Debt/Equity</p>
+              <p className="text-[11px] text-gray-400 italic mb-4">
+                (Total Interest Bearing Loans − Cash − Bank) / (Equity + Loans from Directors) — every
+                component here is its own setting, independent of Cash/Bank/Equity used elsewhere.
+                Loans and Equity must be set for this to compute; Cash/Bank/Director Loans default to 0.
+              </p>
+              <div className="space-y-5">
+                <SearchCheckList
+                  label="Total Interest Bearing Loans Ledgers"
+                  hint="All secured + unsecured loan ledgers"
+                  options={allLedgerOpts}
+                  selected={debtEquityLoanLedgers}
+                  onChange={setDebtEquityLoanLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Cash Balance Ledgers"
+                  hint="e.g. Cash-in-Hand ledgers"
+                  options={allLedgerOpts}
+                  selected={debtEquityCashLedgers}
+                  onChange={setDebtEquityCashLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Bank Balance Ledgers"
+                  hint="e.g. Bank Account ledgers"
+                  options={allLedgerOpts}
+                  selected={debtEquityBankLedgers}
+                  onChange={setDebtEquityBankLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Equity Ledgers"
+                  hint="e.g. Share Capital, Reserves & Surplus"
+                  options={allLedgerOpts}
+                  selected={debtEquityEquityLedgers}
+                  onChange={setDebtEquityEquityLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+                <SearchCheckList
+                  label="Loans from Directors"
+                  hint="Specific unsecured-loan ledgers held by directors/promoters"
+                  options={allLedgerOpts}
+                  selected={directorLoanLedgers}
+                  onChange={setDirectorLoanLedgers}
+                  loading={loadingOpts}
+                  showSelectAll
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* ── MONTHLY PLACEHOLDER ── */}
-      {activeTab === 'monthly' && (
-        <div className="h-40 flex flex-col items-center justify-center gap-1 text-gray-400">
-          <p className="text-sm font-medium">Coming soon</p>
-          <p className="text-xs">Settings for Monthly dashboard will appear here.</p>
-        </div>
-      )}
     </Modal>
   )
 }
