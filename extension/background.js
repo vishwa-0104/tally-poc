@@ -162,8 +162,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ total: 0, error: err.message }))
       return true
 
-    case 'FETCH_DEBTOR_BALANCES':
-      handleFetchDebtorBalances(payload.tallyUrl, payload.tallyCompany)
+    case 'FETCH_DEBTOR_LEDGER_NAMES':
+      handleFetchDebtorLedgerNames(payload.tallyUrl, payload.tallyCompany)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ names: [], error: err.message }))
+      return true
+
+    case 'FETCH_LEDGER_CLOSING_BALANCES':
+      handleFetchLedgerClosingBalances(payload.tallyUrl, payload.tallyCompany, payload.ledgerNames)
         .then(sendResponse)
         .catch((err) => sendResponse({ balances: [], error: err.message }))
       return true
@@ -1997,35 +2003,40 @@ function parseTallyBalance(str) {
 // JS to decide whether it's really under Sundry Debtors, however deeply
 // nested. This works regardless of CHILDOF's behavior or nesting depth.
 //
-// IMPORTANT (found 2026-07-12): the first version of this rewrite fetched
-// ClosingBalance for *every* ledger in the company in one shot to avoid
-// depending on CHILDOF at all. That re-triggered the exact hang risk already
-// documented above handleFetchLedgerBalances — "Fetching ClosingBalance for
-// ALL ledgers is O(ledgers × transactions) and causes Tally to hang" — this
-// company's ledger master is large (the nested-subgroup tree under Sundry
-// Debtors alone has 100+ entries). The dashboard kept showing stale cached
-// data because the live fetch never completed. Fixed by splitting into two
-// cheap metadata-only passes (Name+Parent, no ClosingBalance — same NATIVEMETHOD
-// shape as the already-proven handleFetchLedgers) to resolve exactly which
-// ledger names are under Sundry Debtors, THEN a third request that asks Tally
-// for ClosingBalance on only that resolved (much smaller) name list — same
-// scoped-FILTER pattern already proven in handleFetchLedgerAmounts below
-// (`$Name = "..." OR ...`, with the same XML-escaping needed for names
-// containing "&" etc.).
+// IMPORTANT (found 2026-07-12, round 1): the first version of this rewrite
+// fetched ClosingBalance for *every* ledger in the company in one shot to
+// avoid depending on CHILDOF at all. That re-triggered the exact hang risk
+// already documented above handleFetchLedgerBalances — "Fetching
+// ClosingBalance for ALL ledgers is O(ledgers × transactions) and causes
+// Tally to hang" — this company's ledger master is large (the nested-
+// subgroup tree under Sundry Debtors alone has 100+ entries). Fixed by
+// splitting into two cheap metadata-only passes (Name+Parent, no
+// ClosingBalance — same NATIVEMETHOD shape as the already-proven
+// handleFetchLedgers) to resolve exactly which ledger names are under
+// Sundry Debtors, then a scoped ClosingBalance request for just that list.
 //
-// Sign convention CONFIRMED against live Tally (2026-07-11): this raw
-// NATIVEMETHOD ClosingBalance has no Dr/Cr suffix at all, and Tally's raw
-// internal sign for it is the OPPOSITE of the human-readable Dr/Cr report
-// format — Debit (money owed to us) comes back NEGATIVE, Credit (advance/
-// overpayment) comes back POSITIVE. (The aggregate group-balance code in
-// handleFetchGroupBalances never actually verified this — it sidesteps the
-// question entirely with Math.abs().) Flip the sign so a positive `balance`
-// here means "this party owes us money," matching the existing topDebtors
-// filter convention in Dashboard.tsx (settled/credit-balance parties don't
-// belong in this list).
-async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
+// IMPORTANT (found 2026-07-12, round 2): scoping ClosingBalance to the
+// resolved list in ONE request *still* hung — a FILTER only narrows what's
+// *returned*, it doesn't stop Tally evaluating the formula against the
+// whole ledger master and computing ClosingBalance for every match, so one
+// combined request covering 150+ names was still too much work in one shot.
+// Chunking that into batches of 10 *inside a single extension message
+// handler* (one long-lived async function looping over batches) fixed the
+// Tally-side hang, but surfaced a THIRD, subtler problem: the page's
+// sendToExtension() has a fixed 120s timeout per message
+// (EXTENSION_MSG_TIMEOUT in tallyService.ts) — with enough batches, the
+// *total* sequential time exceeded 120s even though every individual batch
+// was fast, so the page gave up and discarded the extension's eventual
+// (correct) response.
+//
+// Fixed by moving the batch loop OUT of the extension and onto the page
+// (see fetchDebtorBalances in tallyService.ts): this handler now only does
+// the cheap metadata resolution and returns the debtor ledger *names*; the
+// page calls handleFetchLedgerClosingBalances (below) once per batch as its
+// own separate message, each with its own fresh 120s budget, however many
+// batches it takes. No single message can ever approach that ceiling.
+async function handleFetchDebtorLedgerNames(tallyUrl, tallyCompany) {
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&#39;/g, "'").trim()
-  const esc    = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
   // Pass 1 (cheap, metadata-only): every ledger's Name + Parent, no ClosingBalance.
   const ledgersXml = `<ENVELOPE>
@@ -2128,31 +2139,40 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   }
   console.log(`[DebtorBalances] resolved ${debtorNames.length} ledgers under Sundry Debtors (any nesting depth)`)
 
-  if (debtorNames.length === 0) return { balances: [] }
+  return { names: debtorNames }
+}
 
-  // Pass 3: ClosingBalance for the resolved debtor ledgers — CHUNKED into
-  // small batches (found 2026-07-12: even a single scoped request covering
-  // all ~150+ resolved names still hung this company's Tally — a FILTER only
-  // narrows what's *returned*, it doesn't stop Tally evaluating every ledger
-  // in the master against the formula, and ClosingBalance computation for
-  // this many ledgers at once was still too much in one shot). Batches run
-  // sequentially, not concurrently — Tally's HTTP interface effectively
-  // serializes requests anyway, so firing them in parallel would just queue
-  // up against the same bottleneck while adding contention risk. Each batch
-  // is small enough to complete quickly and independently, so one slow/bad
-  // batch can't block the rest of the app — see the Dashboard.tsx caller,
-  // which now runs this whole function decoupled from the main KPI fetch.
-  const BATCH_SIZE = 10
-  const balances = []
-  for (let i = 0; i < debtorNames.length; i += BATCH_SIZE) {
-    const batch = debtorNames.slice(i, i + BATCH_SIZE)
-    const filter = batch.map(n => `$Name = "${esc(n)}"`).join(' OR ')
-    const balancesXml = `<ENVELOPE>
+// ── ClosingBalance for an explicit, caller-supplied list of ledger names ─────
+// Generic single-round-trip fetch — deliberately takes no group/CHILDOF
+// scoping opinion of its own, since the caller (tallyService.ts's
+// fetchDebtorBalances, chunking into batches — see handleFetchDebtorLedgerNames's
+// comment above for why batching+per-batch-message matters) already resolved
+// exactly which names it wants. Same scoped-FILTER pattern as
+// handleFetchLedgerAmounts (`$Name = "..." OR ...`, same XML-escaping for
+// names containing "&" etc.).
+//
+// Returns balance in this file's normal Dr-positive/Cr-negative convention
+// (same as parseTallyBalance's natural output) — this raw NATIVEMETHOD
+// ClosingBalance has no Dr/Cr suffix and Tally's raw sign for it is the
+// OPPOSITE of that convention (confirmed against live Tally 2026-07-11:
+// Debit/money-owed comes back negative here), so it's negated before
+// returning. Whether a positive balance means "owes us" vs "we owe them"
+// depends on which group the ledger belongs to (Sundry Debtors vs
+// Creditors) — that judgment call stays with the caller, not this generic
+// handler.
+async function handleFetchLedgerClosingBalances(tallyUrl, tallyCompany, ledgerNames) {
+  const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&#39;/g, "'").trim()
+  const esc    = (s) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+  if (!ledgerNames?.length) return { balances: [] }
+
+  const filter = ledgerNames.map(n => `$Name = "${esc(n)}"`).join(' OR ')
+  const xml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
     <TYPE>Collection</TYPE>
-    <ID>TBSDebtorBalances</ID>
+    <ID>TBSLedgerClosingBalances</ID>
   </HEADER>
   <BODY>
     <DESC>
@@ -2161,12 +2181,12 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="TBSDebtorBalances" ISMODIFY="No">
+          <COLLECTION NAME="TBSLedgerClosingBalances" ISMODIFY="No">
             <TYPE>Ledger</TYPE>
             <NATIVEMETHOD>Name, ClosingBalance</NATIVEMETHOD>
-            <FILTER>IsTargetDebtorLedger</FILTER>
+            <FILTER>IsTargetLedgerForClosingBalance</FILTER>
           </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="IsTargetDebtorLedger">
+          <SYSTEM TYPE="Formulae" NAME="IsTargetLedgerForClosingBalance">
             ${filter}
           </SYSTEM>
         </TDLMESSAGE>
@@ -2175,21 +2195,19 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   </BODY>
 </ENVELOPE>`
 
-    const tBatch = Date.now()
-    const balancesResponse = await postToTally(balancesXml, tallyUrl)
-    console.log(`[DebtorBalances] batch ${i / BATCH_SIZE + 1}/${Math.ceil(debtorNames.length / BATCH_SIZE)} (${batch.length} ledgers): ${Date.now() - tBatch}ms`)
+  const t0 = Date.now()
+  const responseText = await postToTally(xml, tallyUrl)
+  console.log(`[LedgerClosingBalances] batch of ${ledgerNames.length}: ${Date.now() - t0}ms`)
 
-    for (const m of balancesResponse.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
-      const block = m[0]
-      let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
-      if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
-      if (!name) continue
-      const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
-      const balance = -parseTallyBalance(balRaw)
-      if (balance > 0) balances.push({ name, balance })
-    }
+  const balances = []
+  for (const m of responseText.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
+    const block = m[0]
+    let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
+    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+    if (!name) continue
+    const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
+    const balance = -parseTallyBalance(balRaw)
+    balances.push({ name, balance })
   }
-  balances.sort((a, b) => b.balance - a.balance)
-  console.log(`[DebtorBalances] final: ${balances.length} parties with balance > 0`)
   return { balances }
 }

@@ -326,11 +326,41 @@ export interface DebtorBalance {
   balance: number  // Dr (positive) — what the party currently owes
 }
 
+// Batch size for the ClosingBalance passes below — must match what
+// handleFetchLedgerClosingBalances/handleFetchDebtorLedgerNames in
+// background.js were proven to handle without hanging Tally (2026-07-12).
+const DEBTOR_BALANCE_BATCH_SIZE = 10
+
+// The batching loop lives HERE (page side), not inside a single extension
+// message handler, deliberately: sendToExtension has a fixed 120s timeout
+// per message (EXTENSION_MSG_TIMEOUT above). A company with a large enough
+// Sundry Debtors ledger list can take longer than 120s in total even though
+// each individual batch is fast — when the whole loop ran inside one
+// extension-side async function, the page gave up and discarded the
+// extension's eventual (correct) response. Looping here means each batch is
+// its own independent message with its own fresh 120s budget, so the total
+// time can be however long it needs to be.
 export async function fetchDebtorBalances(
   tallyUrl: string,
   tallyCompany?: string,
 ): Promise<{ balances: DebtorBalance[] }> {
-  return sendToExtension<{ balances: DebtorBalance[] }>('FETCH_DEBTOR_BALANCES', { tallyUrl, tallyCompany })
+  const { names } = await sendToExtension<{ names: string[] }>('FETCH_DEBTOR_LEDGER_NAMES', { tallyUrl, tallyCompany })
+
+  const balances: DebtorBalance[] = []
+  for (let i = 0; i < names.length; i += DEBTOR_BALANCE_BATCH_SIZE) {
+    const batch = names.slice(i, i + DEBTOR_BALANCE_BATCH_SIZE)
+    const { balances: batchBalances } = await sendToExtension<{ balances: DebtorBalance[] }>(
+      'FETCH_LEDGER_CLOSING_BALANCES', { tallyUrl, tallyCompany, ledgerNames: batch },
+    )
+    // Credit-balance parties (advances/overpayments) don't belong in this
+    // list — matches the existing topDebtors filter convention.
+    for (const b of batchBalances) {
+      if (b.balance > 0) balances.push(b)
+    }
+  }
+
+  balances.sort((a, b) => b.balance - a.balance)
+  return { balances }
 }
 
 export interface RawLedger {

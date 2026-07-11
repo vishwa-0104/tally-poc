@@ -1063,7 +1063,8 @@ export default function Dashboard() {
         }
 
         // Deliberately NOT awaited here — this fetch is batched into many
-        // small sequential Tally requests (see handleFetchDebtorBalances)
+        // small sequential Tally requests, each its own message with its own
+        // 120s timeout budget (see fetchDebtorBalances in tallyService.ts),
         // and can take a while for a large ledger master. Awaiting it inline
         // would stall every other KPI card on this tab behind it. Runs on
         // its own, updates just its own card + spinner, and persists its
