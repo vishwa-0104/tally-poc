@@ -149,6 +149,16 @@ function getCurrentFyYear() {
   return today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
 }
 
+// DSO/DIO/DPO's "YTD days" multiplier option — days elapsed since the FY
+// start (1-Apr) as of the given date, inclusive of both ends (e.g. 12-Jul
+// in an Apr-start FY = 103 days).
+function daysSinceFyStart(toDateStr: string): number {
+  const to = new Date(toDateStr)
+  const fyYear = to.getMonth() >= 3 ? to.getFullYear() : to.getFullYear() - 1
+  const fyStart = new Date(fyYear, 3, 1)
+  return Math.floor((to.getTime() - fyStart.getTime()) / 86400000) + 1
+}
+
 function getQuarterMonths(): number[] {
   const m = new Date().getMonth()
   if (m >= 3 && m <= 5) return [4, 5, 6]
@@ -715,18 +725,20 @@ interface RatioResults {
 
 // Pure derivation from AnalysisInputs — every ratio individually null-guards
 // its own required inputs so one missing figure never silently zeroes or
-// skews a different card.
-function computeRatios(i: AnalysisInputs): RatioResults {
+// skews a different card. `days` is each ratio's own configurable
+// multiplier (YTD days elapsed by default, or a fixed 365 if configured) —
+// see daysSinceFyStart above and the render call site for how it's resolved.
+function computeRatios(i: AnalysisInputs, days: { dso: number; dio: number; dpo: number }): RatioResults {
   const dso = i.debtors != null && i.creditSales
-    ? (i.debtors / i.creditSales) * 365 : null
+    ? (i.debtors / i.creditSales) * days.dso : null
 
   const cogs = i.openingStock != null && i.dioPurchases != null && i.dioDirectExpenses != null && i.closingStock != null
     ? i.openingStock + i.dioPurchases + i.dioDirectExpenses - i.closingStock : null
   const dio = i.closingStock != null && cogs
-    ? (i.closingStock / cogs) * 365 : null
+    ? (i.closingStock / cogs) * days.dio : null
 
   const dpo = i.creditors != null && i.dpoPurchases
-    ? (i.creditors / i.dpoPurchases) * 365 : null
+    ? (i.creditors / i.dpoPurchases) * days.dpo : null
 
   const ccc = dso != null && dio != null && dpo != null ? dso + dio - dpo : null
 
@@ -1872,7 +1884,12 @@ export default function Dashboard() {
     if (!companyId) return
     setCfoLoading(true)
     setCfoError(false)
-    const ratios = computeRatios(analysisInputs)
+    const cfoYtdDays = daysSinceFyStart(analysisActivePeriod?.to ?? todayStr())
+    const ratios = computeRatios(analysisInputs, {
+      dso: (dashboardSettings.ytd?.dsoDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
+      dio: (dashboardSettings.ytd?.dioDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
+      dpo: (dashboardSettings.ytd?.dpoDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
+    })
     const figures = {
       debtors:          analysisInputs.debtors,
       creditors:        analysisInputs.creditors,
@@ -1888,7 +1905,7 @@ export default function Dashboard() {
         setCfoError(true)
       })
       .finally(() => setCfoLoading(false))
-  }, [companyId, analysisInputs])
+  }, [companyId, analysisInputs, analysisActivePeriod, dashboardSettings])
 
   // Auto-generate once per session, the first time the CFO tab is opened
   // after ratios are available — never re-fires on subsequent tab switches.
@@ -2485,7 +2502,13 @@ export default function Dashboard() {
             {/* 9 ratio KPI cards */}
             <div className="grid grid-cols-3 gap-4">
               {(() => {
-                const r = computeRatios(analysisInputs)
+                const ytdDaysForRatios = daysSinceFyStart(analysisActivePeriod?.to ?? todayStr())
+                const dayMultipliers = {
+                  dso: (dashboardSettings.ytd?.dsoDaysMode ?? 'ytd') === '365' ? 365 : ytdDaysForRatios,
+                  dio: (dashboardSettings.ytd?.dioDaysMode ?? 'ytd') === '365' ? 365 : ytdDaysForRatios,
+                  dpo: (dashboardSettings.ytd?.dpoDaysMode ?? 'ytd') === '365' ? 365 : ytdDaysForRatios,
+                }
+                const r = computeRatios(analysisInputs, dayMultipliers)
                 return (
                   <>
                     <RatioKpiCard title="DSO" subtitle="Days Sales Outstanding" icon={Users} value={r.dso} suffix=" days" />

@@ -27,6 +27,16 @@ function getCurrentFyYear() {
   return today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1
 }
 
+// Preview for the "Year-to-date" days option below — same calc as
+// daysSinceFyStart in Dashboard.tsx (duplicated locally, same convention as
+// getCurrentFyYear above already being independently defined in both files).
+function daysSinceFyStartToday(): number {
+  const today = new Date()
+  const fyYear = getCurrentFyYear()
+  const fyStart = new Date(fyYear, 3, 1)
+  return Math.floor((today.getTime() - fyStart.getTime()) / 86400000) + 1
+}
+
 type SettingsTab = 'today' | 'ytd' | 'ratios'
 type RatioTab = 'dso' | 'dio' | 'dpo' | 'current' | 'quick' | 'roce' | 'roe' | 'debtEquity'
 
@@ -175,6 +185,29 @@ function SearchCheckList({
   )
 }
 
+// ── Days-multiplier radio pair for DSO/DIO/DPO ──────────────────────────────
+function DaysModeRadio({
+  label, mode, onChange, ytdDaysPreview,
+}: {
+  label: string; mode: 'ytd' | '365'; onChange: (v: 'ytd' | '365') => void; ytdDaysPreview: number
+}) {
+  return (
+    <div className="border-t border-gray-100 pt-4">
+      <p className="text-xs font-semibold text-gray-700 mb-2">{label}</p>
+      <div className="flex items-center gap-5 text-xs text-gray-700">
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="radio" checked={mode === 'ytd'} onChange={() => onChange('ytd')} className="accent-blue-600" />
+          Year-to-date ({ytdDaysPreview} days)
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input type="radio" checked={mode === '365'} onChange={() => onChange('365')} className="accent-blue-600" />
+          Full year (365 days)
+        </label>
+      </div>
+    </div>
+  )
+}
+
 // ── Main modal ────────────────────────────────────────────────────────────────
 export function SalesTargetModal({ open, onClose, companyId }: Props) {
   const { getLedgers, fetchLedgersFromDb, getVoucherTypes, fetchVoucherTypesFromDb } = useCompanyStore()
@@ -241,6 +274,10 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
   const [currentRatioLiabilitiesLedgers, setCurrentRatioLiabilitiesLedgers] = useState<string[]>([])
   const [quickRatioAssetsLedgers,        setQuickRatioAssetsLedgers]        = useState<string[]>([])
   const [quickRatioLiabilitiesLedgers,   setQuickRatioLiabilitiesLedgers]   = useState<string[]>([])
+  // DSO/DIO/DPO's days multiplier — 'ytd' (default) or fixed '365'.
+  const [dsoDaysMode, setDsoDaysMode] = useState<'ytd' | '365'>('ytd')
+  const [dioDaysMode, setDioDaysMode] = useState<'ytd' | '365'>('ytd')
+  const [dpoDaysMode, setDpoDaysMode] = useState<'ytd' | '365'>('ytd')
   // Analysis tab's own Sales definition — deliberately separate from the
   // Today tab's Sales Accounts/Include/Exclude below.
   const [analysisSalesAccounts,        setAnalysisSalesAccounts]        = useState<string[]>([])
@@ -320,6 +357,9 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         setCurrentRatioLiabilitiesLedgers(s.ytd?.currentRatioLiabilitiesLedgers ?? [])
         setQuickRatioAssetsLedgers(s.ytd?.quickRatioAssetsLedgers ?? [])
         setQuickRatioLiabilitiesLedgers(s.ytd?.quickRatioLiabilitiesLedgers ?? [])
+        setDsoDaysMode(s.ytd?.dsoDaysMode ?? 'ytd')
+        setDioDaysMode(s.ytd?.dioDaysMode ?? 'ytd')
+        setDpoDaysMode(s.ytd?.dpoDaysMode ?? 'ytd')
         setAnalysisSalesAccounts(s.ytd?.analysisSalesAccounts ?? [])
         setAnalysisSalesIncludeVouchers(s.ytd?.analysisSalesIncludeVouchers ?? [])
         setAnalysisSalesExcludeVouchers(s.ytd?.analysisSalesExcludeVouchers ?? [])
@@ -400,6 +440,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         currentRatioLiabilitiesLedgers: currentRatioLiabilitiesLedgers.length > 0 ? currentRatioLiabilitiesLedgers : undefined,
         quickRatioAssetsLedgers:        quickRatioAssetsLedgers.length        > 0 ? quickRatioAssetsLedgers        : undefined,
         quickRatioLiabilitiesLedgers:   quickRatioLiabilitiesLedgers.length   > 0 ? quickRatioLiabilitiesLedgers   : undefined,
+        dsoDaysMode, dioDaysMode, dpoDaysMode,
         analysisSalesAccounts:          analysisSalesAccounts.length          > 0 ? analysisSalesAccounts          : undefined,
         analysisSalesIncludeVouchers:   analysisSalesIncludeVouchers.length   > 0 ? analysisSalesIncludeVouchers   : undefined,
         analysisSalesExcludeVouchers:   analysisSalesExcludeVouchers.length   > 0 ? analysisSalesExcludeVouchers   : undefined,
@@ -794,6 +835,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
                   setting needed for that half.
                 </p>
               </div>
+              <DaysModeRadio label="Days Multiplier" mode={dsoDaysMode} onChange={setDsoDaysMode} ytdDaysPreview={daysSinceFyStartToday()} />
             </div>
           )}
 
@@ -846,6 +888,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
                   setting needed for those.
                 </p>
               </div>
+              <DaysModeRadio label="Days Multiplier" mode={dioDaysMode} onChange={setDioDaysMode} ytdDaysPreview={daysSinceFyStartToday()} />
             </div>
           )}
 
@@ -889,6 +932,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
                   needed for that half.
                 </p>
               </div>
+              <DaysModeRadio label="Days Multiplier" mode={dpoDaysMode} onChange={setDpoDaysMode} ytdDaysPreview={daysSinceFyStartToday()} />
             </div>
           )}
 

@@ -164,6 +164,11 @@ export interface DashboardSettings {
     currentRatioLiabilitiesLedgers?: string[]
     quickRatioAssetsLedgers?:        string[]
     quickRatioLiabilitiesLedgers?:   string[]
+    // DSO/DIO/DPO's days multiplier — 'ytd' (days elapsed since FY start,
+    // the default) or the traditional fixed '365'.
+    dsoDaysMode?: 'ytd' | '365'
+    dioDaysMode?: 'ytd' | '365'
+    dpoDaysMode?: 'ytd' | '365'
     // Analysis tab's own Sales definition — deliberately separate from
     // today.salesAccounts/salesIncludeVouchers/salesExcludeVouchers so the
     // ratio KPIs (DSO, Net Profit) never silently depend on the Performance
