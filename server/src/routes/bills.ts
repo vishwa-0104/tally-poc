@@ -682,11 +682,20 @@ These entries exist in the books but are absent from the bank statement. They ma
 ${missing + extra === 0 ? 'Books are fully reconciled.' : missing + extra <= 5 ? 'Minor discrepancy — can be resolved quickly.' : 'Significant discrepancy — requires careful review before closing.'}`
 }
 
-// POST /api/cfo-suggestions — AI-generated financial insights from the
-// company's already-computed ratio KPIs (DSO/DIO/DPO/CCC/Current/Quick/
-// ROCE/ROE/Debt-Equity, from the Analysis tab). Same dual-provider pattern
-// as /reconcile/analyze above: Gemini Flash by default, per-company override,
-// Anthropic fallback, mock fallback if neither key is configured.
+// POST /api/cfo-suggestions — AI-generated CFO report from the company's
+// full YTD KPI set: the 9 ratios (DSO/DIO/DPO/CCC/Current/Quick/ROCE/ROE/
+// Debt-Equity) plus Performance-tab KPIs (sales, monthly trend, margins,
+// cash position, top items/debtors, slow-moving stock, debtor balances —
+// always YTD, see generateCfoSuggestions in Dashboard.tsx). Same
+// dual-provider pattern as /reconcile/analyze above: Gemini Flash by
+// default, per-company override, Anthropic fallback, mock fallback if
+// neither key is configured.
+//
+// The AI only produces NARRATIVE text (executive summary, key action items,
+// section commentaries, top risks) — never restates numbers. Tables
+// (monthly sales, top items, top debtors, debtor balances, slow stock) are
+// rendered client-side directly from the same kpis payload we send here, to
+// avoid the model drifting/hallucinating on anything tabular.
 const cfoSuggestionsBody = z.object({
   companyId: z.string().optional(),
   ratios: z.object({
@@ -700,27 +709,48 @@ const cfoSuggestionsBody = z.object({
     roe:          z.number().nullable(),
     debtEquity:   z.number().nullable(),
   }),
-  figures: z.object({
-    debtors:         z.number().nullable(),
-    creditors:       z.number().nullable(),
-    closingStock:    z.number().nullable(),
-    quickRatioAssets: z.number().nullable(),
-    netProfit:       z.number().nullable(),
-    creditSales:     z.number().nullable(),
+  kpis: z.object({
+    totalSales:     z.number(),
+    monthlySales:   z.array(z.object({ label: z.string(), amount: z.number() })),
+    grossMargin:    z.number().nullable(),
+    grossMarginPct: z.number().nullable(),
+    ebitda:         z.number().nullable(),
+    ebitdaPct:      z.number().nullable(),
+    netProfit:      z.number().nullable(),
+    netProfitPct:   z.number().nullable(),
+    cashInHand:     z.number().nullable(),
+    bankBalance:    z.number().nullable(),
+    receivables:    z.number().nullable(),
+    payables:       z.number().nullable(),
+    topItems:       z.array(z.object({ name: z.string(), qty: z.number(), unit: z.string(), amount: z.number() })),
+    topDebtors:     z.array(z.object({ name: z.string(), amount: z.number() })),
+    slowStock:      z.array(z.object({ name: z.string(), lastSaleDate: z.string(), daysSince: z.number() })),
+    debtorBalances: z.array(z.object({ name: z.string(), balance: z.number() })),
   }),
 })
 
-const cfoSuggestionSchema = z.array(z.object({
-  type:   z.enum(['warning', 'alert', 'success']),
-  title:  z.string(),
-  body:   z.string(),
-  impact: z.string(),
-})).min(4).max(6)
+const cfoReportSchema = z.object({
+  executiveSummary:           z.string(),
+  keyActionItems:             z.array(z.string()).min(2).max(6),
+  monthlySalesCommentary:     z.string(),
+  marginTrendCommentary:      z.string(),
+  workingCapitalCommentary:   z.string(),
+  liquidityCommentary:        z.string(),
+  cashPositionCommentary:     z.string(),
+  capitalEfficiencyCommentary: z.string(),
+  debtorPaymentCommentary:    z.string(),
+  slowMovingCommentary:       z.string(),
+  topRisks: z.array(z.object({
+    title:    z.string(),
+    body:     z.string(),
+    severity: z.enum(['High', 'Medium', 'Low']),
+  })).min(1).max(3),
+})
 
 billsRouter.post('/cfo-suggestions', async (req, res) => {
   const parsed = cfoSuggestionsBody.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const { ratios, figures } = parsed.data
+  const { ratios, kpis } = parsed.data
 
   let companyId: string | null = parsed.data.companyId || null
   if (!companyId && req.auth.role !== 'ADMIN') {
@@ -738,7 +768,7 @@ billsRouter.post('/cfo-suggestions', async (req, res) => {
   const anthropicKey = process.env.ANTHROPIC_API_KEY
 
   if (!geminiKey && !anthropicKey) {
-    res.json({ suggestions: MOCK_CFO_SUGGESTIONS() })
+    res.json(MOCK_CFO_REPORT())
     return
   }
 
@@ -760,33 +790,81 @@ billsRouter.post('/cfo-suggestions', async (req, res) => {
 
   const apiKey = parseService === 'anthropic' ? anthropicKey! : geminiKey!
 
-  const fmt = (n: number | null, suffix = '') =>
+  const fmt = (n: number | null | undefined, suffix = '') =>
     n == null ? 'not available' : `${n.toLocaleString('en-IN', { maximumFractionDigits: 1 })}${suffix}`
 
-  const promptText = `You are a CFO advisor reviewing a company's financial ratios. Based ONLY on the data below, give 5-6 concrete, specific insights or warnings a business owner should act on.
+  const monthlySalesLines = kpis.monthlySales.length
+    ? kpis.monthlySales.map(m => `  - ${m.label}: ${fmt(m.amount)}`).join('\n')
+    : '  (no monthly data available)'
+  const topItemsLines = kpis.topItems.length
+    ? kpis.topItems.slice(0, 10).map(i => `  - ${i.name}: qty ${i.qty} ${i.unit}, ${fmt(i.amount)}`).join('\n')
+    : '  (none)'
+  const topDebtorsLines = kpis.topDebtors.length
+    ? kpis.topDebtors.slice(0, 5).map(d => `  - ${d.name}: ${fmt(d.amount)} in sales YTD`).join('\n')
+    : '  (none)'
+  const debtorBalancesLines = kpis.debtorBalances.length
+    ? kpis.debtorBalances.slice(0, 5).map(d => `  - ${d.name}: ${fmt(d.balance)} outstanding`).join('\n')
+    : '  (none)'
+  const slowStock90 = kpis.slowStock.filter(s => s.daysSince > 90)
+  const slowStockLines = slowStock90.length
+    ? slowStock90.slice(0, 15).map(s => `  - ${s.name}: ${s.daysSince} days since last sale`).join('\n')
+    : '  (none over 90 days)'
 
-RATIOS:
+  const promptText = `You are a CFO advisor reviewing a company's Year-to-Date (YTD) financial data. Based ONLY on the data below, produce a structured executive report. Do NOT restate the tables verbatim (they're already shown to the reader separately) — your job is to interpret them: trends, causes, comparisons, and what to do next. Reference specific numbers only when making a point, formatted in Indian units (₹3.2L, ₹1.2Cr).
+
+RATIOS (YTD):
 - DSO (Days Sales Outstanding): ${fmt(ratios.dso, ' days')}
 - DIO (Days Inventory Outstanding): ${fmt(ratios.dio, ' days')}
 - DPO (Days Payables Outstanding): ${fmt(ratios.dpo, ' days')}
-- CCC (Cash Conversion Cycle): ${fmt(ratios.ccc, ' days')}
+- CCC (Cash Conversion Cycle, = DSO + DIO - DPO): ${fmt(ratios.ccc, ' days')}
 - Current Ratio: ${fmt(ratios.currentRatio)}
 - Quick Ratio: ${fmt(ratios.quickRatio)}
 - ROCE: ${fmt(ratios.roce, '%')}
 - ROE: ${fmt(ratios.roe, '%')}
 - Debt/Equity: ${fmt(ratios.debtEquity)}
 
-SUPPORTING FIGURES (INR):
-- Debtors (Receivables): ${fmt(figures.debtors)}
-- Creditors (Payables): ${fmt(figures.creditors)}
-- Closing Stock: ${fmt(figures.closingStock)}
-- Quick/Liquid Assets: ${fmt(figures.quickRatioAssets)}
-- Net Profit (YTD): ${fmt(figures.netProfit)}
-- Credit Sales (YTD): ${fmt(figures.creditSales)}
+SALES & PROFITABILITY (YTD):
+- Total Sales: ${fmt(kpis.totalSales)}
+- Gross Margin: ${fmt(kpis.grossMargin)} (${fmt(kpis.grossMarginPct, '%')})
+- EBITDA: ${fmt(kpis.ebitda)} (${fmt(kpis.ebitdaPct, '%')})
+- Net Profit: ${fmt(kpis.netProfit)} (${fmt(kpis.netProfitPct, '%')})
 
-Respond with JSON ONLY (no markdown fences, no commentary) — an array of 5-6 objects, each:
-{ "type": "warning" | "alert" | "success", "title": "short title", "body": "1-2 sentence insight referencing the actual numbers above, formatted in Indian units like ₹3.2L or ₹1.2Cr where relevant", "impact": "High" | "Medium" | "Positive" }
-Use "success" only for genuinely healthy metrics, "alert" for the most urgent risk, "warning" for other risks. Skip any ratio marked "not available" rather than guessing.`
+MONTHLY SALES (YTD, Apr-to-date):
+${monthlySalesLines}
+
+CASH POSITION:
+- Cash in Hand: ${fmt(kpis.cashInHand)}
+- Bank Balance: ${fmt(kpis.bankBalance)}
+- Receivables: ${fmt(kpis.receivables)}
+- Payables: ${fmt(kpis.payables)}
+
+TOP PERFORMING ITEMS (by sales value, YTD):
+${topItemsLines}
+
+TOP 5 DEBTORS BY SALES VALUE (YTD):
+${topDebtorsLines}
+
+TOP 5 OUTSTANDING DEBTOR BALANCES (as of now):
+${debtorBalancesLines}
+
+SLOW-MOVING STOCK (no sale in 90+ days):
+${slowStockLines}
+
+Respond with JSON ONLY (no markdown fences, no commentary) matching exactly this shape:
+{
+  "executiveSummary": "2-4 sentence overview of YTD performance",
+  "keyActionItems": ["2-6 short, specific, actionable items for management"],
+  "monthlySalesCommentary": "1-3 sentences on the month-on-month trend — accelerating, seasonal, declining, why",
+  "marginTrendCommentary": "1-3 sentences: is EBITDA/margin improving or declining, and why",
+  "workingCapitalCommentary": "1-3 sentences analyzing CCC and whether working capital is balanced (a very high or negative CCC is worth flagging)",
+  "liquidityCommentary": "1-3 sentences comparing Current vs Quick Ratio — is there enough short-term liquidity to cover current liabilities",
+  "cashPositionCommentary": "1-2 sentences on Cash in Hand vs Bank Balance health",
+  "capitalEfficiencyCommentary": "1-3 sentences on ROCE/ROE — how efficiently is capital generating returns",
+  "debtorPaymentCommentary": "1-3 sentences comparing the top-5-by-sales list against the top-5-outstanding-balances list — are the biggest buyers paying on time, or are big revenue contributors also big overdue risks",
+  "slowMovingCommentary": "1-3 sentences on the impact of the 90+ day slow stock list and what inventory action to prioritize",
+  "topRisks": [{ "title": "short title", "body": "1-2 sentences", "severity": "High"|"Medium"|"Low" }] — exactly the 3 biggest financial risks visible in this data, ranked most severe first (fewer than 3 only if there genuinely aren't that many distinct risks)
+}
+If a section's underlying data is "not available" or empty, say so briefly rather than guessing a number.`
 
   interface ParsedUsage { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
   let text: string
@@ -806,7 +884,7 @@ Use "success" only for genuinely healthy metrics, "alert" for the most urgent ri
           body: JSON.stringify({
             system_instruction: { parts: [{ text: 'You are a helpful CFO advisor. You always respond with valid JSON only.' }] },
             contents: [{ role: 'user', parts: [{ text: promptText }] }],
-            generationConfig: { maxOutputTokens: 2048, responseMimeType: 'application/json' },
+            generationConfig: { maxOutputTokens: 4096, responseMimeType: 'application/json' },
           }),
         },
       )
@@ -823,7 +901,7 @@ Use "success" only for genuinely healthy metrics, "alert" for the most urgent ri
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: 'user', content: promptText }] }),
+        body: JSON.stringify({ model, max_tokens: 4096, messages: [{ role: 'user', content: promptText }] }),
       })
       if (!r.ok) throw new Error(`Anthropic API error ${r.status}`)
       const d = await r.json() as { content: Array<{ type: string; text: string }>; usage: ParsedUsage }
@@ -833,7 +911,7 @@ Use "success" only for genuinely healthy metrics, "alert" for the most urgent ri
     }
 
     const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '')
-    const suggestions = cfoSuggestionSchema.parse(JSON.parse(cleaned))
+    const report = cfoReportSchema.parse(JSON.parse(cleaned))
 
     if (companyId) {
       prisma.parseUsageLog.create({
@@ -849,7 +927,7 @@ Use "success" only for genuinely healthy metrics, "alert" for the most urgent ri
       }).catch((e) => console.error('[CfoSuggestions] usage log error:', e))
     }
 
-    res.json({ suggestions })
+    res.json(report)
   } catch (e) {
     console.error('[CfoSuggestions] failed, falling back to mock:', e)
     if (companyId) {
@@ -857,37 +935,32 @@ Use "success" only for genuinely healthy metrics, "alert" for the most urgent ri
         data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
       }).catch((err) => console.error('[CfoSuggestions] usage log error:', err))
     }
-    res.json({ suggestions: MOCK_CFO_SUGGESTIONS() })
+    res.json(MOCK_CFO_REPORT())
   }
 })
 
-function MOCK_CFO_SUGGESTIONS() {
-  return [
-    {
-      type: 'warning' as const,
-      title: 'Receivables Aging Risk',
-      body: 'Outstanding receivables above 60 days have increased by 18% this quarter. Consider initiating collection calls for your top 5 overdue accounts.',
-      impact: 'High',
-    },
-    {
-      type: 'alert' as const,
-      title: 'Inventory Overstocking Detected',
-      body: '47 stock items have not moved in 30+ days, tying up an estimated ₹3.2L in working capital. Review slow-moving SKUs for discounting or returns.',
-      impact: 'Medium',
-    },
-    {
-      type: 'success' as const,
-      title: 'Gross Margin Improving',
-      body: 'Gross profit margin improved from 28% to 31% compared to last quarter, driven by reduced procurement costs in Electronics and FMCG categories.',
-      impact: 'Positive',
-    },
-    {
-      type: 'warning' as const,
-      title: 'Operating Expense Overrun',
-      body: 'Total operating expenses are 8% above monthly budget. Utility and logistics costs are the primary drivers — review vendor contracts.',
-      impact: 'Medium',
-    },
-  ]
+function MOCK_CFO_REPORT() {
+  return {
+    executiveSummary: 'Demo data — configure GEMINI_API_KEY or ANTHROPIC_API_KEY to get a real AI-generated report from your actual YTD figures.',
+    keyActionItems: [
+      'Follow up on overdue receivables above 60 days.',
+      'Review slow-moving stock for discounting or return-to-vendor.',
+      'Monitor EBITDA margin trend month over month.',
+    ],
+    monthlySalesCommentary: 'Demo: sales have trended upward over the last few months with one seasonal dip.',
+    marginTrendCommentary: 'Demo: EBITDA margin improved slightly this year, driven by lower procurement costs.',
+    workingCapitalCommentary: 'Demo: Cash Conversion Cycle suggests working capital is reasonably balanced, with inventory days the largest component.',
+    liquidityCommentary: 'Demo: Current Ratio is healthy, but Quick Ratio is tighter — short-term liquidity excluding inventory is worth monitoring.',
+    cashPositionCommentary: 'Demo: Bank balance comfortably exceeds cash-in-hand, indicating most funds are held in accounts rather than as cash on premises.',
+    capitalEfficiencyCommentary: 'Demo: ROCE and ROE both point to reasonably efficient use of capital, though there is room to improve asset turnover.',
+    debtorPaymentCommentary: 'Demo: some of the largest customers by sales value also carry large outstanding balances — worth reviewing payment terms with them.',
+    slowMovingCommentary: 'Demo: a handful of items have not sold in over 90 days, tying up working capital that could be redeployed.',
+    topRisks: [
+      { title: 'Receivables Aging Risk', body: 'Outstanding receivables above 60 days have increased, tying up working capital.', severity: 'High' as const },
+      { title: 'Inventory Overstocking', body: 'Several stock items have not moved in 90+ days.', severity: 'Medium' as const },
+      { title: 'Customer Concentration', body: 'A large share of sales comes from a small number of customers.', severity: 'Medium' as const },
+    ],
+  }
 }
 
 function MOCK_BANK_STATEMENT() {

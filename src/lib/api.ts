@@ -1,6 +1,6 @@
 import axios from 'axios'
 import type { DashboardSettings } from '@/types'
-import type { TallyVoucher, SlowStockItem, DebtorBalance } from '@/services/tallyService'
+import type { TallyVoucher, SlowStockItem, DebtorBalance, TopItem, SalesPartyRow } from '@/services/tallyService'
 
 export const api = axios.create({ baseURL: '/api' })
 
@@ -144,32 +144,64 @@ export interface CfoSuggestionRatios {
   debtEquity:   number | null
 }
 
-export interface CfoSuggestionFigures {
-  debtors:          number | null
-  creditors:        number | null
-  closingStock:     number | null
-  quickRatioAssets: number | null
-  netProfit:        number | null
-  creditSales:      number | null
+// Full YTD KPI set (always YTD, regardless of whatever period is currently
+// selected on the Performance/Analysis tabs — see generateCfoSuggestions in
+// Dashboard.tsx). Reuses the same row shapes those tabs already use
+// (TopItem/SalesPartyRow/SlowStockItem/DebtorBalance) since this is the
+// exact same data, just always YTD-scoped.
+export interface CfoKpis {
+  totalSales:         number
+  monthlySales:       { label: string; amount: number }[]
+  grossMargin:        number | null
+  grossMarginPct:     number | null
+  ebitda:             number | null
+  ebitdaPct:          number | null
+  netProfit:          number | null
+  netProfitPct:       number | null
+  cashInHand:         number | null
+  bankBalance:        number | null
+  receivables:        number | null
+  payables:           number | null
+  topItems:           TopItem[]
+  topDebtors:         SalesPartyRow[]
+  slowStock:          SlowStockItem[]
+  debtorBalances:     DebtorBalance[]
 }
 
-export interface CfoSuggestion {
-  type:   'warning' | 'alert' | 'success'
-  title:  string
-  body:   string
-  impact: string
+export interface CfoRisk {
+  title:    string
+  body:     string
+  severity: 'High' | 'Medium' | 'Low'
 }
 
-// AI-generated financial insights derived from the Analysis tab's already-
-// computed ratio KPIs — falls back to demo content server-side if no AI key
-// is configured or the model call fails, so this never errors on the client.
+// Structured report — the AI only produces narrative/synthesis text
+// (never numbers we already have and render ourselves from CfoKpis, to
+// avoid drift/hallucination in anything tabular).
+export interface CfoReport {
+  executiveSummary:            string
+  keyActionItems:               string[]
+  monthlySalesCommentary:       string
+  marginTrendCommentary:        string
+  workingCapitalCommentary:     string
+  liquidityCommentary:          string
+  cashPositionCommentary:       string
+  capitalEfficiencyCommentary:  string
+  debtorPaymentCommentary:      string
+  slowMovingCommentary:         string
+  topRisks:                     CfoRisk[]
+}
+
+// AI-generated financial report derived from the Analysis tab's ratio KPIs
+// plus the full YTD Performance KPI set — falls back to demo content
+// server-side if no AI key is configured or the model call fails, so this
+// never errors on the client.
 export async function fetchCfoSuggestions(
   companyId: string,
   ratios: CfoSuggestionRatios,
-  figures: CfoSuggestionFigures,
-): Promise<CfoSuggestion[]> {
-  const { data } = await api.post<{ suggestions: CfoSuggestion[] }>('/cfo-suggestions', { companyId, ratios, figures })
-  return data.suggestions
+  kpis: CfoKpis,
+): Promise<CfoReport> {
+  const { data } = await api.post<CfoReport>('/cfo-suggestions', { companyId, ratios, kpis })
+  return data
 }
 
 // On 401, clear auth and redirect to login
