@@ -2130,11 +2130,24 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
 
   if (debtorNames.length === 0) return { balances: [] }
 
-  // Pass 3: ClosingBalance for ONLY the resolved debtor ledgers — same
-  // scoped-FILTER pattern as handleFetchLedgerAmounts, so Tally never has to
-  // compute ClosingBalance for the rest of the ledger master.
-  const filter = debtorNames.map(n => `$Name = "${esc(n)}"`).join(' OR ')
-  const balancesXml = `<ENVELOPE>
+  // Pass 3: ClosingBalance for the resolved debtor ledgers — CHUNKED into
+  // small batches (found 2026-07-12: even a single scoped request covering
+  // all ~150+ resolved names still hung this company's Tally — a FILTER only
+  // narrows what's *returned*, it doesn't stop Tally evaluating every ledger
+  // in the master against the formula, and ClosingBalance computation for
+  // this many ledgers at once was still too much in one shot). Batches run
+  // sequentially, not concurrently — Tally's HTTP interface effectively
+  // serializes requests anyway, so firing them in parallel would just queue
+  // up against the same bottleneck while adding contention risk. Each batch
+  // is small enough to complete quickly and independently, so one slow/bad
+  // batch can't block the rest of the app — see the Dashboard.tsx caller,
+  // which now runs this whole function decoupled from the main KPI fetch.
+  const BATCH_SIZE = 10
+  const balances = []
+  for (let i = 0; i < debtorNames.length; i += BATCH_SIZE) {
+    const batch = debtorNames.slice(i, i + BATCH_SIZE)
+    const filter = batch.map(n => `$Name = "${esc(n)}"`).join(' OR ')
+    const balancesXml = `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
@@ -2162,19 +2175,19 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   </BODY>
 </ENVELOPE>`
 
-  const t1 = Date.now()
-  const balancesResponse = await postToTally(balancesXml, tallyUrl)
-  console.log(`[DebtorBalances] balances pass: ${Date.now() - t1}ms, response ${balancesResponse.length} chars`)
+    const tBatch = Date.now()
+    const balancesResponse = await postToTally(balancesXml, tallyUrl)
+    console.log(`[DebtorBalances] batch ${i / BATCH_SIZE + 1}/${Math.ceil(debtorNames.length / BATCH_SIZE)} (${batch.length} ledgers): ${Date.now() - tBatch}ms`)
 
-  const balances = []
-  for (const m of balancesResponse.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
-    const block = m[0]
-    let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
-    if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
-    if (!name) continue
-    const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
-    const balance = -parseTallyBalance(balRaw)
-    if (balance > 0) balances.push({ name, balance })
+    for (const m of balancesResponse.matchAll(/<LEDGER\b[^>]*>([\s\S]*?)<\/LEDGER>/gi)) {
+      const block = m[0]
+      let name = decode(block.match(/<LEDGER\s+NAME="([^"]+)"/i)?.[1] ?? '')
+      if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
+      if (!name) continue
+      const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
+      const balance = -parseTallyBalance(balRaw)
+      if (balance > 0) balances.push({ name, balance })
+    }
   }
   balances.sort((a, b) => b.balance - a.balance)
   console.log(`[DebtorBalances] final: ${balances.length} parties with balance > 0`)

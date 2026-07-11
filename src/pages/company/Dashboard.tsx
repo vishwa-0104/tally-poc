@@ -830,6 +830,10 @@ export default function Dashboard() {
   const [slowStock,         setSlowStock]         = useState<SlowStockItem[]>([])
   const [exportingSlowStock, setExportingSlowStock] = useState(false)
   const [debtorBalances,     setDebtorBalances]     = useState<DebtorBalance[]>([])
+  // Fetched decoupled from the rest of fetchData (see handleFetchLive/fetchData
+  // below) — batched Tally requests, can take a while for a large ledger
+  // master, must never block the other KPI cards from rendering.
+  const [debtorBalancesLoading, setDebtorBalancesLoading] = useState(false)
   const [exportingDebtorBalances, setExportingDebtorBalances] = useState(false)
   const [exportingItems,     setExportingItems]     = useState(false)
   const [exportingDebtors,   setExportingDebtors]   = useState(false)
@@ -1022,7 +1026,6 @@ export default function Dashboard() {
       let latestBankBalance:   number | null = null
       let latestReceivables:   number | null = null
       let latestPayables:      number | null = null
-      let latestDebtorBalances: DebtorBalance[] = []
       if (to === todayStr()) {
         try {
           const { rawLedgers } = await fetchLedgerBalances(tallyUrl, tallyCompany, toTallyDate(todayStr()))
@@ -1059,21 +1062,32 @@ export default function Dashboard() {
           setPayables(null)
         }
 
-        try {
-          const { balances } = await fetchDebtorBalances(tallyUrl, tallyCompany)
-          console.log('[DebtorBalances] parties:', balances.length)
-          setDebtorBalances(balances)
-          latestDebtorBalances = balances
-        } catch (err) {
-          console.error('[DebtorBalances] fetchDebtorBalances failed:', err)
-          setDebtorBalances([])
-        }
+        // Deliberately NOT awaited here — this fetch is batched into many
+        // small sequential Tally requests (see handleFetchDebtorBalances)
+        // and can take a while for a large ledger master. Awaiting it inline
+        // would stall every other KPI card on this tab behind it. Runs on
+        // its own, updates just its own card + spinner, and persists its
+        // own snapshot patch independently once done.
+        setDebtorBalancesLoading(true)
+        fetchDebtorBalances(tallyUrl, tallyCompany)
+          .then(({ balances }) => {
+            console.log('[DebtorBalances] parties:', balances.length)
+            setDebtorBalances(balances)
+            void saveDashboardSnapshot(companyId, { debtorBalances: balances })
+              .catch((err: unknown) => console.error('[DebtorBalances] Failed to persist snapshot:', err))
+          })
+          .catch((err: unknown) => {
+            console.error('[DebtorBalances] fetchDebtorBalances failed:', err)
+            setDebtorBalances([])
+          })
+          .finally(() => setDebtorBalancesLoading(false))
       } else {
         setCashInHand(null)
         setBankBalance(null)
         setReceivables(null)
         setPayables(null)
         setDebtorBalances([])
+        setDebtorBalancesLoading(false)
       }
 
       setFetched(true)
@@ -1194,7 +1208,10 @@ export default function Dashboard() {
         snapshotPatch.bankBalance     = latestBankBalance
         snapshotPatch.receivables     = latestReceivables
         snapshotPatch.payables        = latestPayables
-        snapshotPatch.debtorBalances  = latestDebtorBalances
+        // debtorBalances is deliberately NOT included here — it's fetched
+        // decoupled (see above) and persists its own snapshot patch once
+        // its batched Tally requests finish, since it can resolve well
+        // after this main snapshot save already ran.
       }
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         snapshotPatch.openingStock       = stockResult.value.openingStock
@@ -2366,15 +2383,20 @@ export default function Dashboard() {
                   { label: 'Party' },
                   { label: 'Balance (₹)', right: true },
                 ]}
-                loading={!fetched}
-                rows={fetched && debtorBalances.length > 0
+                // debtorBalancesLoading is its own spinner, independent of
+                // the rest of the tab (`fetched`) — this card's batched fetch
+                // can still be running well after every other KPI has
+                // already rendered, and must show that rather than a stale
+                // or empty state.
+                loading={!fetched || debtorBalancesLoading}
+                rows={fetched && !debtorBalancesLoading && debtorBalances.length > 0
                   ? debtorBalances.slice(0, 8).map((d, i) => ({
                       cells: [
                         `${i + 1}. ${d.name}`,
                         formatCurrency(d.balance),
                       ],
                     }))
-                  : fetched
+                  : fetched && !debtorBalancesLoading
                     ? [{ cells: ['No outstanding balances found', ''], dim: true }]
                     : undefined}
               />
