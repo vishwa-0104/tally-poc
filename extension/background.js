@@ -1983,10 +1983,18 @@ function parseTallyBalance(str) {
 // ── Party-wise debtor balances (Debtor Balances card) ────────────────────────
 // Ad-hoc inline collection, scoped with CHILDOF so it also covers any
 // sub-groups nested under Sundry Debtors — no change to the pre-loaded
-// TallySyncBridge.tdl, no reload needed in Tally. Sundry Debtors' closing
-// balance is Dr/positive when a customer owes money (see handleFetchGroupBalances);
-// only positive balances are kept, matching the existing topDebtors filter in
-// Dashboard.tsx (settled/credit-balance parties don't belong in this list).
+// TallySyncBridge.tdl, no reload needed in Tally.
+//
+// Sign convention CONFIRMED against live Tally (2026-07-11): this raw
+// NATIVEMETHOD ClosingBalance has no Dr/Cr suffix at all, and Tally's raw
+// internal sign for it is the OPPOSITE of the human-readable Dr/Cr report
+// format — Debit (money owed to us) comes back NEGATIVE, Credit (advance/
+// overpayment) comes back POSITIVE. (The aggregate group-balance code in
+// handleFetchGroupBalances never actually verified this — it sidesteps the
+// question entirely with Math.abs().) Flip the sign so a positive `balance`
+// here means "this party owes us money," matching the existing topDebtors
+// filter convention in Dashboard.tsx (settled/credit-balance parties don't
+// belong in this list).
 async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
   const decode = (s) => (s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&#39;/g, "'").trim()
   const xml = `<ENVELOPE>
@@ -2023,7 +2031,7 @@ async function handleFetchDebtorBalances(tallyUrl, tallyCompany) {
     if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name) continue
     const balRaw  = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
-    const balance = parseTallyBalance(balRaw)
+    const balance = -parseTallyBalance(balRaw)
     if (balance > 0) balances.push({ name, balance })
   }
   balances.sort((a, b) => b.balance - a.balance)

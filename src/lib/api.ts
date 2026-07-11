@@ -128,6 +128,47 @@ export async function saveDashboardSnapshot(companyId: string, patch: DashboardS
   await api.put(`/companies/${companyId}/dashboard-snapshot`, patch)
 }
 
+export interface CfoSuggestionRatios {
+  dso:          number | null
+  dio:          number | null
+  dpo:          number | null
+  ccc:          number | null
+  currentRatio: number | null
+  quickRatio:   number | null
+  roce:         number | null
+  roe:          number | null
+  debtEquity:   number | null
+}
+
+export interface CfoSuggestionFigures {
+  debtors:      number | null
+  creditors:    number | null
+  closingStock: number | null
+  cash:         number | null
+  bank:         number | null
+  netProfit:    number | null
+  creditSales:  number | null
+}
+
+export interface CfoSuggestion {
+  type:   'warning' | 'alert' | 'success'
+  title:  string
+  body:   string
+  impact: string
+}
+
+// AI-generated financial insights derived from the Analysis tab's already-
+// computed ratio KPIs — falls back to demo content server-side if no AI key
+// is configured or the model call fails, so this never errors on the client.
+export async function fetchCfoSuggestions(
+  companyId: string,
+  ratios: CfoSuggestionRatios,
+  figures: CfoSuggestionFigures,
+): Promise<CfoSuggestion[]> {
+  const { data } = await api.post<{ suggestions: CfoSuggestion[] }>('/cfo-suggestions', { companyId, ratios, figures })
+  return data.suggestions
+}
+
 // On 401, clear auth and redirect to login
 api.interceptors.response.use(
   (r) => r,

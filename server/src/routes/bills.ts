@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import { prisma } from '../db'
 import { requireAuth, canAccessCompany } from '../middleware/auth'
 
@@ -679,6 +680,216 @@ These entries exist in the books but are absent from the bank statement. They ma
 
 **Verdict**
 ${missing + extra === 0 ? 'Books are fully reconciled.' : missing + extra <= 5 ? 'Minor discrepancy — can be resolved quickly.' : 'Significant discrepancy — requires careful review before closing.'}`
+}
+
+// POST /api/cfo-suggestions — AI-generated financial insights from the
+// company's already-computed ratio KPIs (DSO/DIO/DPO/CCC/Current/Quick/
+// ROCE/ROE/Debt-Equity, from the Analysis tab). Same dual-provider pattern
+// as /reconcile/analyze above: Gemini Flash by default, per-company override,
+// Anthropic fallback, mock fallback if neither key is configured.
+const cfoSuggestionsBody = z.object({
+  companyId: z.string().optional(),
+  ratios: z.object({
+    dso:          z.number().nullable(),
+    dio:          z.number().nullable(),
+    dpo:          z.number().nullable(),
+    ccc:          z.number().nullable(),
+    currentRatio: z.number().nullable(),
+    quickRatio:   z.number().nullable(),
+    roce:         z.number().nullable(),
+    roe:          z.number().nullable(),
+    debtEquity:   z.number().nullable(),
+  }),
+  figures: z.object({
+    debtors:      z.number().nullable(),
+    creditors:    z.number().nullable(),
+    closingStock: z.number().nullable(),
+    cash:         z.number().nullable(),
+    bank:         z.number().nullable(),
+    netProfit:    z.number().nullable(),
+    creditSales:  z.number().nullable(),
+  }),
+})
+
+const cfoSuggestionSchema = z.array(z.object({
+  type:   z.enum(['warning', 'alert', 'success']),
+  title:  z.string(),
+  body:   z.string(),
+  impact: z.string(),
+})).min(4).max(6)
+
+billsRouter.post('/cfo-suggestions', async (req, res) => {
+  const parsed = cfoSuggestionsBody.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
+  const { ratios, figures } = parsed.data
+
+  let companyId: string | null = parsed.data.companyId || null
+  if (!companyId && req.auth.role !== 'ADMIN') {
+    const link = await prisma.userCompany.findFirst({
+      where:  { userId: req.auth.userId },
+      select: { companyId: true },
+    })
+    companyId = link?.companyId ?? null
+  }
+  if (companyId && req.auth.role !== 'ADMIN' && !(await canAccessCompany(req.auth, companyId))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+
+  const geminiKey    = process.env.GEMINI_API_KEY
+  const anthropicKey = process.env.ANTHROPIC_API_KEY
+
+  if (!geminiKey && !anthropicKey) {
+    res.json({ suggestions: MOCK_CFO_SUGGESTIONS() })
+    return
+  }
+
+  let parseService = geminiKey ? 'gemini' : 'anthropic'
+  let model        = parseService === 'gemini' ? 'gemini-flash-latest' : 'claude-haiku-4-5-20251001'
+  if (companyId) {
+    const company = await prisma.company.findUnique({
+      where:  { id: companyId },
+      select: { parseService: true, parseModel: true },
+    })
+    if (company) {
+      parseService = company.parseService ?? parseService
+      const dbModel = company.parseModel ?? ''
+      if (parseService === 'gemini' && GEMINI_MODELS.includes(dbModel))            model = dbModel
+      else if (parseService === 'anthropic' && ANTHROPIC_MODELS.includes(dbModel)) model = dbModel
+      else model = parseService === 'anthropic' ? 'claude-haiku-4-5-20251001' : 'gemini-flash-latest'
+    }
+  }
+
+  const apiKey = parseService === 'anthropic' ? anthropicKey! : geminiKey!
+
+  const fmt = (n: number | null, suffix = '') =>
+    n == null ? 'not available' : `${n.toLocaleString('en-IN', { maximumFractionDigits: 1 })}${suffix}`
+
+  const promptText = `You are a CFO advisor reviewing a company's financial ratios. Based ONLY on the data below, give 5-6 concrete, specific insights or warnings a business owner should act on.
+
+RATIOS:
+- DSO (Days Sales Outstanding): ${fmt(ratios.dso, ' days')}
+- DIO (Days Inventory Outstanding): ${fmt(ratios.dio, ' days')}
+- DPO (Days Payables Outstanding): ${fmt(ratios.dpo, ' days')}
+- CCC (Cash Conversion Cycle): ${fmt(ratios.ccc, ' days')}
+- Current Ratio: ${fmt(ratios.currentRatio)}
+- Quick Ratio: ${fmt(ratios.quickRatio)}
+- ROCE: ${fmt(ratios.roce, '%')}
+- ROE: ${fmt(ratios.roe, '%')}
+- Debt/Equity: ${fmt(ratios.debtEquity)}
+
+SUPPORTING FIGURES (INR):
+- Debtors (Receivables): ${fmt(figures.debtors)}
+- Creditors (Payables): ${fmt(figures.creditors)}
+- Closing Stock: ${fmt(figures.closingStock)}
+- Cash in Hand: ${fmt(figures.cash)}
+- Bank Balance: ${fmt(figures.bank)}
+- Net Profit (YTD): ${fmt(figures.netProfit)}
+- Credit Sales (YTD): ${fmt(figures.creditSales)}
+
+Respond with JSON ONLY (no markdown fences, no commentary) — an array of 5-6 objects, each:
+{ "type": "warning" | "alert" | "success", "title": "short title", "body": "1-2 sentence insight referencing the actual numbers above, formatted in Indian units like ₹3.2L or ₹1.2Cr where relevant", "impact": "High" | "Medium" | "Positive" }
+Use "success" only for genuinely healthy metrics, "alert" for the most urgent risk, "warning" for other risks. Skip any ratio marked "not available" rather than guessing.`
+
+  interface ParsedUsage { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+  let text: string
+  let usage: ParsedUsage
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rawUsage: any = null
+
+  console.log(`[CfoSuggestions] companyId=${companyId ?? 'none'} model=${model}`)
+
+  try {
+    if (parseService === 'gemini') {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: 'You are a helpful CFO advisor. You always respond with valid JSON only.' }] },
+            contents: [{ role: 'user', parts: [{ text: promptText }] }],
+            generationConfig: { maxOutputTokens: 2048, responseMimeType: 'application/json' },
+          }),
+        },
+      )
+      if (!r.ok) throw new Error(`Gemini API error ${r.status}`)
+      const d = await r.json() as {
+        candidates: Array<{ content: { parts: Array<{ text: string }> } }>
+        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number }
+      }
+      const thinkingTokens = d.usageMetadata?.thoughtsTokenCount ?? 0
+      rawUsage = d.usageMetadata ?? null
+      text  = d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+      usage = { input_tokens: d.usageMetadata?.promptTokenCount ?? 0, output_tokens: (d.usageMetadata?.candidatesTokenCount ?? 0) + thinkingTokens }
+    } else {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: 'user', content: promptText }] }),
+      })
+      if (!r.ok) throw new Error(`Anthropic API error ${r.status}`)
+      const d = await r.json() as { content: Array<{ type: string; text: string }>; usage: ParsedUsage }
+      rawUsage = d.usage ?? null
+      text  = d.content.find((b) => b.type === 'text')?.text ?? ''
+      usage = d.usage ?? { input_tokens: 0, output_tokens: 0 }
+    }
+
+    const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '')
+    const suggestions = cfoSuggestionSchema.parse(JSON.parse(cleaned))
+
+    if (companyId) {
+      prisma.parseUsageLog.create({
+        data: {
+          companyId, model,
+          inputTokens:  usage.input_tokens ?? 0,
+          outputTokens: usage.output_tokens ?? 0,
+          cacheRead:    usage.cache_read_input_tokens ?? 0,
+          cacheWrite:   usage.cache_creation_input_tokens ?? 0,
+          success:      true,
+          rawUsage,
+        },
+      }).catch((e) => console.error('[CfoSuggestions] usage log error:', e))
+    }
+
+    res.json({ suggestions })
+  } catch (e) {
+    console.error('[CfoSuggestions] failed, falling back to mock:', e)
+    if (companyId) {
+      prisma.parseUsageLog.create({
+        data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
+      }).catch((err) => console.error('[CfoSuggestions] usage log error:', err))
+    }
+    res.json({ suggestions: MOCK_CFO_SUGGESTIONS() })
+  }
+})
+
+function MOCK_CFO_SUGGESTIONS() {
+  return [
+    {
+      type: 'warning' as const,
+      title: 'Receivables Aging Risk',
+      body: 'Outstanding receivables above 60 days have increased by 18% this quarter. Consider initiating collection calls for your top 5 overdue accounts.',
+      impact: 'High',
+    },
+    {
+      type: 'alert' as const,
+      title: 'Inventory Overstocking Detected',
+      body: '47 stock items have not moved in 30+ days, tying up an estimated ₹3.2L in working capital. Review slow-moving SKUs for discounting or returns.',
+      impact: 'Medium',
+    },
+    {
+      type: 'success' as const,
+      title: 'Gross Margin Improving',
+      body: 'Gross profit margin improved from 28% to 31% compared to last quarter, driven by reduced procurement costs in Electronics and FMCG categories.',
+      impact: 'Positive',
+    },
+    {
+      type: 'warning' as const,
+      title: 'Operating Expense Overrun',
+      body: 'Total operating expenses are 8% above monthly budget. Utility and logistics costs are the primary drivers — review vendor contracts.',
+      impact: 'Medium',
+    },
+  ]
 }
 
 function MOCK_BANK_STATEMENT() {

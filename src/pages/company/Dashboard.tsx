@@ -12,7 +12,7 @@ import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBala
 import {
   fetchSalesTargets, fetchDashboardSettings,
   fetchCachedVouchers, saveVouchers, fetchDashboardSnapshot, saveDashboardSnapshot,
-  type DashboardSnapshotPatch,
+  fetchCfoSuggestions, type DashboardSnapshotPatch, type CfoSuggestion,
 } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
@@ -188,35 +188,6 @@ function computeTargetForPeriod(
   const sum = months.reduce((s, m) => s + (targets[m] ?? 0), 0)
   return sum > 0 ? sum : null
 }
-
-// ── Static data for CFO tab ───────────────────────────────────────────────────
-
-const cfoSuggestions = [
-  {
-    type: 'warning' as const,
-    title: 'Receivables Aging Risk',
-    body: 'Outstanding receivables above 60 days have increased by 18% this quarter. Consider initiating collection calls for your top 5 overdue accounts.',
-    impact: 'High',
-  },
-  {
-    type: 'alert' as const,
-    title: 'Inventory Overstocking Detected',
-    body: '47 stock items have not moved in 30+ days, tying up an estimated ₹3.2L in working capital. Review slow-moving SKUs for discounting or returns.',
-    impact: 'Medium',
-  },
-  {
-    type: 'success' as const,
-    title: 'Gross Margin Improving',
-    body: 'Gross profit margin improved from 28% to 31% compared to last quarter, driven by reduced procurement costs in Electronics and FMCG categories.',
-    impact: 'Positive',
-  },
-  {
-    type: 'warning' as const,
-    title: 'Operating Expense Overrun',
-    body: 'Total operating expenses are 8% above monthly budget. Utility and logistics costs are the primary drivers — review vendor contracts.',
-    impact: 'Medium',
-  },
-]
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -879,6 +850,11 @@ export default function Dashboard() {
   const [analysisUncachedRange, setAnalysisUncachedRange] = useState(false)
   const [analysisActivePeriod, setAnalysisActivePeriod] = useState<{ from: string; to: string } | null>(null)
   const [analysisInputs,       setAnalysisInputs]       = useState<AnalysisInputs>(emptyAnalysisInputs)
+
+  // CFO Suggestions tab — AI-generated insights derived from the ratios above.
+  const [cfoSuggestions, setCfoSuggestions] = useState<CfoSuggestion[] | null>(null)
+  const [cfoLoading,     setCfoLoading]     = useState(false)
+  const [cfoError,       setCfoError]       = useState(false)
 
   // Sales-card trend chart. YTD buckets the already-fetched `all` vouchers by
   // month — no extra call. Today needs history beyond the single day already
@@ -1882,6 +1858,41 @@ export default function Dashboard() {
     fetchAnalysisData(analysisFilterPreset, analysisCustomFrom, analysisCustomTo)
   }
 
+  // AI-generated CFO Suggestions — derived from the ratios/figures already
+  // computed on the Analysis tab. Costs a real API call, so this is only
+  // triggered once automatically per session (see effect below) plus an
+  // explicit "Regenerate" button, never on every tab switch.
+  const generateCfoSuggestions = useCallback(() => {
+    if (!companyId) return
+    setCfoLoading(true)
+    setCfoError(false)
+    const ratios = computeRatios(analysisInputs)
+    const figures = {
+      debtors:      analysisInputs.debtors,
+      creditors:    analysisInputs.creditors,
+      closingStock: analysisInputs.closingStock,
+      cash:         analysisInputs.cash,
+      bank:         analysisInputs.bank,
+      netProfit:    analysisInputs.netProfit,
+      creditSales:  analysisInputs.creditSales,
+    }
+    fetchCfoSuggestions(companyId, ratios, figures)
+      .then(setCfoSuggestions)
+      .catch((err: unknown) => {
+        console.error('[CfoSuggestions] failed:', err)
+        setCfoError(true)
+      })
+      .finally(() => setCfoLoading(false))
+  }, [companyId, analysisInputs])
+
+  // Auto-generate once per session, the first time the CFO tab is opened
+  // after ratios are available — never re-fires on subsequent tab switches.
+  useEffect(() => {
+    if (activeTab !== 'cfo') return
+    if (!analysisFetched || cfoSuggestions !== null || cfoLoading) return
+    generateCfoSuggestions()
+  }, [activeTab, analysisFetched, cfoSuggestions, cfoLoading, generateCfoSuggestions])
+
   const reloadMeta = () => {
     if (!companyId) return
     fetchSalesTargets(companyId, fyYear)
@@ -2490,37 +2501,65 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 mb-1">
               <Lightbulb className="w-4 h-4 text-amber-500" />
               <p className="text-sm font-semibold text-gray-700">AI-Powered Financial Insights</p>
-              <span className="ml-auto text-[10px] text-gray-400 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
-                Demo data · Live integration coming soon
-              </span>
+              {cfoLoading ? (
+                <span className="ml-auto flex items-center gap-1.5 text-[11px] text-gray-400">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> Generating…
+                </span>
+              ) : (
+                <button
+                  onClick={generateCfoSuggestions}
+                  disabled={!analysisFetched}
+                  title="Regenerate AI insights from the latest ratios"
+                  className="ml-auto flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className="w-3 h-3" /> Regenerate
+                </button>
+              )}
             </div>
 
-            {cfoSuggestions.map((s, i) => {
-              const isSuccess = s.type === 'success'
-              const Icon = isSuccess ? CheckCircle : AlertTriangle
-              const style = {
-                warning: { wrap: 'border-amber-200 bg-amber-50', icon: 'text-amber-500', badge: 'bg-amber-100 text-amber-700' },
-                alert:   { wrap: 'border-red-200 bg-red-50',     icon: 'text-red-500',   badge: 'bg-red-100 text-red-700'   },
-                success: { wrap: 'border-green-200 bg-green-50', icon: 'text-green-600', badge: 'bg-green-100 text-green-700' },
-              }[s.type]
+            {!analysisFetched ? (
+              <div className="h-40 flex flex-col items-center justify-center gap-1 text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                <p className="text-sm font-medium">No ratio data yet</p>
+                <p className="text-xs">Visit the Analysis tab first to compute your ratios.</p>
+              </div>
+            ) : cfoLoading && !cfoSuggestions ? (
+              <div className="h-40 flex flex-col items-center justify-center gap-2 text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                <p className="text-sm">Generating insights from your ratios…</p>
+              </div>
+            ) : (
+              <>
+                {cfoError && !cfoSuggestions && (
+                  <p className="text-xs text-red-500 mb-2">Couldn't generate insights right now. Try Regenerate.</p>
+                )}
+                {cfoSuggestions?.map((s, i) => {
+                  const isSuccess = s.type === 'success'
+                  const Icon = isSuccess ? CheckCircle : AlertTriangle
+                  const style = {
+                    warning: { wrap: 'border-amber-200 bg-amber-50', icon: 'text-amber-500', badge: 'bg-amber-100 text-amber-700' },
+                    alert:   { wrap: 'border-red-200 bg-red-50',     icon: 'text-red-500',   badge: 'bg-red-100 text-red-700'   },
+                    success: { wrap: 'border-green-200 bg-green-50', icon: 'text-green-600', badge: 'bg-green-100 text-green-700' },
+                  }[s.type]
 
-              return (
-                <div key={i} className={`rounded-xl border ${style.wrap} p-4`}>
-                  <div className="flex items-start gap-3">
-                    <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${style.icon}`} />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="text-sm font-semibold text-gray-800">{s.title}</p>
-                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${style.badge}`}>
-                          {s.impact}
-                        </span>
+                  return (
+                    <div key={i} className={`rounded-xl border ${style.wrap} p-4`}>
+                      <div className="flex items-start gap-3">
+                        <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${style.icon}`} />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-semibold text-gray-800">{s.title}</p>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${style.badge}`}>
+                              {s.impact}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600 leading-relaxed">{s.body}</p>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-600 leading-relaxed">{s.body}</p>
                     </div>
-                  </div>
-                </div>
-              )
-            })}
+                  )
+                })}
+              </>
+            )}
           </div>
         )}
 
