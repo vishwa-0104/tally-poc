@@ -653,7 +653,7 @@ function DataTableCard({
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'performance', label: 'Performance'     },
-  { key: 'analysis',    label: 'Analysis'        },
+  { key: 'analysis',    label: 'Analytics'        },
   { key: 'cfo',         label: 'CFO Suggestions' },
 ]
 
@@ -2780,7 +2780,7 @@ export default function Dashboard() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-1">
               <Lightbulb className="w-4 h-4 text-amber-500" />
-              <p className="text-sm font-semibold text-gray-700">AI-Powered Financial Report (YTD)</p>
+              <p className="text-sm font-semibold text-gray-700">AI-Powered Analysis on YTD Basis</p>
               {cfoLoading ? (
                 <span className="ml-auto flex items-center gap-1.5 text-[11px] text-gray-400">
                   <RefreshCw className="w-3 h-3 animate-spin" /> Generating…
@@ -2815,7 +2815,7 @@ export default function Dashboard() {
                 {/* Report Header */}
                 <div className="bg-white border border-gray-200 rounded-xl p-5">
                   <p className="text-lg font-bold text-gray-900">{company?.name ?? 'Company'}</p>
-                  <p className="text-sm text-gray-600 mt-0.5">Executive Financial Performance Summary (YTD)</p>
+                  <p className="text-sm text-gray-600 mt-0.5">Financial Performance Summary on YTD Basis</p>
                   <p className="text-xs text-gray-400 mt-1">
                     Reporting Period: {activePeriod ? `${formatDate(activePeriod.from)} – ${formatDate(activePeriod.to)}` : '—'}
                   </p>
@@ -2974,7 +2974,7 @@ export default function Dashboard() {
 
                 {/* Strategic Actions for Management */}
                 <div>
-                  <ReportSectionHeading n={4} title="Strategic Action Items for Management" />
+                  <ReportSectionHeading n={4} title="Strategic Actions for Management" />
                   <div className="bg-white border border-gray-200 rounded-xl p-4">
                     <ul className="space-y-3">
                       {cfoReport.keyActionItems.map((item, i) => (

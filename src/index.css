@@ -4,7 +4,7 @@
 
 @layer base {
   html {
-    font-size: 133.33%; /* scales .75rem → 16px, .875rem → ~18.7px */
+    font-size: 100.00%; /* scales .75rem → 16px, .875rem → ~18.7px */
   }
 
   * {
