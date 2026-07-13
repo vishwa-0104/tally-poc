@@ -151,4 +151,29 @@
 .xml-attr  { color: #FFA657; }
 .xml-comment { color: #6E7681; }
 
+/* CFO report print/PDF export — isolates .print-cfo-report as the entire
+   printed page (sidebar, tabs, buttons, etc. are hidden), so window.print()
+   on the CFO Suggestions tab produces just the report. */
+@media print {
+  body * { visibility: hidden; }
+  .print-cfo-report, .print-cfo-report * { visibility: visible; }
+  .print-cfo-report {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .print-cfo-report > * { break-inside: avoid; }
+
+  /* Chrome/Safari suppress background-color fills in print by default (an
+     ink-saving default) — this forces the report's colored bars, table
+     header, and card backgrounds to actually print instead of showing as
+     blank white. */
+  .print-cfo-report, .print-cfo-report * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+}
+
 

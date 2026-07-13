@@ -2101,17 +2101,23 @@ export default function Dashboard() {
   // Analysis tabs. Reuses loadFromDb/loadAnalysisFromDb (already-proven DB-
   // cache reads) rather than a parallel fetch path — accepted trade-off:
   // this also updates what those tabs show if visited afterward, since it's
-  // the same shared component state. Costs a real API call, so this is only
-  // triggered once automatically per session (see effect below) plus an
-  // explicit "Regenerate" button, never on every tab switch.
-  const generateCfoSuggestions = useCallback(async () => {
+  // the same shared component state.
+  //
+  // The AI call itself is cached server-side (DashboardSnapshot.cfoReport +
+  // cfoInputsHash): every visit recomputes the fresh kpis/ratios and
+  // fingerprints them, but only calls the AI when that fingerprint differs
+  // from the one that produced the last stored report — otherwise the
+  // stored report is reused with no AI call. `force` (the Regenerate
+  // button) always calls the AI regardless of the fingerprint.
+  const generateCfoSuggestions = useCallback(async (force = false) => {
     if (!companyId) return
     setCfoLoading(true)
     setCfoError(false)
     try {
-      const [perf, analysis] = await Promise.all([
+      const [perf, analysis, snapshot] = await Promise.all([
         loadFromDb('ytd', '', ''),
         loadAnalysisFromDb('ytd', '', ''),
+        fetchDashboardSnapshot(companyId),
       ])
       const cfoYtdDays = daysSinceFyStart(todayStr())
       const ratios = computeRatios(analysis.data, {
@@ -2143,8 +2149,16 @@ export default function Dashboard() {
       }
       setCfoKpis(kpis)
       setCfoRatios(ratios)
+
+      const fingerprint = JSON.stringify({ kpis, ratios })
+      if (!force && snapshot?.cfoReport && snapshot.cfoInputsHash === fingerprint) {
+        setCfoReport(snapshot.cfoReport as CfoReport)
+        return
+      }
+
       const report = await fetchCfoSuggestions(companyId, ratios, kpis)
       setCfoReport(report)
+      void saveDashboardSnapshot(companyId, { cfoReport: report, cfoInputsHash: fingerprint })
     } catch (err) {
       console.error('[CfoSuggestions] failed:', err)
       setCfoError(true)
@@ -2153,14 +2167,18 @@ export default function Dashboard() {
     }
   }, [companyId, dashboardSettings, loadFromDb, loadAnalysisFromDb])
 
-  // Auto-generate once per session, the first time the CFO tab is opened —
-  // never re-fires on subsequent tab switches. No longer gated on
-  // analysisFetched: generateCfoSuggestions does its own YTD DB read now.
+  // Re-checks every time the user switches INTO the CFO tab (not merely
+  // because the component re-rendered while already on it) — the ref
+  // detects the transition so this doesn't loop. generateCfoSuggestions
+  // itself decides whether that means a real AI call or an instant cache
+  // hit, based on the data fingerprint.
+  const prevTabRef = useRef<Tab | null>(null)
   useEffect(() => {
-    if (activeTab !== 'cfo') return
-    if (!companyId || cfoReport !== null || cfoLoading) return
+    const enteredCfo = activeTab === 'cfo' && prevTabRef.current !== 'cfo'
+    prevTabRef.current = activeTab
+    if (!enteredCfo || !companyId) return
     generateCfoSuggestions()
-  }, [activeTab, companyId, cfoReport, cfoLoading, generateCfoSuggestions])
+  }, [activeTab, companyId, generateCfoSuggestions])
 
   const reloadMeta = () => {
     if (!companyId) return
@@ -2786,13 +2804,24 @@ export default function Dashboard() {
                   <RefreshCw className="w-3 h-3 animate-spin" /> Generating…
                 </span>
               ) : (
-                <button
-                  onClick={generateCfoSuggestions}
-                  title="Regenerate the report from the latest YTD data"
-                  className="ml-auto flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700"
-                >
-                  <RefreshCw className="w-3 h-3" /> Regenerate
-                </button>
+                <div className="ml-auto flex items-center gap-3">
+                  {cfoReport && (
+                    <button
+                      onClick={() => window.print()}
+                      title="Generate a PDF of this report (opens the print dialog — choose Save as PDF)"
+                      className="flex items-center gap-1 text-[11px] font-medium text-gray-600 hover:text-gray-800"
+                    >
+                      <Download className="w-3 h-3" /> Generate PDF
+                    </button>
+                  )}
+                  <button
+                    onClick={() => generateCfoSuggestions(true)}
+                    title="Regenerate the report from the latest YTD data"
+                    className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Regenerate
+                  </button>
+                </div>
               )}
             </div>
 
@@ -2807,9 +2836,9 @@ export default function Dashboard() {
                 <p className="text-xs">Click Regenerate to try again.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 print-cfo-report">
                 {cfoError && (
-                  <p className="text-xs text-red-500">Last regenerate attempt failed — showing the previous report.</p>
+                  <p className="text-xs text-red-500 print:hidden">Last regenerate attempt failed — showing the previous report.</p>
                 )}
 
                 {/* Report Header */}

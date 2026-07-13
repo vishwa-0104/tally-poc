@@ -1193,6 +1193,8 @@ companiesRouter.put('/companies/:id/dashboard-snapshot', async (req, res) => {
     nonOperatingIncomeTotal:     z.number().nullable().optional(),
     nonOperatingInvestmentTotal: z.number().nullable().optional(),
     directorLoansTotal:          z.number().nullable().optional(),
+    cfoReport:     z.record(z.any()).optional(),
+    cfoInputsHash: z.string().optional(),
   })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }

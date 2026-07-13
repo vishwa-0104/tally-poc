@@ -405,5 +405,10 @@ model DashboardSnapshot {
   nonOperatingIncomeTotal    Float?
   nonOperatingInvestmentTotal Float?
   directorLoansTotal         Float?
+  // CFO Suggestions report cache — cfoInputsHash is a JSON.stringify of the
+  // exact kpis/ratios payload that produced cfoReport, so a later visit can
+  // skip the AI call when the fingerprint still matches fresh data.
+  cfoReport          Json?
+  cfoInputsHash      String?
   fetchedAt          DateTime @default(now())
 }

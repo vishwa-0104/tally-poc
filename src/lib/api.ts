@@ -115,6 +115,8 @@ export interface DashboardSnapshotPatch {
   nonOperatingIncomeTotal?:     number | null
   nonOperatingInvestmentTotal?: number | null
   directorLoansTotal?:          number | null
+  cfoReport?:     CfoReport
+  cfoInputsHash?: string
 }
 
 export interface DashboardSnapshotData extends DashboardSnapshotPatch {
