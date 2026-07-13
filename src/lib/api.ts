@@ -160,6 +160,10 @@ export interface CfoKpis {
   netProfitPct:       number | null
   cashInHand:         number | null
   bankBalance:        number | null
+  cashInflow:         number | null
+  cashOutflow:        number | null
+  bankInflow:         number | null
+  bankOutflow:        number | null
   receivables:        number | null
   payables:           number | null
   topItems:           TopItem[]

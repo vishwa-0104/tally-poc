@@ -16,7 +16,7 @@ import {
 } from '@/lib/api'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
 import { classifyVouchers, computeCreditSalesTotal } from '@/lib/voucherClassification'
 
@@ -815,6 +815,130 @@ function computeRatios(i: AnalysisInputs, days: { dso: number; dio: number; dpo:
   return { dso, dio, dpo, ccc, currentRatio, quickRatio, roce, roe, debtEquity }
 }
 
+// ── CFO report helpers ───────────────────────────────────────────────────────
+// All deterministic — thresholds inferred from the sample Executive Financial
+// Summary report this section was built to match. No AI involvement: the
+// numbers driving these bands are already real (computeRatios/loadFromDb),
+// so the assessment text is just a plain-language readout of a real number,
+// never a model-generated figure.
+
+function formatCompactLakhs(value: number): string {
+  if (Math.abs(value) < 100000) return formatCurrency(value)
+  const lakhs = value / 100000
+  return `${lakhs < 0 ? '-' : ''}₹${Math.abs(lakhs).toFixed(2)}L`
+}
+
+// Net Profit is structurally derived from Gross Margin minus opex/tax, so it
+// should sit at or below it. Net Profit % exceeding Gross Margin % at all
+// (not by some minimum gap) is itself the anomaly — it means indirect/
+// non-operating income is carrying the business, not core trading.
+function hasMarginAnomaly(grossMarginPct: number | null, netProfitPct: number | null): boolean {
+  if (grossMarginPct == null || netProfitPct == null) return false
+  return netProfitPct > grossMarginPct
+}
+
+function dsoAssessment(v: number | null): string {
+  if (v == null) return 'No data available'
+  if (v <= 30) return 'Fast collection cycle — debtors are converting to cash quickly.'
+  if (v <= 45) return `Reasonable collection period; realization from debtors takes ~${v.toFixed(0)} days.`
+  if (v <= 60) return 'Elevated. Tighten credit terms and follow up on outstanding collections.'
+  return 'Extremely prolonged. Working capital is trapped in receivables.'
+}
+function dioAssessment(v: number | null): string {
+  if (v == null) return 'No data available'
+  if (v <= 30) return 'Efficient stock turnover; inventory holds for about a month on average.'
+  if (v <= 60) return 'Moderate. Within typical trading norms.'
+  if (v <= 90) return 'Elevated. Review slow-moving stock and reorder cadence.'
+  return 'Excessive. Capital is tied up in inventory for too long.'
+}
+function dpoAssessment(v: number | null): string {
+  if (v == null) return 'No data available'
+  if (v <= 30) return 'Short payment cycle. Limited use of supplier credit.'
+  if (v <= 60) return 'Reasonable reliance on supplier credit.'
+  return 'Extremely prolonged. The company is heavily leaning on supplier credit to fund operations.'
+}
+function cccAssessment(v: number | null): string {
+  if (v == null) return 'No data available'
+  if (v <= 0) return 'Mathematically favorable, but check whether this is driven by delayed supplier payouts.'
+  if (v <= 45) return 'Efficient cash conversion cycle.'
+  if (v <= 90) return 'Moderate. The working capital cycle is lengthening.'
+  return 'Extended. Significant cash is locked in the operating cycle.'
+}
+function roceAssessment(v: number | null): string {
+  if (v == null) return 'No data available'
+  if (v < 10) return 'Weak capital efficiency. Returns barely cover the cost of capital.'
+  if (v < 20) return 'Moderate capital efficiency.'
+  return 'High capital efficiency, though check whether this is due to a low overall capital asset base.'
+}
+function roeAssessment(v: number | null): string {
+  if (v == null) return 'No data available'
+  if (v < 10) return 'Weak returns for equity stakeholders.'
+  if (v < 20) return 'Reasonable return for equity stakeholders.'
+  return 'Robust return for equity stakeholders — check leverage via current obligations.'
+}
+function quickRatioNote(v: number | null): string {
+  if (v == null) return 'No data available'
+  if (v < 0.5) return 'Severe Liquid Stress'
+  if (v < 1.0) return 'Below comfortable threshold'
+  return 'Healthy quick liquidity'
+}
+function flowNote(inflow: number | null, outflow: number | null): string {
+  if (inflow == null || outflow == null) return 'No data available'
+  if (inflow === outflow) return `Inflow: ${formatCurrency(inflow)} | Outflow: ${formatCurrency(outflow)}`
+  const diff = formatCurrency(Math.abs(inflow - outflow))
+  const cmp = inflow < outflow ? `Inflow < Outflow by ${diff}` : `Inflow > Outflow by ${diff}`
+  return `Inflow: ${formatCurrency(inflow)} | Outflow: ${formatCurrency(outflow)} · ${cmp}`
+}
+
+// Report-style stat card — centered layout with a full-tone background,
+// matching the reference Executive Financial Summary report (as opposed to
+// the dashboard's left-aligned top-border StatCard used elsewhere).
+function ReportStatCard({ label, value, sub, tone = 'blue' }: {
+  label: string
+  value: string
+  sub?:  string
+  tone?: 'blue' | 'green' | 'danger'
+}) {
+  const styles = {
+    blue:   { wrap: 'bg-gray-50 border-gray-200', value: 'text-brand-600',   sub: 'text-gray-500' },
+    green:  { wrap: 'bg-gray-50 border-gray-200', value: 'text-emerald-600', sub: 'text-gray-500' },
+    danger: { wrap: 'bg-red-50 border-red-200',   value: 'text-red-600',    sub: 'text-red-600'  },
+  }[tone]
+  return (
+    <div className={`rounded-xl border p-4 text-center ${styles.wrap}`}>
+      <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{label}</p>
+      <p className={`text-2xl font-bold leading-tight ${styles.value}`}>{value}</p>
+      {sub && <p className={`text-[11px] mt-1.5 leading-snug ${styles.sub}`}>{sub}</p>}
+    </div>
+  )
+}
+
+// Numbered section heading with a small blue accent bar, matching the
+// reference report's "1. Key Financial Metrics" style headings.
+function ReportSectionHeading({ n, title }: { n: number; title: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <div className="w-1 h-4 bg-brand-600 rounded-sm shrink-0" />
+      <p className="text-sm font-bold text-gray-800">{n}. {title}</p>
+    </div>
+  )
+}
+
+// Splits an AI-generated action item on its first "Title: description"
+// colon (the prompt now asks for this shape) so the lead phrase can be
+// bolded like the reference report. Falls back to plain text if the model
+// didn't include a colon.
+function renderActionItem(item: string) {
+  const idx = item.indexOf(': ')
+  if (idx === -1) return <span>{item}</span>
+  return (
+    <>
+      <span className="font-semibold text-gray-900">{item.slice(0, idx + 1)}</span>
+      <span>{item.slice(idx + 1)}</span>
+    </>
+  )
+}
+
 export default function Dashboard() {
   const { activeCompanyId } = useAuthStore()
   const { getCompany }       = useCompanyStore()
@@ -1288,6 +1412,8 @@ export default function Dashboard() {
       ebitda: number | null; ebitdaPct: number | null
       netProfit: number | null; netProfitPct: number | null
       cashInHand: number | null; bankBalance: number | null
+      cashInflow: number | null; cashOutflow: number | null
+      bankInflow: number | null; bankOutflow: number | null
       receivables: number | null; payables: number | null
       topItems: TopItem[]
       topDebtors: SalesPartyRow[]
@@ -1298,7 +1424,9 @@ export default function Dashboard() {
     const emptyData = {
       total: 0, salesTrend: [], grossMargin: null, grossMarginPct: null,
       ebitda: null, ebitdaPct: null, netProfit: null, netProfitPct: null,
-      cashInHand: null, bankBalance: null, receivables: null, payables: null,
+      cashInHand: null, bankBalance: null,
+      cashInflow: null, cashOutflow: null, bankInflow: null, bankOutflow: null,
+      receivables: null, payables: null,
       topItems: [], topDebtors: [], slowStock: [], debtorBalances: [],
     }
     if (!companyId) return { fetchedDates: [], data: emptyData }
@@ -1462,6 +1590,8 @@ export default function Dashboard() {
           ebitda: ebitdaResult, ebitdaPct: ebitdaPctResult,
           netProfit: netProfitResult, netProfitPct: netProfitPctResult,
           cashInHand: cashInHandResult, bankBalance: bankBalanceResult,
+          cashInflow: cashFlow.inflow, cashOutflow: cashFlow.outflow,
+          bankInflow: bankFlow.inflow, bankOutflow: bankFlow.outflow,
           receivables: receivablesResult, payables: payablesResult,
           topItems: fetchedTopItems, topDebtors: topDebtorsResult,
           slowStock: slowStockResult, debtorBalances: debtorBalancesResult,
@@ -2000,6 +2130,10 @@ export default function Dashboard() {
         netProfitPct:   perf.data.netProfitPct,
         cashInHand:     perf.data.cashInHand,
         bankBalance:    perf.data.bankBalance,
+        cashInflow:     perf.data.cashInflow,
+        cashOutflow:    perf.data.cashOutflow,
+        bankInflow:     perf.data.bankInflow,
+        bankOutflow:    perf.data.bankOutflow,
         receivables:    perf.data.receivables,
         payables:       perf.data.payables,
         topItems:       perf.data.topItems,
@@ -2678,248 +2812,179 @@ export default function Dashboard() {
                   <p className="text-xs text-red-500">Last regenerate attempt failed — showing the previous report.</p>
                 )}
 
-                {/* Executive Summary */}
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                  <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-2">Executive Summary</p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{cfoReport.executiveSummary}</p>
+                {/* Report Header */}
+                <div className="bg-white border border-gray-200 rounded-xl p-5">
+                  <p className="text-lg font-bold text-gray-900">{company?.name ?? 'Company'}</p>
+                  <p className="text-sm text-gray-600 mt-0.5">Executive Financial Performance Summary (YTD)</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Reporting Period: {activePeriod ? `${formatDate(activePeriod.from)} – ${formatDate(activePeriod.to)}` : '—'}
+                  </p>
+                  <div className="border-t-2 border-brand-600 mt-3" />
                 </div>
 
-                {/* Key Action Items */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Key Action Items</p>
-                  <ul className="space-y-1.5">
-                    {cfoReport.keyActionItems.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                        <span className="text-blue-500 mt-0.5">•</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Top Risks */}
-                <div className="space-y-3">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest">Top Risks</p>
-                  {cfoReport.topRisks.map((risk, i) => {
-                    const style = {
-                      High:   { wrap: 'border-red-200 bg-red-50',     icon: 'text-red-500',   badge: 'bg-red-100 text-red-700'   },
-                      Medium: { wrap: 'border-amber-200 bg-amber-50', icon: 'text-amber-500', badge: 'bg-amber-100 text-amber-700' },
-                      Low:    { wrap: 'border-gray-200 bg-gray-50',   icon: 'text-gray-400',  badge: 'bg-gray-100 text-gray-600'   },
-                    }[risk.severity]
-                    return (
-                      <div key={i} className={`rounded-xl border ${style.wrap} p-4`}>
-                        <div className="flex items-start gap-3">
-                          <AlertTriangle className={`w-4 h-4 mt-0.5 shrink-0 ${style.icon}`} />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <p className="text-sm font-semibold text-gray-800">{risk.title}</p>
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${style.badge}`}>{risk.severity}</span>
-                            </div>
-                            <p className="text-xs text-gray-600 leading-relaxed">{risk.body}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Monthly Sales */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Monthly Sales (YTD)</p>
-                  {cfoKpis && cfoKpis.monthlySales.length > 0 ? (
-                    <div className="overflow-x-auto mb-2">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-left text-gray-400 border-b border-gray-100">
-                            <th className="py-1.5 font-medium">Month</th>
-                            <th className="py-1.5 font-medium text-right">Sales</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cfoKpis.monthlySales.map((m, i) => (
-                            <tr key={i} className="border-b border-gray-50 last:border-0">
-                              <td className="py-1.5 text-gray-700">{m.label}</td>
-                              <td className="py-1.5 text-right font-medium text-gray-800">{formatCurrency(m.amount)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-400 italic mb-2">No monthly data available.</p>
-                  )}
-                  <p className="text-xs text-gray-600 leading-relaxed">{cfoReport.monthlySalesCommentary}</p>
-                </div>
-
-                {/* Margins & Profitability */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Margins &amp; Profitability</p>
-                  <div className="grid grid-cols-3 gap-3 mb-2 text-xs">
-                    <div>
-                      <p className="text-gray-400">Gross Margin</p>
-                      <p className="font-semibold text-gray-800">{cfoKpis?.grossMargin != null ? `${formatCurrency(cfoKpis.grossMargin)} (${cfoKpis.grossMarginPct?.toFixed(1)}%)` : 'No data available'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">EBITDA</p>
-                      <p className="font-semibold text-gray-800">{cfoKpis?.ebitda != null ? `${formatCurrency(cfoKpis.ebitda)} (${cfoKpis.ebitdaPct?.toFixed(1)}%)` : 'No data available'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Net Profit</p>
-                      <p className="font-semibold text-gray-800">{cfoKpis?.netProfit != null ? `${formatCurrency(cfoKpis.netProfit)} (${cfoKpis.netProfitPct?.toFixed(1)}%)` : 'No data available'}</p>
-                    </div>
+                {/* Key Financial Metrics */}
+                <div>
+                  <ReportSectionHeading n={1} title="Key Financial Metrics" />
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <ReportStatCard label="Total Sales" value={formatCurrency(cfoKpis?.totalSales ?? 0)} sub="YTD Turnover" tone="blue" />
+                    <ReportStatCard
+                      label="Gross Margin"
+                      value={cfoKpis?.grossMargin != null ? formatCurrency(cfoKpis.grossMargin) : '—'}
+                      sub={cfoKpis?.grossMarginPct != null ? `${cfoKpis.grossMarginPct.toFixed(1)}% Margin` : 'No data available'}
+                      tone="blue"
+                    />
+                    <ReportStatCard
+                      label="EBITDA"
+                      value={cfoKpis?.ebitda != null ? formatCurrency(cfoKpis.ebitda) : '—'}
+                      sub={cfoKpis?.ebitdaPct != null ? `${cfoKpis.ebitdaPct.toFixed(1)}% Margin` : 'No data available'}
+                      tone="blue"
+                    />
+                    <ReportStatCard
+                      label="Net Profit"
+                      value={cfoKpis?.netProfit != null ? formatCurrency(cfoKpis.netProfit) : '—'}
+                      sub={cfoKpis?.netProfitPct != null ? `${cfoKpis.netProfitPct.toFixed(1)}% Margin` : 'No data available'}
+                      tone={(cfoKpis?.netProfit ?? 0) < 0 ? 'danger' : 'blue'}
+                    />
                   </div>
-                  <p className="text-xs text-gray-600 leading-relaxed">{cfoReport.marginTrendCommentary}</p>
-                </div>
-
-                {/* Working Capital & Liquidity */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Working Capital &amp; Liquidity</p>
-                  <div className="grid grid-cols-3 gap-3 mb-2 text-xs">
-                    <div>
-                      <p className="text-gray-400">CCC</p>
-                      <p className="font-semibold text-gray-800">{cfoRatios?.ccc != null ? `${cfoRatios.ccc.toFixed(1)} days` : 'No data available'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Current Ratio</p>
-                      <p className="font-semibold text-gray-800">{cfoRatios?.currentRatio != null ? cfoRatios.currentRatio.toFixed(2) : 'No data available'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Quick Ratio</p>
-                      <p className="font-semibold text-gray-800">{cfoRatios?.quickRatio != null ? cfoRatios.quickRatio.toFixed(2) : 'No data available'}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed mb-1">{cfoReport.workingCapitalCommentary}</p>
-                  <p className="text-xs text-gray-600 leading-relaxed">{cfoReport.liquidityCommentary}</p>
-                </div>
-
-                {/* Cash Position */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Cash Position</p>
-                  <div className="grid grid-cols-2 gap-3 mb-2 text-xs">
-                    <div>
-                      <p className="text-gray-400">Cash in Hand</p>
-                      <p className="font-semibold text-gray-800">{cfoKpis?.cashInHand != null ? formatCurrency(cfoKpis.cashInHand) : 'No data available'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">Bank Balance</p>
-                      <p className="font-semibold text-gray-800">{cfoKpis?.bankBalance != null ? formatCurrency(cfoKpis.bankBalance) : 'No data available'}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed">{cfoReport.cashPositionCommentary}</p>
-                </div>
-
-                {/* Top Performing Items */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Top Performing Items (YTD)</p>
-                  {cfoKpis && cfoKpis.topItems.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-left text-gray-400 border-b border-gray-100">
-                            <th className="py-1.5 font-medium">Item</th>
-                            <th className="py-1.5 font-medium text-right">Qty</th>
-                            <th className="py-1.5 font-medium text-right">Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {cfoKpis.topItems.slice(0, 8).map((item, i) => (
-                            <tr key={i} className="border-b border-gray-50 last:border-0">
-                              <td className="py-1.5 text-gray-700">{item.name}</td>
-                              <td className="py-1.5 text-right text-gray-700">{item.qty} {item.unit}</td>
-                              <td className="py-1.5 text-right font-medium text-gray-800">{formatCurrency(item.amount)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-400 italic">No item data available.</p>
-                  )}
-                </div>
-
-                {/* Top Debtors vs Outstanding Balances */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Top Debtors vs Outstanding Balances</p>
-                  <div className="grid grid-cols-2 gap-4 mb-2">
-                    <div>
-                      <p className="text-[11px] font-semibold text-gray-500 mb-1">Top 5 by Sales (YTD)</p>
-                      {cfoKpis && cfoKpis.topDebtors.length > 0 ? (
-                        <ul className="text-xs space-y-1">
-                          {cfoKpis.topDebtors.slice(0, 5).map((d, i) => (
-                            <li key={i} className="flex justify-between gap-2 text-gray-700">
-                              <span className="truncate">{d.name}</span>
-                              <span className="font-medium shrink-0">{formatCurrency(d.amount)}</span>
-                            </li>
-                          ))}
-                        </ul>
+                  <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50 p-4">
+                    <p className="text-sm text-gray-700 leading-relaxed">
+                      <span className="font-bold text-brand-700">Critical Margin Structural Anomaly: </span>
+                      {cfoKpis?.grossMarginPct == null || cfoKpis?.netProfitPct == null ? (
+                        <span>No data available — Gross Margin and/or Net Profit could not be computed for this period.</span>
+                      ) : hasMarginAnomaly(cfoKpis.grossMarginPct, cfoKpis.netProfitPct) ? (
+                        <>
+                          The core operating Gross Margin stands at an extremely thin{' '}
+                          <span className="font-semibold">{cfoKpis.grossMarginPct.toFixed(1)}%</span> (Sales minus Purchases), whereas the Net Profit margin is higher at{' '}
+                          <span className="font-semibold">{cfoKpis.netProfitPct.toFixed(1)}%</span>. This indicates that core trading operations are under-performing, and profitability is driven by substantial{' '}
+                          <span className="font-semibold">Indirect Income</span> or non-operating revenue.
+                        </>
                       ) : (
-                        <p className="text-xs text-gray-400 italic">No data available.</p>
+                        <span>
+                          None detected — Net Profit margin ({cfoKpis.netProfitPct.toFixed(1)}%) is at or below Gross Margin ({cfoKpis.grossMarginPct.toFixed(1)}%), consistent with a structurally healthy core trading business.
+                        </span>
                       )}
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold text-gray-500 mb-1">Top 5 Outstanding Balances</p>
-                      {cfoKpis && cfoKpis.debtorBalances.length > 0 ? (
-                        <ul className="text-xs space-y-1">
-                          {cfoKpis.debtorBalances.slice(0, 5).map((d, i) => (
-                            <li key={i} className="flex justify-between gap-2 text-gray-700">
-                              <span className="truncate">{d.name}</span>
-                              <span className="font-medium shrink-0">{formatCurrency(d.balance)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-xs text-gray-400 italic">No data available.</p>
-                      )}
-                    </div>
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-600 leading-relaxed">{cfoReport.debtorPaymentCommentary}</p>
                 </div>
 
-                {/* Slow Moving Stock */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Slow Moving Stock (90+ days)</p>
+                {/* Cash & Bank Liquidity Analysis */}
+                <div>
+                  <ReportSectionHeading n={2} title="Cash & Bank Liquidity Analysis" />
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                    <ReportStatCard
+                      label="Cash in Hand"
+                      value={cfoKpis?.cashInHand != null ? formatCurrency(cfoKpis.cashInHand) : '—'}
+                      sub={flowNote(cfoKpis?.cashInflow ?? null, cfoKpis?.cashOutflow ?? null)}
+                      tone="green"
+                    />
+                    <ReportStatCard
+                      label="Bank Balance"
+                      value={cfoKpis?.bankBalance != null ? `${formatCurrency(cfoKpis.bankBalance)}${cfoKpis.bankBalance < 0 ? ' (OD)' : ''}` : '—'}
+                      sub={flowNote(cfoKpis?.bankInflow ?? null, cfoKpis?.bankOutflow ?? null)}
+                      tone={(cfoKpis?.bankBalance ?? 0) < 0 ? 'danger' : 'blue'}
+                    />
+                    <ReportStatCard
+                      label="Current Ratio"
+                      value={cfoRatios?.currentRatio != null ? cfoRatios.currentRatio.toFixed(2) : '—'}
+                      sub="Benchmark: 1.5 - 2.0"
+                      tone={cfoRatios?.currentRatio != null && cfoRatios.currentRatio < 1.5 ? 'danger' : 'blue'}
+                    />
+                    <ReportStatCard
+                      label="Quick Ratio"
+                      value={cfoRatios?.quickRatio != null ? cfoRatios.quickRatio.toFixed(2) : '—'}
+                      sub={quickRatioNote(cfoRatios?.quickRatio ?? null)}
+                      tone={cfoRatios?.quickRatio != null && cfoRatios.quickRatio < 1.0 ? 'danger' : 'blue'}
+                    />
+                  </div>
                   {(() => {
-                    const slow90 = cfoKpis?.slowStock.filter(s => s.daysSince > 90) ?? []
-                    return slow90.length > 0 ? (
-                      <div className="overflow-x-auto mb-2">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-left text-gray-400 border-b border-gray-100">
-                              <th className="py-1.5 font-medium">Item</th>
-                              <th className="py-1.5 font-medium text-right">Days Since Last Sale</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {slow90.slice(0, 10).map((item, i) => (
-                              <tr key={i} className="border-b border-gray-50 last:border-0">
-                                <td className="py-1.5 text-gray-700">{item.name}</td>
-                                <td className="py-1.5 text-right text-amber-600 font-medium">{item.daysSince}</td>
-                              </tr>
+                    const hasData = cfoKpis && (cfoKpis.cashInHand != null || cfoKpis.bankBalance != null)
+                    const cash = cfoKpis?.cashInHand ?? 0
+                    const bank = cfoKpis?.bankBalance ?? 0
+                    const maxAbs = Math.max(Math.abs(cash), Math.abs(bank), 1)
+                    const rows = [
+                      { label: 'Cash In Hand', value: cash, color: 'bg-emerald-600' },
+                      { label: 'Bank Balance', value: bank, color: bank < 0 ? 'bg-red-500' : 'bg-emerald-600' },
+                    ]
+                    return (
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3">Bank &amp; Cash Liquidity Comparison</p>
+                        {hasData ? (
+                          <div className="space-y-3">
+                            {rows.map((row, i) => (
+                              <div key={i} className="flex items-center gap-3">
+                                <span className="w-24 shrink-0 text-xs text-gray-600">{row.label}</span>
+                                <div className="flex-1 flex items-center gap-2">
+                                  <div className="flex-1 max-w-md">
+                                    <div className={`h-6 rounded ${row.color}`} style={{ width: `${Math.max((Math.abs(row.value) / maxAbs) * 100, 3)}%` }} />
+                                  </div>
+                                  <span className="text-xs font-semibold text-gray-700 whitespace-nowrap">
+                                    {formatCompactLakhs(row.value)}{row.value < 0 ? ' (OD)' : ''}
+                                  </span>
+                                </div>
+                              </div>
                             ))}
-                          </tbody>
-                        </table>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic">No data available.</p>
+                        )}
                       </div>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic mb-2">No items over 90 days.</p>
                     )
                   })()}
-                  <p className="text-xs text-gray-600 leading-relaxed">{cfoReport.slowMovingCommentary}</p>
                 </div>
 
-                {/* Capital Efficiency */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-2">Capital Efficiency</p>
-                  <div className="grid grid-cols-2 gap-3 mb-2 text-xs">
-                    <div>
-                      <p className="text-gray-400">ROCE</p>
-                      <p className="font-semibold text-gray-800">{cfoRatios?.roce != null ? `${cfoRatios.roce.toFixed(1)}%` : 'No data available'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400">ROE</p>
-                      <p className="font-semibold text-gray-800">{cfoRatios?.roe != null ? `${cfoRatios.roe.toFixed(1)}%` : 'No data available'}</p>
-                    </div>
+                {/* Working Capital & Efficiency Ratios */}
+                <div>
+                  <ReportSectionHeading n={3} title="Working Capital & Efficiency Ratios" />
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-brand-600">
+                          <th className="py-2.5 px-3 text-left font-semibold text-white">Efficiency Parameter</th>
+                          <th className="py-2.5 px-3 text-center font-semibold text-white w-24">Value (Days / %)</th>
+                          <th className="py-2.5 px-3 text-left font-semibold text-white">Strategic Assessment</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {([
+                          { label: 'Days Sales Outstanding (DSO)',    value: cfoRatios?.dso  ?? null, suffix: ' Days', assess: dsoAssessment(cfoRatios?.dso ?? null),   badge: null as string | null },
+                          { label: 'Days Inventory Outstanding (DIO)', value: cfoRatios?.dio  ?? null, suffix: ' Days', assess: dioAssessment(cfoRatios?.dio ?? null),   badge: null },
+                          { label: 'Days Payables Outstanding (DPO)',  value: cfoRatios?.dpo  ?? null, suffix: ' Days', assess: dpoAssessment(cfoRatios?.dpo ?? null),   badge: null },
+                          { label: 'Cash Conversion Cycle (CCC)',      value: cfoRatios?.ccc  ?? null, suffix: ' Days', assess: cccAssessment(cfoRatios?.ccc ?? null),
+                            badge: cfoRatios?.ccc != null && cfoRatios.ccc <= 0 ? 'NEGATIVE' : null },
+                          { label: 'Return on Capital Employed (ROCE)', value: cfoRatios?.roce ?? null, suffix: '%',     assess: roceAssessment(cfoRatios?.roce ?? null), badge: null },
+                          { label: 'Return on Equity (ROE)',           value: cfoRatios?.roe  ?? null, suffix: '%',     assess: roeAssessment(cfoRatios?.roe ?? null),   badge: null },
+                        ]).map((row, i) => (
+                          <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
+                            <td className="py-2.5 px-3 text-gray-800 font-semibold align-top">{row.label}</td>
+                            <td className="py-2.5 px-3 text-center text-brand-700 font-bold whitespace-nowrap align-top">
+                              {row.value != null ? `${row.value.toFixed(1)}${row.suffix}` : '—'}
+                            </td>
+                            <td className="py-2.5 px-3 text-gray-600 leading-relaxed align-top">
+                              {row.badge && (
+                                <span className="inline-block mr-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 align-middle">{row.badge}</span>
+                              )}
+                              {row.assess}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <p className="text-xs text-gray-600 leading-relaxed">{cfoReport.capitalEfficiencyCommentary}</p>
+                </div>
+
+                {/* Strategic Actions for Management */}
+                <div>
+                  <ReportSectionHeading n={4} title="Strategic Action Items for Management" />
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <ul className="space-y-3">
+                      {cfoReport.keyActionItems.map((item, i) => (
+                        <li key={i} className="flex gap-2 text-sm text-gray-700 leading-relaxed">
+                          <span className="text-brand-600 shrink-0">•</span>
+                          <span>{renderActionItem(item)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
             )}

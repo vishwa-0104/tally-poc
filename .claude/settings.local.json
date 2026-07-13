@@ -31,7 +31,8 @@
       "Bash(npm audit *)",
       "Bash(npm uninstall *)",
       "Skill(dataviz)",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(textutil -convert txt \"/Users/vishwnath.yadav/Downloads/Executive_Financial_Summary.docx\" -output \"/private/tmp/claude-502/-Users-vishwnath-yadav-Desktop-projects-tally-bill-sync/8a891a5d-4473-416c-a105-d057f2f8fef2/scratchpad/Executive_Financial_Summary.txt\")"
     ]
   }
 }

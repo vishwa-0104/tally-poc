@@ -853,7 +853,7 @@ ${slowStockLines}
 Respond with JSON ONLY (no markdown fences, no commentary) matching exactly this shape:
 {
   "executiveSummary": "2-4 sentence overview of YTD performance",
-  "keyActionItems": ["2-6 short, specific, actionable items for management"],
+  "keyActionItems": ["2-6 items for management, each formatted as 'Short Title: one to two sentence explanation of the action and why it matters'"],
   "monthlySalesCommentary": "1-3 sentences on the month-on-month trend — accelerating, seasonal, declining, why",
   "marginTrendCommentary": "1-3 sentences: is EBITDA/margin improving or declining, and why",
   "workingCapitalCommentary": "1-3 sentences analyzing CCC and whether working capital is balanced (a very high or negative CCC is worth flagging)",
@@ -943,9 +943,9 @@ function MOCK_CFO_REPORT() {
   return {
     executiveSummary: 'Demo data — configure GEMINI_API_KEY or ANTHROPIC_API_KEY to get a real AI-generated report from your actual YTD figures.',
     keyActionItems: [
-      'Follow up on overdue receivables above 60 days.',
-      'Review slow-moving stock for discounting or return-to-vendor.',
-      'Monitor EBITDA margin trend month over month.',
+      'Follow Up on Overdue Receivables: Receivables aged above 60 days should be prioritized for collection to free up working capital.',
+      'Review Slow-Moving Stock: Consider discounting or returning items to vendors that have not sold in over 90 days.',
+      'Monitor EBITDA Margin Trend: Track the month-over-month margin trend to catch cost or pricing drift early.',
     ],
     monthlySalesCommentary: 'Demo: sales have trended upward over the last few months with one seasonal dip.',
     marginTrendCommentary: 'Demo: EBITDA margin improved slightly this year, driven by lower procurement costs.',
