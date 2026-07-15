@@ -125,7 +125,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         payload.nonOperatingInvestmentLedgers  || [],
       )
         .then(sendResponse)
-        .catch((err) => sendResponse({ vouchers: [], rawXml: '', cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
+        .catch((err) => sendResponse({ vouchers: [], cashFlow: { inflow: 0, outflow: 0 }, bankFlow: { inflow: 0, outflow: 0 }, error: err.message }))
       return true
 
     case 'FETCH_SLOW_STOCK':
@@ -717,20 +717,9 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, sale
 
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
-  // rawXml is deliberately omitted for normal-sized ranges — including it for
-  // a full YTD fetch (thousands of vouchers) is what previously blew past
-  // Chrome's 64MB chrome.runtime.sendMessage cap (message exceeded maximum
-  // allowed size). It's safe to include for a narrow debug range though, so
-  // a Custom filter of a few days can still be used to inspect the raw Tally
-  // XML for a specific voucher (e.g. checking for a <CANCELLED> tag).
-  const rangeDays = (new Date(toISO).getTime() - new Date(fromISO).getTime()) / 86400000 + 1
-  const debugRawXml = rangeDays <= 7 ? responseText : undefined
-  if (debugRawXml) console.log(`[FETCH_DAYBOOK] rawXml for ${fromISO}..${toISO} (${responseText.length} chars):\n`, debugRawXml)
-
   return {
     vouchers, cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback,
     interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal,
-    ...(debugRawXml ? { rawXml: debugRawXml } : {}),
   }
 }
 

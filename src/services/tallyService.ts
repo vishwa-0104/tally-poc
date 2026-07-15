@@ -263,10 +263,6 @@ export interface DaybookOptions {
 
 export interface DaybookResult {
   vouchers: TallyVoucher[]
-  // Only present for a narrow debug-sized range (<=7 days) — omitted for
-  // normal fetches to avoid exceeding Chrome's 64MB extension-message cap.
-  // See handleFetchDaybook in extension/background.js.
-  rawXml?: string
   cashFlow: CashBankFlow
   bankFlow: CashBankFlow
   topItems: TopItem[]
