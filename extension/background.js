@@ -942,6 +942,24 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
 
     if (!rawDate) continue
 
+    // Ghost/orphaned voucher guard — see "VOUCHERRETAINKEY ghost voucher"
+    // note in CLAUDE.md for the full incident writeup. Short version: Tally's
+    // own Day Book/Sales Register already exclude vouchers whose retain key
+    // has been cleared (confirmed via a raw XML export where exactly 1 of
+    // 6,803 vouchers had VOUCHERRETAINKEY=0 — every other, currently-visible-
+    // in-Tally voucher had a non-zero key). That one was a leftover duplicate
+    // from a manually-edited test voucher (linked back to the voucher it was
+    // copied from via its own <REFERENCE> tag) that Tally's UI no longer
+    // shows, but the TBSVouchers TDL collection still returns. Left
+    // unfiltered, it silently inflates Sales/Gross Margin/EBITDA/Net Profit
+    // by the ghost voucher's full amount. If numbers mismatch Tally again,
+    // check this first before assuming a caching/classification bug.
+    const voucherRetainKey = decode(block.match(/<VOUCHERRETAINKEY[^>]*>([^<]+)<\/VOUCHERRETAINKEY>/i)?.[1] ?? '')
+    if (voucherRetainKey === '0') {
+      console.warn(`[GhostVoucher] Skipped voucherNo="${voucherNo}" date="${rawDate}" party="${party}" guid="${guid}" — VOUCHERRETAINKEY=0`)
+      continue
+    }
+
     // Tally date format: YYYYMMDD → YYYY-MM-DD
     const date = rawDate.length === 8
       ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`

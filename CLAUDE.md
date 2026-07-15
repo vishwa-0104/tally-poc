@@ -216,6 +216,12 @@ Always use `taxableAmount` for sales reporting/KPIs. `amount` includes GST.
 - **CGST/SGST/IGST**: name contains `cgst`/`sgst`/`igst`
 - Falls back to all ledgers if filtered list is empty
 
+### Known Tally export quirk — VOUCHERRETAINKEY ghost vouchers
+
+The `TBSVouchers` TDL collection (queried by `FETCH_DAYBOOK`) can return "ghost" vouchers that Tally's own native reports (Day Book, Sales Register) no longer show — e.g. a leftover duplicate from a manually-edited voucher, still exported as a live record even though Tally's UI has already superseded it. Neither `<ISDELETED>` nor a `<CANCELLED>`/`<ISOPTIONAL>` tag flags this (confirmed absent/always "No" in a full raw export). The reliable signal is **`<VOUCHERRETAINKEY>` — a real, currently-visible-in-Tally voucher always has a non-zero value; a ghost voucher has `0`**. `parseVouchers()` in `extension/background.js` skips any voucher block with `VOUCHERRETAINKEY=0` (logged as `[GhostVoucher] Skipped ...` in the extension's service worker console).
+
+Diagnosed 2026-07-16: a manually-created test voucher (duplicated from a real one to test push-from-Tally sync) left a ghost duplicate that inflated Total Sales/Gross Margin/EBITDA/Net Profit for New Ruchi Paints. The ghost voucher's `<REFERENCE>` tag pointed back to the original voucher's number — a byproduct of how it was created, not a reliable general-purpose signal on its own. If numbers mismatch Tally again, check for `VOUCHERRETAINKEY=0` in a raw XML export before assuming a caching/classification bug (`extension/background.js`'s `handleFetchDaybook` can be temporarily instrumented to log/extract specific `<VOUCHER>` blocks by GUID for this kind of investigation — see git history around this note for the pattern used).
+
 ---
 
 ## Company Dashboard
