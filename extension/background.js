@@ -718,7 +718,7 @@ async function handleFetchDaybook(tallyUrl, tallyCompany, fromDate, toDate, sale
   const vouchers = allVouchers.filter(v => v.date >= fromISO && v.date <= toISO)
 
   return {
-    vouchers, cashFlow, bankFlow, topItems, rawXml: responseText, indExpTotal, indIncTotal, ebitdaAddback,
+    vouchers, cashFlow, bankFlow, topItems, indExpTotal, indIncTotal, ebitdaAddback,
     interestExpenseTotal, taxPaymentTotal, nonOperatingIncomeTotal, nonOperatingInvestmentTotal,
   }
 }

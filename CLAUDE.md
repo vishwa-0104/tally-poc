@@ -186,7 +186,7 @@ GET    /health
 | `FETCH_VOUCHER_TYPES` | Voucher type names → `{ voucherTypes }` |
 | `FETCH_VOUCHERS` | Vouchers in date range by type → `{ vouchers: TallyVoucher[] }` |
 | `FETCH_SALES_PARTY` | Sales totals by party → `{ parties }` |
-| `FETCH_DAYBOOK` | All vouchers in date range → `{ vouchers: TallyVoucher[], rawXml }` |
+| `FETCH_DAYBOOK` | All vouchers in date range → `{ vouchers: TallyVoucher[] }` |
 | `FETCH_SLOW_STOCK` | Items with no recent sales → `{ items: SlowStockItem[] }` |
 | `FETCH_AGENT` | TallySyncAgent proxy (top-debtors, health) → varies |
 | `SYNC_TO_TALLY` | POST purchase voucher XML → `TallySyncResult` |

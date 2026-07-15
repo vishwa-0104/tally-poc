@@ -263,7 +263,6 @@ export interface DaybookOptions {
 
 export interface DaybookResult {
   vouchers: TallyVoucher[]
-  rawXml: string
   cashFlow: CashBankFlow
   bankFlow: CashBankFlow
   topItems: TopItem[]
