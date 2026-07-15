@@ -5,7 +5,6 @@ import { PageHeader } from '@/components/shared'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge } from '@/components/ui/Badge'
 import { AddCompanyModal } from '@/components/admin'
-import { SalesTargetModal } from '@/components/company/SalesTargetModal'
 import { useCompanyStore } from '@/store'
 import { COMPANY_FEATURES } from '@/types'
 import type { Company, CompanyFeature } from '@/types'
@@ -269,7 +268,6 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
   const [renewing,     setRenewing]     = useState(false)
   const [togglingBlk,  setTogglingBlk]  = useState(false)
   const [usage,        setUsage]        = useState<ParseUsageStats | null>(null)
-  const [showDashboardSettings, setShowDashboardSettings] = useState(false)
 
   useEffect(() => {
     api.get(`/companies/${company.id}/parse-usage`)
@@ -430,18 +428,6 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
           </div>
           <Button variant="outline" size="sm" loading={saving} onClick={handleSave} className="mt-3 w-full">
             Save Changes
-          </Button>
-        </div>
-
-        {/* dashboard settings — same modal the company portal's gear icon opens,
-            just triggered from here so admin can configure it per company */}
-        <div className="px-5 py-5 border-b border-gray-700/50">
-          <div className="flex items-center gap-2 mb-3">
-            <Settings size={13} className="text-gray-400" />
-            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">Dashboard Settings</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setShowDashboardSettings(true)} className="w-full">
-            Configure Dashboard Settings
           </Button>
         </div>
 
@@ -670,12 +656,6 @@ function FeaturePanel({ company, onClose }: FeaturePanelProps) {
           </button>
         </div>
       </div>
-
-      <SalesTargetModal
-        open={showDashboardSettings}
-        onClose={() => setShowDashboardSettings(false)}
-        companyId={company.id}
-      />
     </div>
   )
 }

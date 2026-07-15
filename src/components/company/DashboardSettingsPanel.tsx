@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { Loader2 } from 'lucide-react'
-import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { fetchSalesTargets, saveSalesTargets, fetchDashboardSettings, saveDashboardSettings } from '@/lib/api'
 import { useCompanyStore } from '@/store'
@@ -37,12 +36,11 @@ function daysSinceFyStartToday(): number {
   return Math.floor((today.getTime() - fyStart.getTime()) / 86400000) + 1
 }
 
-type SettingsTab = 'today' | 'ytd' | 'ratios'
+type TopTab = 'performance' | 'analysis'
+type PerfTab = 'today' | 'ytd'
 type RatioTab = 'dso' | 'dio' | 'dpo' | 'current' | 'quick' | 'roce' | 'roe' | 'debtEquity'
 
 interface Props {
-  open:      boolean
-  onClose:   () => void
   companyId: string
 }
 
@@ -208,13 +206,14 @@ function DaysModeRadio({
   )
 }
 
-// ── Main modal ────────────────────────────────────────────────────────────────
-export function SalesTargetModal({ open, onClose, companyId }: Props) {
+// ── Main panel ────────────────────────────────────────────────────────────────
+export function DashboardSettingsPanel({ companyId }: Props) {
   const { getLedgers, fetchLedgersFromDb, getVoucherTypes, fetchVoucherTypesFromDb } = useCompanyStore()
   const fyYear  = getCurrentFyYear()
   const fyLabel = `FY ${fyYear}–${String(fyYear + 1).slice(2)}`
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('today')
+  const [topTab, setTopTab]   = useState<TopTab>('performance')
+  const [perfTab, setPerfTab] = useState<PerfTab>('today')
   const [activeRatioTab, setActiveRatioTab] = useState<RatioTab>('dso')
 
   // Budget state
@@ -299,7 +298,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!open) return
+    if (!companyId) return
 
     // Load budget
     setLoadingBudget(true)
@@ -370,11 +369,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
 
     // Ledgers/voucher types come from the DB cache (already synced whenever
     // the company last used the "Sync"/"Refresh" buttons on the Settings
-    // page — see CompanySettings.tsx's handleSyncLedgers/handleSyncVoucherTypes),
-    // never a live Tally call from here. This is what lets Admin manage these
-    // settings for a company without Tally open on Admin's machine, and it
-    // also means the company user doesn't need Tally running just to open
-    // this modal.
+    // page's Default Ledgers tab), never a live Tally call from here.
     setLoadingOpts(true)
     Promise.allSettled([
       fetchVoucherTypesFromDb(companyId),
@@ -397,7 +392,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         all.map(l => l.group).filter(g => g && !/primary$/i.test(g.trim()))
       )].sort())
     }).finally(() => setLoadingOpts(false))
-  }, [open, companyId, fyYear, fetchVoucherTypesFromDb, fetchLedgersFromDb, getVoucherTypes, getLedgers])
+  }, [companyId, fyYear, fetchVoucherTypesFromDb, fetchLedgersFromDb, getVoucherTypes, getLedgers])
 
   const handleSave = async () => {
     const targets = FY_MONTHS.map(({ month }) => ({
@@ -466,8 +461,7 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         saveSalesTargets(companyId, fyYear, targets),
         saveDashboardSettings(companyId, settings),
       ])
-      toast.success('Settings saved')
-      onClose()
+      toast.success('Dashboard settings saved')
     } catch {
       toast.error('Failed to save settings')
     } finally {
@@ -477,10 +471,14 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
 
   const totalTarget = FY_MONTHS.reduce((s, { month }) => s + (parseFloat(budgetValues[month] || '0') || 0), 0)
 
-  const TABS: { key: SettingsTab; label: string }[] = [
-    { key: 'today',   label: 'Today'   },
-    { key: 'ytd',     label: 'YTD'     },
-    { key: 'ratios',  label: 'Ratios'  },
+  const TOP_TABS: { key: TopTab; label: string }[] = [
+    { key: 'performance', label: 'Performance' },
+    { key: 'analysis',    label: 'Analysis'    },
+  ]
+
+  const PERF_TABS: { key: PerfTab; label: string }[] = [
+    { key: 'today', label: 'Today' },
+    { key: 'ytd',   label: 'YTD'   },
   ]
 
   const RATIO_TABS: { key: RatioTab; label: string }[] = [
@@ -495,26 +493,17 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
   ]
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Dashboard Settings"
-      subtitle="Configure KPI filters and monthly sales targets"
-      footer={
-        <>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave} loading={saving}>Save Settings</Button>
-        </>
-      }
-    >
-      {/* Tab bar */}
+    <div>
+      <p className="text-xs text-gray-500 mb-5">Configure the ledger/voucher-type filters and monthly sales targets that drive the Dashboard's Performance and Analysis tabs.</p>
+
+      {/* Top-level sub-tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-5">
-        {TABS.map(t => (
+        {TOP_TABS.map(t => (
           <button
             key={t.key}
-            onClick={() => setActiveTab(t.key)}
+            onClick={() => setTopTab(t.key)}
             className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all ${
-              activeTab === t.key
+              topTab === t.key
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
@@ -524,272 +513,295 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         ))}
       </div>
 
-      {/* ── TODAY TAB ── */}
-      {activeTab === 'today' && (
-        <div className="space-y-6">
+      {/* ── PERFORMANCE ── */}
+      {topTab === 'performance' && (
+        <div>
+          {/* Date-filter sub-tabs */}
+          <div className="flex gap-1 bg-gray-50 border border-gray-100 rounded-lg p-1 mb-5">
+            {PERF_TABS.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setPerfTab(t.key)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  perfTab === t.key
+                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
-          {/* Section A — Sales Budget */}
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-3">
-              Sales Budget
-              <span className="font-normal text-gray-400 ml-1">({fyLabel}, excl. GST)</span>
-            </p>
-            {loadingBudget ? (
-              <div className="h-24 flex items-center justify-center text-sm text-gray-400">Loading…</div>
-            ) : (
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                {FY_MONTHS.map(({ month, label }) => (
-                  <div key={month} className="flex items-center gap-2">
-                    <label className="text-xs text-gray-600 w-24 shrink-0">{label}</label>
-                    <div className="relative flex-1">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">₹</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="0"
-                        value={budgetValues[month] ?? ''}
-                        onChange={e => setBudgetValues(v => ({ ...v, [month]: e.target.value }))}
-                        className="w-full pl-6 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 bg-white"
-                      />
-                    </div>
+          {/* ── TODAY ── */}
+          {perfTab === 'today' && (
+            <div className="space-y-6">
+
+              {/* Section A — Sales Budget */}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-3">
+                  Sales Budget
+                  <span className="font-normal text-gray-400 ml-1">({fyLabel}, excl. GST)</span>
+                </p>
+                {loadingBudget ? (
+                  <div className="h-24 flex items-center justify-center text-sm text-gray-400">Loading…</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                    {FY_MONTHS.map(({ month, label }) => (
+                      <div key={month} className="flex items-center gap-2">
+                        <label className="text-xs text-gray-600 w-24 shrink-0">{label}</label>
+                        <div className="relative flex-1">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="0"
+                            value={budgetValues[month] ?? ''}
+                            onChange={e => setBudgetValues(v => ({ ...v, [month]: e.target.value }))}
+                            className="w-full pl-6 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 bg-white"
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                {totalTarget > 0 && (
+                  <div className="flex justify-between items-center border-t border-gray-100 pt-2 mt-3 text-xs">
+                    <span className="text-gray-500">Annual Target</span>
+                    <span className="font-semibold text-gray-800">
+                      ₹{totalTarget.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-            {totalTarget > 0 && (
-              <div className="flex justify-between items-center border-t border-gray-100 pt-2 mt-3 text-xs">
-                <span className="text-gray-500">Annual Target</span>
-                <span className="font-semibold text-gray-800">
-                  ₹{totalTarget.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </span>
-              </div>
-            )}
-          </div>
 
-          {/* Section B — Sales Accounts (ledgers) */}
-          <div className="border-t border-gray-100 pt-5">
-            <SearchCheckList
-              label="Sales Accounts"
-              hint="Default: all vouchers matching voucher type filter below"
-              options={allLedgerOpts}
-              selected={salesAccounts}
-              onChange={setSalesAccounts}
-              loading={loadingOpts}
-            />
-          </div>
-
-          {/* Section C — Sales Voucher Filters */}
-          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
-            <SearchCheckList
-              label="Sales — Include Vouchers"
-              hint="Default: voucher types containing 'sales'"
-              options={voucherTypeOpts}
-              selected={salesIncludeVouchers}
-              onChange={setSalesIncludeVouchers}
-              loading={loadingOpts}
-            />
-            <SearchCheckList
-              label="Sales — Exclude Vouchers"
-              hint="Default: Credit Note"
-              options={voucherTypeOpts}
-              selected={salesExcludeVouchers}
-              onChange={setSalesExcludeVouchers}
-              loading={loadingOpts}
-            />
-          </div>
-
-          {/* Section C — Cash Ledgers */}
-          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
-            <CheckList
-              label="Cash-in-Hand"
-              hint="Default: all Cash-in-Hand ledgers"
-              options={cashLedgerOpts}
-              selected={inflowLedgers}
-              onChange={setInflowLedgers}
-              loading={loadingOpts}
-            />
-          </div>
-
-          {/* Section D — Bank Ledgers */}
-          <div className="border-t border-gray-100 pt-5">
-            <CheckList
-              label="Bank Accounts"
-              hint="Default: ledgers whose name contains 'bank'"
-              options={bankLedgerOpts}
-              selected={bankLedgers}
-              onChange={setBankLedgers}
-              loading={loadingOpts}
-            />
-          </div>
-
-        </div>
-      )}
-
-      {/* ── YTD TAB ── */}
-      {activeTab === 'ytd' && (
-        <div className="space-y-6">
-
-          {/* Purchase Accounts — mirrors Sales Accounts in Today tab */}
-          <div>
-            <SearchCheckList
-              label="Purchase Accounts"
-              hint="Default: all vouchers matching voucher type filter below"
-              options={allLedgerOpts}
-              selected={ytdPurchaseAccounts}
-              onChange={setYtdPurchaseAccounts}
-              loading={loadingOpts}
-            />
-          </div>
-
-          <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
-            <SearchCheckList
-              label="Purchase — Include Vouchers"
-              hint="Default: voucher types containing 'purchase'"
-              options={voucherTypeOpts}
-              selected={ytdPurchaseIncludeVouchers}
-              onChange={setYtdPurchaseIncludeVouchers}
-              loading={loadingOpts}
-            />
-            <SearchCheckList
-              label="Purchase — Exclude Vouchers"
-              hint="Default: Debit Note"
-              options={voucherTypeOpts}
-              selected={ytdPurchaseExcludeVouchers}
-              onChange={setYtdPurchaseExcludeVouchers}
-              loading={loadingOpts}
-            />
-          </div>
-
-          <div className="border-t border-gray-100 pt-5">
-            <SearchCheckList
-              label="Direct Expense Ledgers"
-              hint="e.g. Freight, Wages, Power — leave empty to exclude direct expenses"
-              options={allLedgerOpts}
-              selected={ytdDirectExpenseLedgers}
-              onChange={setYtdDirectExpenseLedgers}
-              loading={loadingOpts}
-            />
-          </div>
-
-          {/* ── EBITDA Section ── */}
-          <div className="border-t-2 border-blue-100 pt-5">
-            <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-4">Net Profit</p>
-            <div className="space-y-5">
-              <SearchCheckList
-                label="Indirect Expense Ledgers"
-                hint="e.g. Rent, Salaries, Admin costs"
-                options={allLedgerOpts}
-                selected={ytdIndirectExpenseLedgers}
-                onChange={setYtdIndirectExpenseLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <div className="grid grid-cols-2 gap-5">
+              {/* Section B — Sales Accounts (ledgers) */}
+              <div className="border-t border-gray-100 pt-5">
                 <SearchCheckList
-                  label="Expense Vouchers — Include"
-                  hint="Default: all voucher types"
-                  options={voucherTypeOpts}
-                  selected={ytdIndirectExpenseIncludeVouchers}
-                  onChange={setYtdIndirectExpenseIncludeVouchers}
-                  loading={loadingOpts}
-                />
-                <SearchCheckList
-                  label="Expense Vouchers — Exclude"
-                  hint="Default: none excluded"
-                  options={voucherTypeOpts}
-                  selected={ytdIndirectExpenseExcludeVouchers}
-                  onChange={setYtdIndirectExpenseExcludeVouchers}
-                  loading={loadingOpts}
-                />
-              </div>
-              <SearchCheckList
-                label="Indirect Income Ledgers"
-                hint="e.g. Interest Received, Commission Income"
-                options={allLedgerOpts}
-                selected={ytdIndirectIncomeLedgers}
-                onChange={setYtdIndirectIncomeLedgers}
-                loading={loadingOpts}
-                showSelectAll
-              />
-              <div className="grid grid-cols-2 gap-5">
-                <SearchCheckList
-                  label="Income Vouchers — Include"
-                  hint="Default: all voucher types"
-                  options={voucherTypeOpts}
-                  selected={ytdIndirectIncomeIncludeVouchers}
-                  onChange={setYtdIndirectIncomeIncludeVouchers}
-                  loading={loadingOpts}
-                />
-                <SearchCheckList
-                  label="Income Vouchers — Exclude"
-                  hint="Default: none excluded"
-                  options={voucherTypeOpts}
-                  selected={ytdIndirectIncomeExcludeVouchers}
-                  onChange={setYtdIndirectIncomeExcludeVouchers}
+                  label="Sales Accounts"
+                  hint="Default: all vouchers matching voucher type filter below"
+                  options={allLedgerOpts}
+                  selected={salesAccounts}
+                  onChange={setSalesAccounts}
                   loading={loadingOpts}
                 />
               </div>
 
-              {/* EBITDA addback ledgers */}
-              <div className="border-t border-blue-100 pt-4">
-                <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-3">EBITDA Addback Ledgers</p>
-                <p className="text-[10px] text-gray-400 italic mb-3">Depreciation, Tax, Interest etc. — added back to Net Profit → EBITDA</p>
-                <div className="space-y-3">
+              {/* Section C — Sales Voucher Filters */}
+              <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+                <SearchCheckList
+                  label="Sales — Include Vouchers"
+                  hint="Default: voucher types containing 'sales'"
+                  options={voucherTypeOpts}
+                  selected={salesIncludeVouchers}
+                  onChange={setSalesIncludeVouchers}
+                  loading={loadingOpts}
+                />
+                <SearchCheckList
+                  label="Sales — Exclude Vouchers"
+                  hint="Default: Credit Note"
+                  options={voucherTypeOpts}
+                  selected={salesExcludeVouchers}
+                  onChange={setSalesExcludeVouchers}
+                  loading={loadingOpts}
+                />
+              </div>
+
+              {/* Section C — Cash Ledgers */}
+              <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+                <CheckList
+                  label="Cash-in-Hand"
+                  hint="Default: all Cash-in-Hand ledgers"
+                  options={cashLedgerOpts}
+                  selected={inflowLedgers}
+                  onChange={setInflowLedgers}
+                  loading={loadingOpts}
+                />
+              </div>
+
+              {/* Section D — Bank Ledgers */}
+              <div className="border-t border-gray-100 pt-5">
+                <CheckList
+                  label="Bank Accounts"
+                  hint="Default: ledgers whose name contains 'bank'"
+                  options={bankLedgerOpts}
+                  selected={bankLedgers}
+                  onChange={setBankLedgers}
+                  loading={loadingOpts}
+                />
+              </div>
+
+            </div>
+          )}
+
+          {/* ── YTD ── */}
+          {perfTab === 'ytd' && (
+            <div className="space-y-6">
+
+              {/* Purchase Accounts — mirrors Sales Accounts in Today tab */}
+              <div>
+                <SearchCheckList
+                  label="Purchase Accounts"
+                  hint="Default: all vouchers matching voucher type filter below"
+                  options={allLedgerOpts}
+                  selected={ytdPurchaseAccounts}
+                  onChange={setYtdPurchaseAccounts}
+                  loading={loadingOpts}
+                />
+              </div>
+
+              <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+                <SearchCheckList
+                  label="Purchase — Include Vouchers"
+                  hint="Default: voucher types containing 'purchase'"
+                  options={voucherTypeOpts}
+                  selected={ytdPurchaseIncludeVouchers}
+                  onChange={setYtdPurchaseIncludeVouchers}
+                  loading={loadingOpts}
+                />
+                <SearchCheckList
+                  label="Purchase — Exclude Vouchers"
+                  hint="Default: Debit Note"
+                  options={voucherTypeOpts}
+                  selected={ytdPurchaseExcludeVouchers}
+                  onChange={setYtdPurchaseExcludeVouchers}
+                  loading={loadingOpts}
+                />
+              </div>
+
+              <div className="border-t border-gray-100 pt-5">
+                <SearchCheckList
+                  label="Direct Expense Ledgers"
+                  hint="e.g. Freight, Wages, Power — leave empty to exclude direct expenses"
+                  options={allLedgerOpts}
+                  selected={ytdDirectExpenseLedgers}
+                  onChange={setYtdDirectExpenseLedgers}
+                  loading={loadingOpts}
+                />
+              </div>
+
+              {/* ── EBITDA Section ── */}
+              <div className="border-t-2 border-blue-100 pt-5">
+                <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-4">Net Profit</p>
+                <div className="space-y-5">
                   <SearchCheckList
-                    label="EBITDA Ledgers"
-                    hint="e.g. Depreciation, Income Tax, Interest Paid"
+                    label="Indirect Expense Ledgers"
+                    hint="e.g. Rent, Salaries, Admin costs"
                     options={allLedgerOpts}
-                    selected={ytdEbitdaLedgers}
-                    onChange={setYtdEbitdaLedgers}
+                    selected={ytdIndirectExpenseLedgers}
+                    onChange={setYtdIndirectExpenseLedgers}
                     loading={loadingOpts}
                     showSelectAll
                   />
                   <div className="grid grid-cols-2 gap-5">
                     <SearchCheckList
-                      label="EBITDA Vouchers — Include"
+                      label="Expense Vouchers — Include"
                       hint="Default: all voucher types"
                       options={voucherTypeOpts}
-                      selected={ytdEbitdaIncludeVouchers}
-                      onChange={setYtdEbitdaIncludeVouchers}
+                      selected={ytdIndirectExpenseIncludeVouchers}
+                      onChange={setYtdIndirectExpenseIncludeVouchers}
                       loading={loadingOpts}
                     />
                     <SearchCheckList
-                      label="EBITDA Vouchers — Exclude"
+                      label="Expense Vouchers — Exclude"
                       hint="Default: none excluded"
                       options={voucherTypeOpts}
-                      selected={ytdEbitdaExcludeVouchers}
-                      onChange={setYtdEbitdaExcludeVouchers}
+                      selected={ytdIndirectExpenseExcludeVouchers}
+                      onChange={setYtdIndirectExpenseExcludeVouchers}
                       loading={loadingOpts}
                     />
                   </div>
+                  <SearchCheckList
+                    label="Indirect Income Ledgers"
+                    hint="e.g. Interest Received, Commission Income"
+                    options={allLedgerOpts}
+                    selected={ytdIndirectIncomeLedgers}
+                    onChange={setYtdIndirectIncomeLedgers}
+                    loading={loadingOpts}
+                    showSelectAll
+                  />
+                  <div className="grid grid-cols-2 gap-5">
+                    <SearchCheckList
+                      label="Income Vouchers — Include"
+                      hint="Default: all voucher types"
+                      options={voucherTypeOpts}
+                      selected={ytdIndirectIncomeIncludeVouchers}
+                      onChange={setYtdIndirectIncomeIncludeVouchers}
+                      loading={loadingOpts}
+                    />
+                    <SearchCheckList
+                      label="Income Vouchers — Exclude"
+                      hint="Default: none excluded"
+                      options={voucherTypeOpts}
+                      selected={ytdIndirectIncomeExcludeVouchers}
+                      onChange={setYtdIndirectIncomeExcludeVouchers}
+                      loading={loadingOpts}
+                    />
+                  </div>
+
+                  {/* EBITDA addback ledgers */}
+                  <div className="border-t border-blue-100 pt-4">
+                    <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-3">EBITDA Addback Ledgers</p>
+                    <p className="text-[10px] text-gray-400 italic mb-3">Depreciation, Tax, Interest etc. — added back to Net Profit → EBITDA</p>
+                    <div className="space-y-3">
+                      <SearchCheckList
+                        label="EBITDA Ledgers"
+                        hint="e.g. Depreciation, Income Tax, Interest Paid"
+                        options={allLedgerOpts}
+                        selected={ytdEbitdaLedgers}
+                        onChange={setYtdEbitdaLedgers}
+                        loading={loadingOpts}
+                        showSelectAll
+                      />
+                      <div className="grid grid-cols-2 gap-5">
+                        <SearchCheckList
+                          label="EBITDA Vouchers — Include"
+                          hint="Default: all voucher types"
+                          options={voucherTypeOpts}
+                          selected={ytdEbitdaIncludeVouchers}
+                          onChange={setYtdEbitdaIncludeVouchers}
+                          loading={loadingOpts}
+                        />
+                        <SearchCheckList
+                          label="EBITDA Vouchers — Exclude"
+                          hint="Default: none excluded"
+                          options={voucherTypeOpts}
+                          selected={ytdEbitdaExcludeVouchers}
+                          onChange={setYtdEbitdaExcludeVouchers}
+                          loading={loadingOpts}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="border-t border-gray-100 pt-5">
-            <p className="text-xs font-semibold text-gray-700 mb-1.5">Gross Margin Target (%)</p>
-            <div className="relative w-40">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                placeholder="e.g. 40"
-                value={ytdGrossMarginTarget}
-                onChange={e => setYtdGrossMarginTarget(e.target.value)}
-                className="w-full pr-7 pl-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 bg-white"
-              />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
-            </div>
-            <p className="text-[11px] text-gray-400 italic mt-1">Target GM% to track achievement on the dashboard</p>
-          </div>
+              <div className="border-t border-gray-100 pt-5">
+                <p className="text-xs font-semibold text-gray-700 mb-1.5">Gross Margin Target (%)</p>
+                <div className="relative w-40">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="e.g. 40"
+                    value={ytdGrossMarginTarget}
+                    onChange={e => setYtdGrossMarginTarget(e.target.value)}
+                    className="w-full pr-7 pl-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 bg-white"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                </div>
+                <p className="text-[11px] text-gray-400 italic mt-1">Target GM% to track achievement on the dashboard</p>
+              </div>
 
+            </div>
+          )}
         </div>
       )}
 
-      {activeTab === 'ratios' && (
+      {/* ── ANALYSIS ── */}
+      {topTab === 'analysis' && (
         <div>
           {/* Ratio sub-tab bar */}
           <div className="flex gap-1 bg-gray-50 border border-gray-100 rounded-lg p-1 mb-5 flex-wrap">
@@ -1184,6 +1196,9 @@ export function SalesTargetModal({ open, onClose, companyId }: Props) {
         </div>
       )}
 
-    </Modal>
+      <div className="flex justify-end pt-6 mt-6 border-t border-gray-100">
+        <Button variant="teal" loading={saving} onClick={handleSave}>Save Dashboard Settings</Button>
+      </div>
+    </div>
   )
 }

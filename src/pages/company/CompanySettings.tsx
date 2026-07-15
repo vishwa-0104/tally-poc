@@ -4,6 +4,7 @@ import { RefreshCw, CheckCircle, AlertTriangle, CreditCard, Plus, Trash2, Landma
 import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
+import { DashboardSettingsPanel } from '@/components/company/DashboardSettingsPanel'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { Navigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
@@ -99,7 +100,7 @@ function SyncRow({ label, count, loading, lastSync, onSync }: SyncRowProps) {
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-type Tab = 'connection' | 'ledgers' | 'bank_cash' | 'subscription'
+type Tab = 'connection' | 'ledgers' | 'dashboard' | 'bank_cash' | 'subscription'
 
 interface TabBarProps {
   active: Tab
@@ -111,6 +112,7 @@ function TabBar({ active, onChange, showBankCash }: TabBarProps) {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'connection',   label: 'Connection' },
     { id: 'ledgers',      label: 'Default Ledgers' },
+    { id: 'dashboard',    label: 'Dashboard Settings' },
     ...(showBankCash ? [{ id: 'bank_cash' as Tab, label: 'Bank & Cash' }] : []),
     { id: 'subscription', label: 'Subscription' },
   ]
@@ -588,6 +590,11 @@ export default function CompanySettings() {
                 Save Default Mapping
               </Button>
             </div>
+          )}
+
+          {/* ── Tab: Dashboard Settings ── */}
+          {activeTab === 'dashboard' && (
+            <DashboardSettingsPanel companyId={companyId} />
           )}
 
           {/* ── Tab: Bank & Cash Default Ledgers ── */}
