@@ -32,13 +32,13 @@ function LedgerInput({ id, label, required, matched, ledgers, pinnedNames = [], 
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between mb-1.5">
-        <label className="block text-xs font-semibold text-gray-700 tracking-wide">
+        <label className="block text-xs font-semibold text-foreground tracking-wide">
           {label}{required && ' *'}
         </label>
         <div className="flex items-center gap-2">
           {action}
           {matched && (
-            <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
+            <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
               <CheckCircle className="w-3 h-3" /> matched
             </span>
           )}
@@ -88,21 +88,24 @@ function TallyItemCell({ stockItems, value, onChange, onCreateClick }: TallyItem
             minHeight: 28,
             height: 28,
             fontSize: 12,
-            borderColor: s.isFocused ? '#2dd4bf' : '#e5e7eb',
-            boxShadow: s.isFocused ? '0 0 0 1px #2dd4bf' : 'none',
-            '&:hover': { borderColor: '#2dd4bf' },
+            backgroundColor: 'var(--background)',
+            borderColor: s.isFocused ? 'var(--primary)' : 'var(--border)',
+            boxShadow: s.isFocused ? '0 0 0 1px var(--primary)' : 'none',
+            '&:hover': { borderColor: 'var(--primary)' },
           }),
           valueContainer: (b) => ({ ...b, padding: '0 6px' }),
-          input:          (b) => ({ ...b, margin: 0, padding: 0, fontSize: 12 }),
+          input:          (b) => ({ ...b, margin: 0, padding: 0, fontSize: 12, color: 'var(--foreground)' }),
+          singleValue:    (b) => ({ ...b, color: 'var(--foreground)' }),
+          placeholder:    (b) => ({ ...b, color: 'var(--muted-foreground)' }),
           indicatorSeparator: () => ({ display: 'none' }),
           dropdownIndicator:  (b) => ({ ...b, padding: '0 4px' }),
           clearIndicator:     (b) => ({ ...b, padding: '0 4px' }),
-          menu:           (b) => ({ ...b, fontSize: 12, zIndex: 9999 }),
+          menu:           (b) => ({ ...b, fontSize: 12, zIndex: 9999, backgroundColor: 'var(--card)', border: '1px solid var(--border)' }),
           option:         (b, s) => ({
             ...b,
             padding: '4px 10px',
-            backgroundColor: s.isSelected ? '#1A56B0' : s.isFocused ? '#1A56B0' : 'white',
-            color: s.isSelected || s.isFocused ? 'white' : '#111827',
+            backgroundColor: s.isSelected ? 'var(--primary)' : s.isFocused ? 'var(--muted)' : 'var(--card)',
+            color: s.isSelected ? 'var(--primary-foreground)' : 'var(--foreground)',
             cursor: 'default',
           }),
         }}
@@ -112,7 +115,7 @@ function TallyItemCell({ stockItems, value, onChange, onCreateClick }: TallyItem
           type="button"
           title="Create new stock item in Tally"
           onClick={onCreateClick}
-          className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded border border-teal-400 text-teal-600 hover:bg-teal-50 transition-colors"
+          className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
         >
           <Plus className="w-3 h-3" />
         </button>
@@ -538,11 +541,11 @@ export function MappingForm({
     <form onSubmit={handleSubmit(onSaveMapping)} noValidate>
       {/* Vendor status banner */}
       {gstinMatch && (
-        <div className="flex gap-3 p-4 bg-teal-50 border border-teal-200 rounded-xl mb-5">
-          <Zap className="w-5 h-5 text-teal-500 flex-shrink-0 mt-0.5" />
+        <div className="flex gap-3 p-4 bg-primary/10 border border-primary/30 rounded-xl mb-5">
+          <Zap className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-teal-800">Vendor auto-matched by GSTIN</p>
-            <p className="text-xs text-teal-700 mt-0.5">
+            <p className="text-sm font-semibold text-primary">Vendor auto-matched by GSTIN</p>
+            <p className="text-xs text-primary/80 mt-0.5">
               GSTIN <span className="font-mono">{bill.vendorGstin}</span> matched ledger <span className="font-medium">"{gstinMatch.name}"</span>
             </p>
           </div>
@@ -550,18 +553,18 @@ export function MappingForm({
       )}
 
       {!gstinMatch && exactNameMatch && (
-        <div className="flex gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-5">
-          <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm font-medium text-emerald-800">Vendor ledger matched by name in Accounting software</p>
+        <div className="flex gap-3 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl mb-5">
+          <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Vendor ledger matched by name in Accounting software</p>
         </div>
       )}
 
       {!gstinMatch && !exactNameMatch && !ledgersLoading && (
-        <div className="flex gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl mb-5">
-          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+        <div className="flex gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl mb-5">
+          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-amber-800">Vendor ledger not found</p>
-            <p className="text-xs text-amber-700 mt-0.5">
+            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Vendor ledger not found</p>
+            <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
               No ledger matched for "{bill.vendorName}" (GSTIN: {bill.vendorGstin ?? 'N/A'}).
               Create it in Accounting software or re-sync ledgers.
             </p>
@@ -581,7 +584,7 @@ export function MappingForm({
             <button
               type="button"
               onClick={() => setLedgerModalOpen(true)}
-              className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 font-medium"
+              className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium"
             >
               <Plus className="w-3.5 h-3.5" />
               New
@@ -590,12 +593,12 @@ export function MappingForm({
         />
         {debitVoucherEnabled && (
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+            <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
               Voucher Type
             </label>
             <input
               readOnly
-              className="input-base w-full bg-gray-100 text-gray-500 cursor-not-allowed"
+              className="input-base w-full bg-muted text-muted-foreground cursor-not-allowed"
               {...register('voucherType')}
             />
           </div>
@@ -604,7 +607,7 @@ export function MappingForm({
 
       {billType !== 'misc' && (
         <div className="mt-2">
-          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
+          <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">Purchase Ledgers</p>
           <div className="grid grid-cols-2 gap-x-4">
             {show5 && (
               <LedgerInput
@@ -652,7 +655,7 @@ export function MappingForm({
       {/* ── CGST / SGST (intra-state) ── */}
       {!isInterstate && (show5 || show18 || show40) && (
         <div className="mt-2">
-          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">CGST / SGST</p>
+          <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">CGST / SGST</p>
           <div className="grid grid-cols-2 gap-x-4">
             {show5 && (
               <>
@@ -721,7 +724,7 @@ export function MappingForm({
       {/* ── IGST (interstate) ── */}
       {isInterstate && (show5 || show18 || show40) && (
         <div className="mt-2">
-          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">IGST</p>
+          <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">IGST</p>
           <div className="grid grid-cols-2 gap-x-4">
             {show5 && (
               <LedgerInput
@@ -760,10 +763,10 @@ export function MappingForm({
       {/* ── Godown (admin-enabled feature) ── */}
       {billType !== 'misc' && godownEnabled && (
         <div className="mt-2">
-          <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Godown</p>
+          <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">Godown</p>
           <div className="w-1/2 pr-2">
             <div className="mb-4">
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Godown Name</label>
+              <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">Godown Name</label>
               <input
                 {...register('godownName')}
                 list="godowns-list"
@@ -774,7 +777,7 @@ export function MappingForm({
               <datalist id="godowns-list">
                 {godowns.map((g) => <option key={g.name} value={g.name} />)}
               </datalist>
-              <p className="text-xs text-gray-500 mt-1">Applied to all line items in this bill.</p>
+              <p className="text-xs text-muted-foreground mt-1">Applied to all line items in this bill.</p>
             </div>
           </div>
         </div>
@@ -790,10 +793,10 @@ export function MappingForm({
 
       {/* Bill Details */}
       <div className="mt-5">
-        <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Bill Details</p>
+        <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">Bill Details</p>
         <div className="grid grid-cols-3 gap-x-4 gap-y-0">
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Bill Number *</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">Bill Number *</label>
             <input
               {...register('billNumber')}
               type="text"
@@ -802,7 +805,7 @@ export function MappingForm({
             />
           </div>
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Bill Date *</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">Bill Date *</label>
             <input
               {...register('billDate')}
               type="date"
@@ -810,7 +813,7 @@ export function MappingForm({
             />
           </div>
           <div className="mb-4">
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">Total Amount *</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">Total Amount *</label>
             <input
               {...register('totalAmount')}
               type="number"
@@ -825,16 +828,16 @@ export function MappingForm({
       {/* Voucher number + Voucher Date + Round Off */}
       <div className="mt-2 flex gap-6 flex-wrap">
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+          <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
             Voucher Number
           </label>
-          <div className="input-base w-48 bg-gray-50 text-gray-500 cursor-not-allowed select-none">
+          <div className="input-base w-48 bg-muted text-muted-foreground cursor-not-allowed select-none">
             {nextVoucherNumber ?? `VN_1`}
           </div>
-          <p className="text-xs text-gray-500 mt-1">Auto-assigned on sync</p>
+          <p className="text-xs text-muted-foreground mt-1">Auto-assigned on sync</p>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+          <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
             Voucher Date
           </label>
           <input
@@ -842,11 +845,11 @@ export function MappingForm({
             type="date"
             className="input-base w-40"
           />
-          <p className="text-xs text-gray-500 mt-1">Entry date in Tally (<span className="font-mono">DATE</span>)</p>
+          <p className="text-xs text-muted-foreground mt-1">Entry date in Tally (<span className="font-mono">DATE</span>)</p>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-            Round Off <span className="font-normal text-gray-500">(₹ — negative to deduct)</span>
+          <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
+            Round Off <span className="font-normal text-muted-foreground">(₹ — negative to deduct)</span>
           </label>
           <input
             {...register('roundOffAmount')}
@@ -863,8 +866,8 @@ export function MappingForm({
         </div>
         {hasInvoiceDiscount && (
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-              Discount Ledger <span className="font-normal text-gray-500">(₹{bill.invoiceDiscountAmount?.toFixed(2)})</span>
+            <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
+              Discount Ledger <span className="font-normal text-muted-foreground">(₹{bill.invoiceDiscountAmount?.toFixed(2)})</span>
             </label>
             <input
               {...register('discountLedger')}
@@ -876,7 +879,7 @@ export function MappingForm({
             <datalist id="discount-ledger-list">
               {allLedgerNames.map((name) => <option key={name} value={name} />)}
             </datalist>
-            <p className="text-xs text-gray-500 mt-1">Invoice-level discount of ₹{bill.invoiceDiscountAmount?.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground mt-1">Invoice-level discount of ₹{bill.invoiceDiscountAmount?.toFixed(2)}</p>
           </div>
         )}
       </div>
@@ -884,34 +887,34 @@ export function MappingForm({
       {/* Line items — purchase bill: editable stock item table */}
       {billType !== 'misc' && bill.lineItems.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-sm font-bold text-gray-800 mb-3">Line Items <span className="text-gray-500 font-normal">(editable)</span></h3>
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <h3 className="text-sm font-bold text-foreground mb-3">Line Items <span className="text-muted-foreground font-normal">(editable)</span></h3>
+          <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full border-collapse text-xs" aria-label="Line items">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Description</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">HSN</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Qty</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Unit Price</th>
-                  {showDiscPctCol  && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc%</th>}
-                  {showDiscFlatCol && <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Disc ₹</th>}
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">GST%</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider min-w-[160px]">Item as defined in ERP</th>
+                <tr className="bg-muted border-b border-border">
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Description</th>
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">HSN</th>
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Qty</th>
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Unit</th>
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Unit Price</th>
+                  {showDiscPctCol  && <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Disc%</th>}
+                  {showDiscFlatCol && <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Disc ₹</th>}
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">GST%</th>
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Amount</th>
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider min-w-[160px]">Item as defined in ERP</th>
                 </tr>
               </thead>
               <tbody>
                 {bill.lineItems.map((_item, i) => (
-                  <tr key={i} className="border-b border-gray-100 last:border-0">
+                  <tr key={i} className="border-b border-border last:border-0">
                     <td className="px-1 py-5" title={watchedLineItems?.[i]?.description ?? ''}>
-                      <input {...register(`lineItems.${i}.description`)} className="w-full min-w-[120px] px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.description`)} className="w-full min-w-[120px] px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                     </td>
                     <td className="px-1 py-5" title={watchedLineItems?.[i]?.hsnCode ?? ''}>
-                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-16 px-1 py-1 text-xs font-mono border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.hsnCode`)} className="w-16 px-1 py-1 text-xs font-mono border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                     </td>
                     <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.quantity ?? '')}>
-                      <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-16 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.quantity`)} type="number" step="any" className="w-16 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                     </td>
                     <td className="px-1 py-5" title={watchedLineItems?.[i]?.unit ?? ''}>
                       {(() => {
@@ -924,8 +927,8 @@ export function MappingForm({
                           <div className="relative">
                             <select
                               {...register(`lineItems.${i}.unit`)}
-                              className={`w-20 px-1 py-1 text-xs border rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400 bg-white ${
-                                showFromBill ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'
+                              className={`w-20 px-1 py-1 text-xs border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 bg-card ${
+                                showFromBill ? 'border-yellow-400 bg-yellow-50' : 'border-border'
                               }`}
                             >
                               {stockUnits.map((u) => (
@@ -951,7 +954,7 @@ export function MappingForm({
                           || (originalItem?.discountPercent != null && originalItem.discountPercent !== 0)
                         return (
                           <div className="relative">
-                            <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register(`lineItems.${i}.unitPrice`)} type="number" step="any" className="w-24 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                             {hasItemDiscount && originalItem.unitPrice !== watch(`lineItems.${i}.unitPrice`) && (
                               <p className="absolute top-full left-0 text-xs text-amber-600 mt-0.5 whitespace-nowrap">
                                 Bill: <span className="font-semibold">{originalItem.unitPrice.toFixed(2)}</span>
@@ -965,7 +968,7 @@ export function MappingForm({
                       <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.discountPercent ?? '')}>
                         {discountColumnEnabled ? (
                           <div className="relative">
-                            <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-10 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-10 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                             {(() => {
                               const orig = bill.lineItems[i]
                               if (orig?.discountAmount != null && orig.discountAmount !== 0) {
@@ -979,20 +982,20 @@ export function MappingForm({
                             })()}
                           </div>
                         ) : (
-                          <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-20 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register(`lineItems.${i}.discountPercent`)} type="number" step="any" placeholder="0" className="w-20 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                         )}
                       </td>
                     )}
                     {showDiscFlatCol && (
                       <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.discountAmount ?? '')}>
-                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-20 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        <input {...register(`lineItems.${i}.discountAmount`)} type="number" step="any" placeholder="0" className="w-20 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                       </td>
                     )}
                     <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.gstRate ?? '')}>
-                      <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-12 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.gstRate`)} type="number" step="any" className="w-12 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                     </td>
                     <td className="px-1 py-5" title={String(watchedLineItems?.[i]?.amount ?? '')}>
-                      <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register(`lineItems.${i}.amount`)} type="number" step="any" className="w-24 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                     </td>
                     <td className="px-1 py-5" title={watchedLineItems?.[i]?.tallyStockItem ?? ''}>
                       <TallyItemCell
@@ -1009,7 +1012,7 @@ export function MappingForm({
               <datalist id="all-ledgers-list">
                 {allLedgerNames.map((name) => <option key={name} value={name} />)}
               </datalist>
-              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+              <tfoot className="bg-muted border-t-2 border-border">
                 {/* Helper variable to keep colSpan consistent across all rows */}
                 {(() => {
                   const baseColSpan = 6 + (showDiscPctCol || showDiscFlatCol ? 1 : 0);
@@ -1017,76 +1020,76 @@ export function MappingForm({
                   return (
                     <>
                       {bill.extraCharges?.map((charge, i) => (
-                        <tr key={i} className="border-t border-gray-100">
+                        <tr key={i} className="border-t border-border">
                           <td className="px-1 py-1.5 text-right" colSpan={discountColumnEnabled ? 4 : 3}>
                             <input
                               {...register(`extraCharges.${i}.ledger`)}
                               list="extra-charges-ledger-list"
                               autoComplete="off"
                               placeholder="Select ledger… *"
-                              className="w-56 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                              className="w-56 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
                             />
                             {!extraChargesOk && (
                               <p className="text-xs text-amber-600 mt-2">Select a ledger for every extra charge to enable sync.</p>
                             )}
                           </td>
-                          <td colSpan={3} className="px-3 py-2 text-sm text-gray-700 text-right">{charge.description}</td>
+                          <td colSpan={3} className="px-3 py-2 text-sm text-foreground text-right">{charge.description}</td>
                           <td colSpan={3} className="px-3 py-2">
                             <input
                               {...register(`extraCharges.${i}.amount`)}
                               type="number"
                               step="0.01"
-                              className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                              className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
                             />
                           </td>
                         </tr>
                       ))}
 
-                      <tr className="border-t border-gray-100">
-                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Taxable Amount</td>
+                      <tr className="border-t border-border">
+                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Taxable Amount</td>
                         <td className="px-3 py-2">
-                          <input {...register('subtotal')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register('subtotal')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                         </td>
                         <td></td>
                       </tr>
 
                       {!isInterstate && (
                         <>
-                          <tr className="border-t border-gray-100">
-                            <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
+                          <tr className="border-t border-border">
+                            <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">CGST</td>
                             <td className="px-3 py-2" colSpan={3}>
-                              <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                              <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                             </td>
                           </tr>
-                          <tr className="border-t border-gray-100">
-                            <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
+                          <tr className="border-t border-border">
+                            <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">SGST</td>
                             <td className="px-3 py-2" colSpan={3}>
-                              <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                              <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                             </td>
                           </tr>
                         </>
                       )}
 
                       {isInterstate && (
-                        <tr className="border-t border-gray-100">
-                          <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
+                        <tr className="border-t border-border">
+                          <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">IGST</td>
                           <td className="px-3 py-2" colSpan={3}>
-                            <input {...register('igstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                            <input {...register('igstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                           </td>
                         </tr>
                       )}
 
-                      <tr className="border-t border-gray-100">
-                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                      <tr className="border-t border-border">
+                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Round Off</td>
                         <td className="px-3 py-2" colSpan={3}>
-                          <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                         </td>
                       </tr>
 
-                      <tr className="border-t-2 border-gray-300">
-                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
+                      <tr className="border-t-2 border-border">
+                        <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-bold text-foreground">Total Amount</td>
                         <td className="px-3 py-2" colSpan={3}>
-                          <input {...register('totalAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                          <input {...register('totalAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-bold text-primary border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                         </td>
                       </tr>
                     </>
@@ -1104,86 +1107,86 @@ export function MappingForm({
       {/* Expense ledger rows — misc bill only */}
       {billType === 'misc' && bill.lineItems.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-sm font-bold text-gray-800 mb-3">Ledgers <span className="text-gray-500 font-normal">(select a ledger for each row)</span></h3>
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <h3 className="text-sm font-bold text-foreground mb-3">Ledgers <span className="text-muted-foreground font-normal">(select a ledger for each row)</span></h3>
+          <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full border-collapse text-xs" aria-label="Expense ledger rows">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Description</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Ledger *</th>
-                  <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-wider">Amount</th>
+                <tr className="bg-muted border-b border-border">
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Description</th>
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Ledger *</th>
+                  <th className="px-3 py-2 text-left font-bold text-muted-foreground uppercase tracking-wider">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {bill.lineItems.map((_item, i) => (
-                  <tr key={i} className="border-b border-gray-100 last:border-0">
-                    <td className="px-3 py-2 text-sm text-gray-700">{bill.lineItems[i].description}</td>
+                  <tr key={i} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2 text-sm text-foreground">{bill.lineItems[i].description}</td>
                     <td className="px-1 py-1.5">
                       <input
                         {...register(`lineItems.${i}.tallyLedger`)}
                         list="all-ledgers-list"
                         autoComplete="off"
                         placeholder="Select ledger…"
-                        className="w-56 px-1 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400"
+                        className="w-56 px-1 py-1 text-xs border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
                       />
                     </td>
-                    <td className="px-3 py-2 text-sm font-semibold text-gray-800">{formatCurrency(bill.lineItems[i].amount)}</td>
+                    <td className="px-3 py-2 text-sm font-semibold text-foreground">{formatCurrency(bill.lineItems[i].amount)}</td>
                   </tr>
                 ))}
               </tbody>
               <datalist id="all-ledgers-list">
                 {allLedgerNames.map((name) => <option key={name} value={name} />)}
               </datalist>
-              <tfoot className="bg-gray-50 border-t-2 border-gray-200">
-                <tr className="border-t border-gray-100">
-                  <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Subtotal</td>
+              <tfoot className="bg-muted border-t-2 border-border">
+                <tr className="border-t border-border">
+                  <td className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Subtotal</td>
                   <td></td>
                   <td className="px-3 py-2">
-                    <input {...register('subtotal')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <input {...register('subtotal')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                   </td>
                 </tr>
                 {!isInterstate && (
                   <>
-                    <tr className="border-t border-gray-100">
-                      <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">CGST</td>
+                    <tr className="border-t border-border">
+                      <td className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">CGST</td>
                       <td></td>
                       <td className="px-3 py-2">
-                        <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        <input {...register('cgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                       </td>
                     </tr>
-                    <tr className="border-t border-gray-100">
-                      <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">SGST</td>
+                    <tr className="border-t border-border">
+                      <td className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">SGST</td>
                       <td></td>
                       <td className="px-3 py-2">
-                        <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                        <input {...register('sgstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                       </td>
                     </tr>
                   </>
                 )}
                 {isInterstate && (
-                  <tr className="border-t border-gray-100">
-                    <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">IGST</td>
+                  <tr className="border-t border-border">
+                    <td className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">IGST</td>
                     <td></td>
                     <td className="px-3 py-2">
-                      <input {...register('igstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                      <input {...register('igstAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                     </td>
                   </tr>
                 )}
-                <tr className="border-t border-gray-100">
-                  <td className="px-3 py-2 text-right text-xs font-medium text-gray-500">Round Off</td>
+                <tr className="border-t border-border">
+                  <td className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Round Off</td>
                   <td></td>
                   <td className="px-3 py-2">
-                    <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <input {...register('roundOffAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-semibold border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                     {roundOffSuggestion !== null && (
                       <p className="text-xs text-amber-600 mt-1">Value seems incorrect, try ₹{roundOffSuggestion}</p>
                     )}
                   </td>
                 </tr>
-                <tr className="border-t-2 border-gray-300">
-                  <td className="px-3 py-2 text-right text-xs font-bold text-gray-700">Total Amount</td>
+                <tr className="border-t-2 border-border">
+                  <td className="px-3 py-2 text-right text-xs font-bold text-foreground">Total Amount</td>
                   <td></td>
                   <td className="px-3 py-2">
-                    <input {...register('totalAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-bold text-teal-700 border border-gray-200 rounded focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400" />
+                    <input {...register('totalAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-bold text-primary border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                   </td>
                 </tr>
               </tfoot>
@@ -1226,8 +1229,8 @@ export function MappingForm({
 
       {/* Narration */}
       <div className="mt-5">
-        <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
-          Narration <span className="font-normal text-gray-400">(optional)</span>
+        <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
+          Narration <span className="font-normal text-muted-foreground">(optional)</span>
         </label>
         <textarea
           {...register('narration')}
@@ -1288,7 +1291,7 @@ export function MappingForm({
       >
         <div className="flex gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div className="text-sm text-gray-700 space-y-2">
+          <div className="text-sm text-foreground space-y-2">
             {unitMismatchItems.map((item, index) => (
               <div key={index} className="p-2 bg-yellow-50 border border-yellow-200 rounded">
                 <p>

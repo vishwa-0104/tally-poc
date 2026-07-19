@@ -81,17 +81,17 @@ export function CreateLedgerModal({
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/30 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0">
-          <h3 className="text-sm font-bold text-gray-900">Create Vendor Ledger in Tally</h3>
-          <button onClick={onClose} disabled={saving} className="text-gray-400 hover:text-gray-600 disabled:opacity-40">
+          <h3 className="text-sm font-bold text-foreground">Create Vendor Ledger in Tally</h3>
+          <button onClick={onClose} disabled={saving} className="text-muted-foreground hover:text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="overflow-y-auto px-5 pb-5 space-y-4 flex-1">
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Name *</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">Name *</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -102,7 +102,7 @@ export function CreateLedgerModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Under</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">Under</label>
             <input
               value={under}
               onChange={(e) => setUnder(e.target.value)}
@@ -111,11 +111,11 @@ export function CreateLedgerModal({
             />
           </div>
 
-          <div className="pt-1 border-t border-gray-100">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Tax Registration</p>
+          <div className="pt-1 border-t border-border">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">Tax Registration</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">GST Registration Type</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">GST Registration Type</label>
                 <select
                   value={gstRegistrationType}
                   onChange={(e) => setGstRegType(e.target.value)}
@@ -127,7 +127,7 @@ export function CreateLedgerModal({
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">GSTIN/UIN</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">GSTIN/UIN</label>
                 <input
                   value={gstin}
                   onChange={(e) => setGstin(e.target.value)}
@@ -136,7 +136,7 @@ export function CreateLedgerModal({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">PAN/IT No.</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">PAN/IT No.</label>
                 <input
                   value={pan}
                   onChange={(e) => setPan(e.target.value)}
@@ -147,11 +147,11 @@ export function CreateLedgerModal({
             </div>
           </div>
 
-          <div className="pt-1 border-t border-gray-100">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Mailing Details</p>
+          <div className="pt-1 border-t border-border">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">Mailing Details</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Address</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">Address</label>
                 <textarea
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
@@ -162,7 +162,7 @@ export function CreateLedgerModal({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">State</label>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">State</label>
                   <input
                     value={state}
                     onChange={(e) => setState(e.target.value)}
@@ -171,7 +171,7 @@ export function CreateLedgerModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">Pincode</label>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">Pincode</label>
                   <input
                     value={pincode}
                     onChange={(e) => setPincode(e.target.value)}
@@ -190,7 +190,7 @@ export function CreateLedgerModal({
           )}
         </div>
 
-        <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-100 flex-shrink-0">
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-border flex-shrink-0">
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>

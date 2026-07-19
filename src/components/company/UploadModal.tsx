@@ -36,13 +36,14 @@ interface UploadModalProps {
   onClose: () => void
   onParsed: (billId: string) => void
   onMultipleFiles: (files: File[], type: BillType, isMiscDebit: boolean, isMiscCredit: boolean) => void
-  initialType?: 'purchase' | 'debit'
+  initialType?: 'purchase' | 'debit' | 'credit'
+  initialFiles?: File[]
   debitVoucherEnabled?: boolean
   creditVoucherEnabled?: boolean
   isMiscUpload?: boolean
 }
 
-export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialType = 'purchase', debitVoucherEnabled = false, creditVoucherEnabled = false, isMiscUpload = false }: UploadModalProps) {
+export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialType = 'purchase', initialFiles, debitVoucherEnabled = false, creditVoucherEnabled = false, isMiscUpload = false }: UploadModalProps) {
   const [file, setFile]             = useState<File | null>(null)
   const [multiFiles, setMultiFiles] = useState<File[]>([])
   const [parsing, setParsing]       = useState(false)
@@ -88,25 +89,30 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
   // Reset type selection when modal reopens with a different initialType
   useEffect(() => { setSelectedType(initialType) }, [initialType])
 
-  const handleParse = async () => {
+  // overrideFile/overrideMultiFiles/overrideType let the auto-submit effect below fire
+  // immediately with fresh values instead of waiting a render for state to catch up.
+  const handleParse = async (overrideFile?: File | null, overrideMultiFiles?: File[], overrideType?: BillType) => {
     if (!activeCompanyId) return
 
-    const isMiscDebit    = isMiscUpload && selectedType === 'debit'
-    const isMiscCredit   = isMiscUpload && selectedType === 'credit'
-    const billTypeToSave: 'purchase' | 'debit' | 'misc' = isMiscUpload ? 'misc' : selectedType as 'purchase' | 'debit'
+    const effectiveType  = overrideType ?? selectedType
+    const isMiscDebit    = isMiscUpload && effectiveType === 'debit'
+    const isMiscCredit   = isMiscUpload && effectiveType === 'credit'
+    const billTypeToSave: 'purchase' | 'debit' | 'misc' = isMiscUpload ? 'misc' : effectiveType as 'purchase' | 'debit'
+    const f  = overrideFile !== undefined ? overrideFile : file
+    const mf = overrideMultiFiles !== undefined ? overrideMultiFiles : multiFiles
 
     // Multi-file: hand off to parent and close immediately
-    if (multiFiles.length > 1) {
-      onMultipleFiles(multiFiles, billTypeToSave, isMiscDebit, isMiscCredit)
+    if (mf.length > 1) {
+      onMultipleFiles(mf, billTypeToSave, isMiscDebit, isMiscCredit)
       handleClose()
       return
     }
 
-    if (!file) return
+    if (!f) return
     setParsing(true)
     setStep(0)
     try {
-      const parsed = await parseBillWithAI(file, (s) => setStep(s), billTypeToSave, activeCompanyId)
+      const parsed = await parseBillWithAI(f, (s) => setStep(s), billTypeToSave, activeCompanyId)
       let bill     = parsedDataToBill(parsed, activeCompanyId, undefined, billTypeToSave)
       if (isMiscDebit)  bill = { ...bill, tallyMapping: { isDebit:  true } }
       if (isMiscCredit) bill = { ...bill, tallyMapping: { isCredit: true } }
@@ -127,6 +133,20 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
       setStep(-1)
     }
   }
+
+  // Cards on the page stage files before the modal opens (matching dashboard-main's
+  // inline-dropzone entry points) — seed the modal's file state AND fire the parse
+  // immediately, so opening the modal from a card is a single click, not two.
+  useEffect(() => {
+    if (!open || !initialFiles || initialFiles.length === 0) return
+    if (initialFiles.length > 1) {
+      setMultiFiles(initialFiles); setFile(null)
+      handleParse(null, initialFiles, initialType)
+    } else {
+      setFile(initialFiles[0]); setMultiFiles([])
+      handleParse(initialFiles[0], [], initialType)
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClose = () => {
     if (parsing) return
@@ -156,7 +176,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
         parsing ? undefined : (
           <>
             <Button variant="outline" onClick={handleClose}>Cancel</Button>
-            <Button variant="teal" onClick={handleParse} disabled={!file && multiFiles.length === 0}>
+            <Button variant="teal" onClick={() => handleParse()} disabled={!file && multiFiles.length === 0}>
               {multiFiles.length > 1 ? `Upload ${multiFiles.length} Bills` : 'Submit Bill'}
             </Button>
           </>
@@ -167,18 +187,18 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
         <div className="py-6 flex flex-col items-center gap-4 text-center">
           <div className={cn(
             'w-14 h-14 rounded-full flex items-center justify-center',
-            quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'bg-red-100' : 'bg-amber-100',
+            quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'bg-red-500/15' : 'bg-amber-500/15',
           )}>
-            <AlertTriangle className={cn('w-7 h-7', quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'text-red-500' : 'text-amber-500')} />
+            <AlertTriangle className={cn('w-7 h-7', quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400')} />
           </div>
           <div>
-            <p className={cn('text-sm font-bold mb-1', quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'text-red-700' : 'text-amber-700')}>
+            <p className={cn('text-sm font-bold mb-1', quotaError.type === 'blocked' || quotaError.type === 'unavailable' ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400')}>
               {quotaError.type === 'blocked'     ? 'Parsing Disabled' :
                quotaError.type === 'expired'     ? 'Subscription Expired' :
                quotaError.type === 'unavailable' ? 'Service Unavailable' :
                                                    'Parse Limit Reached'}
             </p>
-            <p className="text-xs text-gray-600 leading-relaxed max-w-xs">{quotaError.message}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed max-w-xs">{quotaError.message}</p>
           </div>
         </div>
       ) : !parsing ? (
@@ -192,8 +212,8 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
                 className={cn(
                   'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
                   selectedType === 'purchase'
-                    ? 'bg-teal-500 text-white border-teal-500'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary',
                 )}
               >
                 {isMiscUpload ? 'Misc. Purchases' : 'Purchase'}
@@ -205,8 +225,8 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
                   className={cn(
                     'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
                     selectedType === 'debit'
-                      ? 'bg-teal-500 text-white border-teal-500'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary',
                   )}
                 >
                   {isMiscUpload ? 'Misc. Debit Note' : 'Debit Note'}
@@ -219,8 +239,8 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
                   className={cn(
                     'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
                     selectedType === 'credit'
-                      ? 'bg-teal-500 text-white border-teal-500'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:text-teal-700',
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary',
                   )}
                 >
                   Misc. Credit Note
@@ -235,25 +255,25 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
             className={cn(
               'border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all',
               isDragActive
-                ? 'border-teal-500 bg-teal-50'
-                : 'border-gray-200 bg-gray-50 hover:border-teal-400 hover:bg-teal-50/50',
+                ? 'border-primary bg-primary/10'
+                : 'border-border bg-muted hover:border-primary/50 hover:bg-primary/5',
             )}
           >
             <input {...getInputProps()} aria-label="Upload bill file" />
-            <div className="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Upload className="w-5 h-5 text-teal-600" />
+            <div className="w-12 h-12 bg-primary/15 rounded-xl flex items-center justify-center mx-auto mb-3">
+              <Upload className="w-5 h-5 text-primary" />
             </div>
-            <p className="text-sm font-semibold text-gray-700 mb-1">
+            <p className="text-sm font-semibold text-foreground mb-1">
               {isDragActive ? 'Drop it here…' : 'Drop file here or click to browse'}
             </p>
-            <p className="text-xs text-gray-500">JPG, PNG, PDF — max 10 MB · up to 10 files</p>
+            <p className="text-xs text-muted-foreground">JPG, PNG, PDF — max 10 MB · up to 10 files</p>
           </div>
 
           {/* Camera capture — opens rear camera on mobile, file picker on desktop */}
           <div className="flex items-center gap-3 my-3">
-            <div className="flex-1 border-t border-gray-200" />
-            <span className="text-xs text-gray-500">or</span>
-            <div className="flex-1 border-t border-gray-200" />
+            <div className="flex-1 border-t border-border" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <div className="flex-1 border-t border-border" />
           </div>
           <input
             ref={cameraInputRef}
@@ -266,7 +286,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
           <button
             type="button"
             onClick={() => cameraInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 hover:border-teal-400 hover:bg-teal-50/50 transition-all text-sm font-semibold text-gray-600 hover:text-teal-700"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-border bg-muted hover:border-primary/50 hover:bg-primary/5 transition-all text-sm font-semibold text-muted-foreground hover:text-primary"
           >
             <Camera className="w-4 h-4" />
             Take a Photo
@@ -274,16 +294,16 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
 
           {/* Selected file(s) */}
           {multiFiles.length > 1 ? (
-            <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-teal-50 rounded-lg border border-teal-200">
-              <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0" />
-              <span className="text-sm font-medium text-gray-800 flex-1">{multiFiles.length} files selected</span>
-              <span className="text-xs text-gray-500">{(multiFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)} KB total</span>
+            <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-primary/10 rounded-lg border border-primary/30">
+              <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
+              <span className="text-sm font-medium text-foreground flex-1">{multiFiles.length} files selected</span>
+              <span className="text-xs text-muted-foreground">{(multiFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)} KB total</span>
             </div>
           ) : file ? (
-            <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
-              <CheckCircle className="w-4 h-4 text-teal-500 flex-shrink-0" />
-              <span className="text-sm font-medium text-gray-800 flex-1 truncate">{file.name}</span>
-              <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
+            <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-muted rounded-lg border border-border">
+              <CheckCircle className="w-4 h-4 text-primary flex-shrink-0" />
+              <span className="text-sm font-medium text-foreground flex-1 truncate">{file.name}</span>
+              <span className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
             </div>
           ) : null}
         </>
@@ -295,20 +315,20 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
             const active = i === step
             const idle   = i > step
             return (
-              <div key={i} className="flex items-start gap-3 py-3 border-b border-gray-100 last:border-0">
+              <div key={i} className="flex items-start gap-3 py-3 border-b border-border last:border-0">
                 <div className={cn(
                   'w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
-                  done   && 'bg-emerald-50',
-                  active && 'bg-teal-50',
-                  idle   && 'bg-gray-100',
+                  done   && 'bg-emerald-500/15',
+                  active && 'bg-primary/15',
+                  idle   && 'bg-muted',
                 )}>
-                  {done   && <CheckCircle className="w-4 h-4 text-emerald-500" />}
-                  {active && <Loader className="w-4 h-4 text-teal-500 animate-spin" />}
-                  {idle   && <Circle className="w-4 h-4 text-gray-300" />}
+                  {done   && <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
+                  {active && <Loader className="w-4 h-4 text-primary animate-spin" />}
+                  {idle   && <Circle className="w-4 h-4 text-muted-foreground/50" />}
                 </div>
                 <div>
-                  <p className={cn('text-sm font-semibold', idle ? 'text-gray-500' : 'text-gray-800')}>{s.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{s.sub}</p>
+                  <p className={cn('text-sm font-semibold', idle ? 'text-muted-foreground' : 'text-foreground')}>{s.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{s.sub}</p>
                 </div>
               </div>
             )

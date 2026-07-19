@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BookOpen, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import { Badge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
+import { Badge } from '@/shadcn/components/ui/badge'
+import { Button } from '@/shadcn/components/ui/button'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/shadcn/components/ui/table'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { useCashBookStore } from '@/store/cashBookStore'
 import type { CashBookRecord, CashBookStatus } from '@/store/cashBookStore'
 
@@ -20,16 +21,23 @@ const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Error',    value: 'error'            },
 ]
 
+const statusBadgeMap: Record<CashBookStatus, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
+  pending:          { variant: 'secondary',   label: 'Pending'      },
+  partially_synced: { variant: 'outline',     label: 'Partial Sync' },
+  synced:           { variant: 'default',     label: 'Synced'       },
+  error:            { variant: 'destructive', label: 'Sync Error'   },
+}
+
 function CashBookStatusBadge({ status }: { status: CashBookStatus }) {
-  const map: Record<CashBookStatus, { variant: 'amber' | 'green' | 'red' | 'blue'; label: string }> = {
-    pending:          { variant: 'amber', label: 'Pending'      },
-    partially_synced: { variant: 'blue',  label: 'Partial Sync' },
-    synced:           { variant: 'green', label: 'Synced'       },
-    error:            { variant: 'red',   label: 'Sync Error'   },
-  }
-  const { variant, label } = map[status]
+  const { variant, label } = statusBadgeMap[status]
   return <Badge variant={variant}>{label}</Badge>
 }
+
+const pillClass = (active: boolean) =>
+  cn(
+    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+    active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80',
+  )
 
 interface CashBookTableProps {
   records: CashBookRecord[]
@@ -77,7 +85,7 @@ export function CashBookTable({ records, onUpload }: CashBookTableProps) {
         icon={BookOpen}
         title="No cash book records yet"
         description="Upload a CSV or PDF cash book to get started"
-        action={<Button variant="teal" onClick={onUpload}>Upload Cash Book</Button>}
+        action={<Button onClick={onUpload}>Upload Cash Book</Button>}
       />
     )
   }
@@ -85,88 +93,81 @@ export function CashBookTable({ records, onUpload }: CashBookTableProps) {
   return (
     <div>
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-100 bg-gray-50">
-        <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2 px-2 pb-4">
+        <div className="flex flex-wrap gap-2">
           {STATUS_OPTIONS.map((opt) => (
             <button
               key={opt.value}
+              type="button"
               onClick={() => toggleStatus(opt.value)}
-              className={`px-3 py-1 text-xs rounded-full font-medium border transition-colors ${
-                statusFilter.has(opt.value)
-                  ? opt.value === 'synced'
-                    ? 'bg-emerald-100 border-emerald-300 text-emerald-700'
-                    : opt.value === 'error'
-                    ? 'bg-red-100 border-red-300 text-red-700'
-                    : opt.value === 'partially_synced'
-                    ? 'bg-blue-100 border-blue-300 text-blue-700'
-                    : 'bg-amber-100 border-amber-300 text-amber-700'
-                  : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'
-              }`}
+              className={pillClass(statusFilter.has(opt.value))}
             >
               {opt.label}
             </button>
           ))}
         </div>
-        <span className="ml-auto text-xs text-gray-400">
+        <span className="ml-auto text-xs text-muted-foreground">
           {filtered.length} record{filtered.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">
+        <div className="py-12 text-center text-sm text-muted-foreground">
           No records match the selected filters.
         </div>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse" aria-label="Cash book records">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  {['Cash Book', 'Account', 'Uploaded', 'Transactions', 'Total In', 'Total Out', 'Status', 'Action', ''].map((h, i) => (
-                    <th key={i} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="min-w-[720px]" aria-label="Cash book records">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cash Book</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead>Uploaded</TableHead>
+                  <TableHead className="text-center">Transactions</TableHead>
+                  <TableHead className="text-right">Total In</TableHead>
+                  <TableHead className="text-right">Total Out</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {pageRows.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
+                  <TableRow key={row.id}>
+                    <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                          <BookOpen className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-gray-800">{row.bookName}</p>
-                          <p className="text-[10px] text-gray-400 truncate max-w-32">{row.fileName}</p>
+                          <p className="text-sm font-semibold">{row.bookName}</p>
+                          <p className="max-w-32 truncate text-[10px] text-muted-foreground">{row.fileName}</p>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 font-mono">
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {row.accountNumber ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                       {formatDate(row.uploadedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-700 text-center">
+                    </TableCell>
+                    <TableCell className="text-center font-semibold">
                       {row.totalCount}
                       {(row.status === 'synced' || row.status === 'partially_synced') && row.syncedCount > 0 && (
-                        <span className="ml-1 text-[10px] text-gray-400">({row.syncedCount} synced)</span>
+                        <span className="ml-1 text-[10px] text-muted-foreground">({row.syncedCount} synced)</span>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-teal-700 text-right whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right font-semibold text-emerald-600 dark:text-emerald-400">
                       {row.totalDebit > 0 ? formatCurrency(row.totalDebit) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-semibold text-red-600 text-right whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right font-semibold text-red-600 dark:text-red-400">
                       {row.totalCredit > 0 ? formatCurrency(row.totalCredit) : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <CashBookStatusBadge status={row.status} />
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell><CashBookStatusBadge status={row.status} /></TableCell>
+                    <TableCell className="text-right">
                       {row.status === 'pending' && (
-                        <Button variant="teal" size="sm" onClick={() => navigate(`/company/cash-book/${row.id}`)}>
+                        <Button size="sm" onClick={() => navigate(`/company/cash-book/${row.id}`)}>
                           Map & Sync
                         </Button>
                       )}
@@ -176,7 +177,7 @@ export function CashBookTable({ records, onUpload }: CashBookTableProps) {
                         </Button>
                       )}
                       {row.status === 'error' && (
-                        <Button variant="danger" size="sm" onClick={() => navigate(`/company/cash-book/${row.id}`)}>
+                        <Button variant="destructive" size="sm" onClick={() => navigate(`/company/cash-book/${row.id}`)}>
                           Retry
                         </Button>
                       )}
@@ -185,53 +186,57 @@ export function CashBookTable({ records, onUpload }: CashBookTableProps) {
                           View
                         </Button>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-destructive"
                         onClick={() => handleDelete(row)}
-                        className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                         title="Delete record"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
-              <span className="text-xs text-gray-500">
+            <div className="mt-4 flex flex-col gap-2 px-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
                 Showing {start}–{end} of {filtered.length}
-              </span>
+              </p>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={page === 1}
-                  className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  <ChevronLeft className="w-4 h-4 text-gray-600" />
-                </button>
+                  <ChevronLeft className="size-3.5" />
+                </Button>
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button
+                  <Button
                     key={p}
+                    variant={p === page ? 'default' : 'outline'}
+                    size="sm"
+                    className="w-7 p-0"
                     onClick={() => setPage(p)}
-                    className={`w-7 h-7 text-xs rounded font-medium transition-colors ${
-                      p === page ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-200'
-                    }`}
                   >
                     {p}
-                  </button>
+                  </Button>
                 ))}
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={page === totalPages}
-                  className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 >
-                  <ChevronRight className="w-4 h-4 text-gray-600" />
-                </button>
+                  <ChevronRight className="size-3.5" />
+                </Button>
               </div>
             </div>
           )}

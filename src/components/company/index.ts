@@ -1,4 +1,5 @@
 export { UploadModal }  from './UploadModal'
+export { UploadCard }   from './UploadCard'
 export { BillsTable }  from './BillsTable'
 export { MappingForm } from './MappingForm'
 export { XmlPreview }  from './XmlPreview'

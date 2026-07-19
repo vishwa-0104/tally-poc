@@ -1,11 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
-import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip as RechartsTooltip, type TooltipContentProps } from 'recharts'
 import {
-  TrendingUp, TrendingDown, AlertCircle,
-  Lightbulb, AlertTriangle, CheckCircle,
-  ArrowUpRight, ArrowDownRight, RefreshCw, Wallet, Building2,
-  Users, Store, Download, Zap,
+  TrendingUp, AlertCircle,
+  Lightbulb, AlertTriangle,
+  RefreshCw, Download, Zap,
+  CalendarDays, Package, Clock, Scale, LineChart, Landmark,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore, useDaybookSyncStore } from '@/store'
 import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBalances, fetchStockValue, fetchLedgerAmounts, fetchTallyStockItems, fetchDebtorBalances, type SlowStockItem, type TallyVoucher, type TopItem, type SalesPartyRow, type DebtorBalance } from '@/services/tallyService'
@@ -19,6 +18,22 @@ import { getTallyUrl } from './CompanySettings'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
 import { classifyVouchers, computeCreditSalesTotal } from '@/lib/voucherClassification'
+import { SalesWidget } from '@/shadcn/components/dashboard/sales-widget'
+import { SalesChartWidget } from '@/shadcn/components/dashboard/sales-chart-widget'
+import { CashWidget } from '@/shadcn/components/dashboard/cash-widget'
+import { BankWidget } from '@/shadcn/components/dashboard/bank-widget'
+import { ReceivablesWidget } from '@/shadcn/components/dashboard/receivables-widget'
+import { PayablesWidget } from '@/shadcn/components/dashboard/payables-widget'
+import { DebtorsWidget } from '@/shadcn/components/dashboard/debtors-widget'
+import { ItemsWidget } from '@/shadcn/components/dashboard/items-widget'
+import { GrossMarginWidget } from '@/shadcn/components/dashboard/gross-margin-widget'
+import { EbitdaWidget } from '@/shadcn/components/dashboard/ebitda-widget'
+import { NetMarginWidget } from '@/shadcn/components/dashboard/net-margin-widget'
+import { StocksWidget } from '@/shadcn/components/dashboard/stocks-widget'
+import { RatioWidget } from '@/shadcn/components/dashboard/ratio-widget'
+import { Switch } from '@/shadcn/components/ui/switch'
+import { CompanyPageHeader } from '@/shadcn/components/company-page-header'
+import { FormatProvider } from '@/shadcn/lib/format-context'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -216,444 +231,11 @@ function computeTargetForPeriod(
   return sum > 0 ? sum : null
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-// Single-series bar chart tooltip — value leads (bold, high-contrast), the
-// bucket label follows, matching the KPI card's own value/label hierarchy.
-function SalesTrendTooltip({ active, payload, label }: TooltipContentProps) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-2 py-1.5">
-      <p className="text-[11px] font-semibold text-gray-900">{formatCurrency(Number(payload[0].value ?? 0))}</p>
-      <p className="text-[10px] text-gray-400">{label}</p>
-    </div>
-  )
-}
-
-function KpiCard({ title, value, subtitle, icon: Icon, trend, placeholder = false, targetInfo, prevValue, trendData }: {
-  title: string
-  value: string | number
-  subtitle: string
-  icon: React.ElementType
-  trend?: { value: number }
-  placeholder?: boolean
-  targetInfo?: { target: number; achieved: number } | null
-  prevValue?: { amount: number; current: number } | null
-  trendData?: { label: string; amount: number }[]
-}) {
-  const DisplayIcon = targetInfo
-    ? targetInfo.achieved >= 100 ? CheckCircle
-    : targetInfo.achieved >= 75  ? TrendingUp
-    : targetInfo.achieved >= 50  ? AlertTriangle
-    : TrendingDown
-    : Icon
-  const iconBg = targetInfo
-    ? targetInfo.achieved >= 100 ? 'bg-green-50'
-    : targetInfo.achieved >= 75  ? 'bg-amber-50'
-    : targetInfo.achieved >= 50  ? 'bg-orange-50'
-    : 'bg-red-50'
-    : 'bg-blue-50'
-  const iconColor = targetInfo
-    ? targetInfo.achieved >= 100 ? 'text-green-600'
-    : targetInfo.achieved >= 75  ? 'text-amber-500'
-    : targetInfo.achieved >= 50  ? 'text-orange-500'
-    : 'text-red-500'
-    : 'text-blue-600'
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`p-2 ${iconBg} rounded-lg`}>
-          <DisplayIcon className={`w-4 h-4 ${iconColor}`} />
-        </div>
-        {trend !== undefined && (
-          <span className={`text-xs font-semibold flex items-center gap-0.5 ${trend.value >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            {trend.value >= 0
-              ? <ArrowUpRight className="w-3 h-3" />
-              : <ArrowDownRight className="w-3 h-3" />}
-            {Math.abs(trend.value)}%
-          </span>
-        )}
-      </div>
-      <p className={`text-lg font-bold tracking-tight mb-0.5 ${placeholder ? 'text-gray-300' : 'text-gray-900'}`}>
-        {placeholder ? '—' : value}
-      </p>
-      <p className="text-[11px] font-semibold text-gray-600">{title}</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{subtitle}</p>
-      {targetInfo && (
-        <div className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
-          <div className="flex justify-between text-[11px]">
-            <span className="text-gray-500">Target Achievement</span>
-            <span className={`font-semibold ${targetInfo.achieved >= 100 ? 'text-green-600' : 'text-red-500'}`}>
-              {targetInfo.achieved.toFixed(1)}%
-            </span>
-          </div>
-          <div className="flex justify-between text-[11px]">
-            <span className="text-gray-500">Target</span>
-            <span className="text-gray-600">{formatCurrency(targetInfo.target)}</span>
-          </div>
-          <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
-            <div
-              className={`h-1 rounded-full transition-all ${targetInfo.achieved >= 100 ? 'bg-green-500' : 'bg-red-400'}`}
-              style={{ width: `${Math.min(100, targetInfo.achieved)}%` }}
-            />
-          </div>
-        </div>
-      )}
-      {prevValue != null && (
-        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between">
-          <span className="text-[11px] text-gray-400">Previous day</span>
-          <div className="flex items-center gap-1">
-            {prevValue.current >= prevValue.amount
-              ? <ArrowUpRight className="w-3 h-3 text-green-500" />
-              : <ArrowDownRight className="w-3 h-3 text-red-400" />}
-            <span className="text-[11px] text-gray-600 font-medium">{formatCurrency(prevValue.amount)}</span>
-          </div>
-        </div>
-      )}
-      {trendData && trendData.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          <div className="h-14 -mx-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trendData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }} barCategoryGap={2}>
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 9, fill: '#9ca3af' }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval="preserveStartEnd"
-                />
-                <RechartsTooltip content={(props) => <SalesTrendTooltip {...props} />} cursor={{ fill: '#f3f4f6' }} />
-                <Bar dataKey="amount" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={18} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CashCard({ inflow, outflow, inHand }: {
-  inflow:  number | null
-  outflow: number | null
-  inHand:  number | null
-}) {
-  const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-2">
-        <div className="p-1.5 bg-emerald-50 rounded-lg">
-          <Wallet className="w-3.5 h-3.5 text-emerald-600" />
-        </div>
-      </div>
-      <p className="text-sm font-bold text-gray-900 mb-2">Cash</p>
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-gray-500 flex-1">Cash Inflow</span>
-          <span className="text-[11px] font-semibold text-emerald-600 shrink-0 whitespace-nowrap">{val(inflow)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-gray-500 flex-1">Cash Outflow</span>
-          <span className="text-[11px] font-semibold text-red-500 shrink-0 whitespace-nowrap">{val(outflow)}</span>
-        </div>
-        <div className="flex items-center gap-2 border-t border-gray-100 pt-1.5">
-          <span className="text-[11px] text-gray-500 flex-1">Cash In Hand</span>
-          <span className="text-[11px] font-semibold text-gray-800 shrink-0 whitespace-nowrap">{val(inHand)}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function BankCard({ inflow, outflow, balance }: {
-  inflow:   number | null
-  outflow:  number | null
-  balance:  number | null
-}) {
-  const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-2">
-        <div className="p-1.5 bg-blue-50 rounded-lg">
-          <Building2 className="w-3.5 h-3.5 text-blue-600" />
-        </div>
-      </div>
-      <p className="text-sm font-bold text-gray-900 mb-2">Banks</p>
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-gray-500 flex-1">Bank Inflow</span>
-          <span className="text-[11px] font-semibold text-emerald-600 shrink-0 whitespace-nowrap">{val(inflow)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-gray-500 flex-1">Bank Outflow</span>
-          <span className="text-[11px] font-semibold text-red-500 shrink-0 whitespace-nowrap">{val(outflow)}</span>
-        </div>
-        <div className="flex items-center gap-2 border-t border-gray-100 pt-1.5">
-          <span className="text-[11px] text-gray-500 flex-1">Balance in Bank</span>
-          <span className="text-[11px] font-semibold text-gray-800 shrink-0 whitespace-nowrap">{val(balance)}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ReceivablesCard({ balance }: { balance: number | null }) {
-  const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-2">
-        <div className="p-1.5 bg-violet-50 rounded-lg">
-          <Users className="w-3.5 h-3.5 text-violet-600" />
-        </div>
-      </div>
-      <p className={`text-lg font-bold tracking-tight mb-0.5 ${balance === null ? 'text-gray-300' : 'text-gray-900'}`}>
-        {val(balance)}
-      </p>
-      <p className="text-[11px] font-semibold text-gray-600">Receivables</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Sundry Debtors</p>
-    </div>
-  )
-}
-
-function PayablesCard({ balance }: { balance: number | null }) {
-  const val = (v: number | null) => v !== null ? formatCurrency(v) : '—'
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-2">
-        <div className="p-1.5 bg-orange-50 rounded-lg">
-          <Store className="w-3.5 h-3.5 text-orange-600" />
-        </div>
-      </div>
-      <p className={`text-lg font-bold tracking-tight mb-0.5 ${balance === null ? 'text-gray-300' : 'text-gray-900'}`}>
-        {val(balance)}
-      </p>
-      <p className="text-[11px] font-semibold text-gray-600">Payables</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Sundry Creditors</p>
-    </div>
-  )
-}
-
-// Analysis tab's 9 ratio KPI cards. Reuses KpiCard's exact visual language.
-// noData renders only the heading + "No data available" — never a fabricated
-// number — for whichever inputs genuinely aren't fetchable for this company.
-function RatioKpiCard({ title, value, subtitle, icon: Icon, suffix = '' }: {
-  title:    string
-  value:    number | null
-  subtitle: string
-  icon:     React.ElementType
-  suffix?:  string
-}) {
-  const noData = value == null
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className="p-2 bg-blue-50 rounded-lg">
-          <Icon className="w-4 h-4 text-blue-600" />
-        </div>
-      </div>
-      {noData ? (
-        <p className="text-xs font-semibold text-gray-400 italic mb-0.5">No data available</p>
-      ) : (
-        <p className="text-lg font-bold tracking-tight mb-0.5 text-gray-900">
-          {value.toLocaleString('en-IN', { maximumFractionDigits: 1 })}{suffix}
-        </p>
-      )}
-      <p className="text-[11px] font-semibold text-gray-600">{title}</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{subtitle}</p>
-    </div>
-  )
-}
-
-function GrossMarginCard({ value, pct, targetPct }: {
-  value:     number | null
-  pct:       number | null
-  targetPct: number | null
-}) {
-  const achieved = (pct !== null && targetPct) ? (pct / targetPct) * 100 : null
-  const iconBg    = achieved === null ? 'bg-blue-50'
-    : achieved >= 100 ? 'bg-green-50' : achieved >= 75 ? 'bg-amber-50' : 'bg-red-50'
-  const iconColor = achieved === null ? 'text-blue-600'
-    : achieved >= 100 ? 'text-green-600' : achieved >= 75 ? 'text-amber-500' : 'text-red-500'
-  const Icon = achieved === null ? TrendingUp
-    : achieved >= 100 ? CheckCircle : achieved >= 75 ? TrendingUp : TrendingDown
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`p-2 ${iconBg} rounded-lg`}>
-          <Icon className={`w-4 h-4 ${iconColor}`} />
-        </div>
-      </div>
-      <p className={`text-lg font-bold tracking-tight mb-0.5 ${value === null ? 'text-gray-300' : 'text-gray-900'}`}>
-        {value !== null ? formatCurrency(value) : '—'}
-      </p>
-      <p className="text-[11px] font-semibold text-gray-600">Gross Margin</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Sales − Purchases (excl. GST)</p>
-      {pct !== null && (
-        <div className="mt-2 pt-2 border-t border-gray-100 space-y-0.5">
-          <div className="flex justify-between text-[11px]">
-            <span className="text-gray-500">Margin %</span>
-            <span className="font-semibold text-gray-700">{pct.toFixed(1)}%</span>
-          </div>
-          {achieved !== null && (
-            <>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-gray-500">Target</span>
-                <span className="text-gray-600">{targetPct!.toFixed(1)}%</span>
-              </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-gray-500">Target Achievement</span>
-                <span className={`font-semibold ${achieved >= 100 ? 'text-green-600' : 'text-red-500'}`}>
-                  {achieved.toFixed(1)}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
-                <div
-                  className={`h-1 rounded-full transition-all ${achieved >= 100 ? 'bg-green-500' : 'bg-red-400'}`}
-                  style={{ width: `${Math.min(100, achieved)}%` }}
-                />
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NetProfitCard({ value, pct }: { value: number | null; pct: number | null }) {
-  const color = value === null ? 'text-gray-300' : value >= 0 ? 'text-gray-900' : 'text-red-600'
-  const Icon  = value === null || value >= 0 ? TrendingUp : TrendingDown
-  const iconBg    = value === null ? 'bg-purple-50' : value >= 0 ? 'bg-green-50' : 'bg-red-50'
-  const iconColor = value === null ? 'text-purple-500' : value >= 0 ? 'text-green-600' : 'text-red-500'
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`p-2 ${iconBg} rounded-lg`}>
-          <Icon className={`w-4 h-4 ${iconColor}`} />
-        </div>
-      </div>
-      <p className={`text-lg font-bold tracking-tight mb-0.5 ${color}`}>
-        {value !== null ? formatCurrency(value) : '—'}
-      </p>
-      <p className="text-[11px] font-semibold text-gray-600">Net Profit</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Gross Margin − Indirect Exp + Indirect Inc</p>
-      {pct !== null && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          <div className="flex justify-between text-[11px]">
-            <span className="text-gray-500">Net Margin %</span>
-            <span className={`font-semibold ${pct >= 0 ? 'text-gray-700' : 'text-red-500'}`}>{pct.toFixed(1)}%</span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function EbitdaCard({ value, pct }: { value: number | null; pct: number | null }) {
-  const color     = value === null ? 'text-gray-300' : value >= 0 ? 'text-gray-900' : 'text-red-600'
-  const Icon      = value === null || value >= 0 ? TrendingUp : TrendingDown
-  const iconBg    = value === null ? 'bg-indigo-50' : value >= 0 ? 'bg-indigo-50' : 'bg-red-50'
-  const iconColor = value === null ? 'text-indigo-400' : value >= 0 ? 'text-indigo-600' : 'text-red-500'
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`p-2 ${iconBg} rounded-lg`}>
-          <Icon className={`w-4 h-4 ${iconColor}`} />
-        </div>
-      </div>
-      <p className={`text-lg font-bold tracking-tight mb-0.5 ${color}`}>
-        {value !== null ? formatCurrency(value) : '—'}
-      </p>
-      <p className="text-[11px] font-semibold text-gray-600">EBITDA</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">Earnings before interest, tax, depreciation</p>
-      {pct !== null && (
-        <div className="mt-2 pt-2 border-t border-gray-100">
-          <div className="flex justify-between text-[11px]">
-            <span className="text-gray-500">EBITDA Margin %</span>
-            <span className={`font-semibold ${pct >= 0 ? 'text-gray-700' : 'text-red-500'}`}>{pct.toFixed(1)}%</span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function DataTableCard({
-  title,
-  columns,
-  rows,
-  loading = false,
-  onDownload,
-  downloadPending = false,
-}: {
-  title:   string
-  columns: { label: string; right?: boolean }[]
-  rows?:   { cells: (string | React.ReactNode)[]; dim?: boolean }[]
-  loading?: boolean
-  onDownload?: () => void
-  downloadPending?: boolean
-}) {
-  const showSkeleton = loading || !rows || rows.length === 0
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-bold text-gray-700">{title}</p>
-        {onDownload && (
-          <button
-            onClick={onDownload}
-            disabled={downloadPending}
-            title={`Download ${title} as CSV`}
-            className="text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50"
-          >
-            {downloadPending
-              ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              : <Download className="w-3.5 h-3.5" />}
-          </button>
-        )}
-      </div>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-gray-100">
-            {columns.map((col, i) => (
-              <th key={i} className={`pb-2 px-2 text-[11px] font-semibold text-gray-400 ${col.right ? 'text-right' : 'text-left'}`}>
-                {col.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {showSkeleton
-            ? Array.from({ length: 6 }).map((_, ri) => (
-                <tr key={ri}>
-                  {columns.map((_, ci) => (
-                    <td key={ci} className="py-2.5 px-2">
-                      <div className={`h-2 bg-gray-100 rounded-full animate-pulse ${ci === 0 ? 'w-4/5' : 'w-1/2'}`} />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            : rows!.map((row, ri) => (
-                <tr key={ri} className="border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                  {row.cells.map((cell, ci) => (
-                    <td key={ci} className={`py-1.5 px-2 ${row.dim ? 'text-gray-400' : 'text-gray-700'} ${columns[ci]?.right ? 'text-right font-medium' : ''}`}>
-                      {cell}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'performance', label: 'Performance'     },
-  { key: 'analysis',    label: 'Analytics'        },
+  { key: 'analysis',    label: 'KPI Analytics'     },
   { key: 'cfo',         label: 'CFO Suggestions' },
 ]
 
@@ -900,13 +482,13 @@ function ReportStatCard({ label, value, sub, tone = 'blue' }: {
   tone?: 'blue' | 'green' | 'danger'
 }) {
   const styles = {
-    blue:   { wrap: 'bg-gray-50 border-gray-200', value: 'text-brand-600',   sub: 'text-gray-500' },
-    green:  { wrap: 'bg-gray-50 border-gray-200', value: 'text-emerald-600', sub: 'text-gray-500' },
+    blue:   { wrap: 'bg-muted border-border', value: 'text-brand-600',   sub: 'text-muted-foreground' },
+    green:  { wrap: 'bg-muted border-border', value: 'text-emerald-600', sub: 'text-muted-foreground' },
     danger: { wrap: 'bg-red-50 border-red-200',   value: 'text-red-600',    sub: 'text-red-600'  },
   }[tone]
   return (
     <div className={`rounded-xl border p-4 text-center ${styles.wrap}`}>
-      <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">{label}</p>
+      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">{label}</p>
       <p className={`text-2xl font-bold leading-tight ${styles.value}`}>{value}</p>
       {sub && <p className={`text-[11px] mt-1.5 leading-snug ${styles.sub}`}>{sub}</p>}
     </div>
@@ -919,7 +501,7 @@ function ReportSectionHeading({ n, title }: { n: number; title: string }) {
   return (
     <div className="flex items-center gap-2 mb-2">
       <div className="w-1 h-4 bg-brand-600 rounded-sm shrink-0" />
-      <p className="text-sm font-bold text-gray-800">{n}. {title}</p>
+      <p className="text-sm font-bold text-foreground">{n}. {title}</p>
     </div>
   )
 }
@@ -933,7 +515,7 @@ function renderActionItem(item: string) {
   if (idx === -1) return <span>{item}</span>
   return (
     <>
-      <span className="font-semibold text-gray-900">{item.slice(0, idx + 1)}</span>
+      <span className="font-semibold text-foreground">{item.slice(0, idx + 1)}</span>
       <span>{item.slice(idx + 1)}</span>
     </>
   )
@@ -950,7 +532,9 @@ export default function Dashboard() {
   const tallyCompany = company?.name ?? undefined
 
   const fyYear = getCurrentFyYear()
+  const todayLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
+  const [compactFormat,   setCompactFormat]   = useState(false)
   const [activeTab,       setActiveTab]       = useState<Tab>('performance')
   const [filterPreset,    setFilterPreset]    = useState<FilterPreset>('today')
   const [customFrom,      setCustomFrom]      = useState(todayStr())
@@ -983,12 +567,6 @@ export default function Dashboard() {
   const [salesTrend,        setSalesTrend]        = useState<{ label: string; amount: number }[]>([])
   const [slowStock,         setSlowStock]         = useState<SlowStockItem[]>([])
   const [exportingSlowStock, setExportingSlowStock] = useState(false)
-  const [debtorBalances,     setDebtorBalances]     = useState<DebtorBalance[]>([])
-  // Fetched decoupled from the rest of fetchData (see handleFetchLive/fetchData
-  // below) — batched Tally requests, can take a while for a large ledger
-  // master, must never block the other KPI cards from rendering.
-  const [debtorBalancesLoading, setDebtorBalancesLoading] = useState(false)
-  const [exportingDebtorBalances, setExportingDebtorBalances] = useState(false)
   const [exportingItems,     setExportingItems]     = useState(false)
   const [exportingDebtors,   setExportingDebtors]   = useState(false)
   const [exportingPurchases, setExportingPurchases] = useState(false)
@@ -1233,28 +811,21 @@ export default function Dashboard() {
         // 120s timeout budget (see fetchDebtorBalances in tallyService.ts),
         // and can take a while for a large ledger master. Awaiting it inline
         // would stall every other KPI card on this tab behind it. Runs on
-        // its own, updates just its own card + spinner, and persists its
-        // own snapshot patch independently once done.
-        setDebtorBalancesLoading(true)
+        // its own and persists its own snapshot patch independently once done.
         fetchDebtorBalances(tallyUrl, tallyCompany)
           .then(({ balances }) => {
             console.log('[DebtorBalances] parties:', balances.length)
-            setDebtorBalances(balances)
             void saveDashboardSnapshot(companyId, { debtorBalances: balances })
               .catch((err: unknown) => console.error('[DebtorBalances] Failed to persist snapshot:', err))
           })
           .catch((err: unknown) => {
             console.error('[DebtorBalances] fetchDebtorBalances failed:', err)
-            setDebtorBalances([])
           })
-          .finally(() => setDebtorBalancesLoading(false))
       } else {
         setCashInHand(null)
         setBankBalance(null)
         setReceivables(null)
         setPayables(null)
-        setDebtorBalances([])
-        setDebtorBalancesLoading(false)
       }
 
       setFetched(true)
@@ -1530,13 +1101,11 @@ export default function Dashboard() {
         setBankBalance(bankBalanceResult)
         setReceivables(receivablesResult)
         setPayables(payablesResult)
-        setDebtorBalances(debtorBalancesResult)
       } else {
         setCashInHand(null)
         setBankBalance(null)
         setReceivables(null)
         setPayables(null)
-        setDebtorBalances([])
       }
       const slowStockResult = snapshot?.slowStockItems ?? []
       setSlowStock(slowStockResult)
@@ -2406,79 +1975,68 @@ export default function Dashboard() {
     }
   }
 
-  const exportDebtorBalancesToXls = async () => {
-    if (debtorBalances.length === 0) { toast.error('No debtor balances to export'); return }
-    setExportingDebtorBalances(true)
-    try {
-      await yieldToPaint()
-      const rows = [
-        ['Party', 'Balance (₹)'],
-        ...debtorBalances.map(d => [d.name, d.balance.toFixed(2)]),
-      ]
-      downloadXls(rows, 'debtor_balances')
-    } finally {
-      setExportingDebtorBalances(false)
-    }
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-gray-50">
+    <div className="flex flex-col h-full overflow-y-auto bg-grid-paper">
 
-      {/* ── Header bar with tabs ── */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 shrink-0">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <h1 className="text-base font-bold text-gray-900">Dashboard</h1>
-
-          {/* Tabs — centred */}
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            {TABS.map(t => (
-              <button
-                key={t.key}
-                onClick={() => handleTabChange(t.key)}
-                className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                  activeTab === t.key
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Right side: connection badge */}
-          <div className="flex items-center gap-2">
+      <CompanyPageHeader
+        title={company?.name ?? 'Dashboard'}
+        subtitle="Dashboard"
+        actions={
+          <>
             {!connected && (
-              <span className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+              <span className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-400">
                 Extension not connected
               </span>
             )}
-          </div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+              <Switch checked={compactFormat} onCheckedChange={setCompactFormat} size="sm" />
+              In Thousands
+            </label>
+          </>
+        }
+      />
+
+      {/* ── Tabs — outside the bordered header, no border of its own ── */}
+      <div className="px-6 pt-3 shrink-0">
+        <div className="flex items-center gap-4">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => handleTabChange(t.key)}
+              className={`text-sm transition-colors ${
+                activeTab === t.key
+                  ? 'font-semibold text-foreground'
+                  : 'font-medium text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* ── Page body ── */}
-      <div className="px-6 py-5 max-w-6xl w-full mx-auto space-y-5">
+      <div className="px-6 py-5 w-full space-y-5">
 
         {/* ══════════════════ PERFORMANCE TAB ══════════════════ */}
         {activeTab === 'performance' && (
-          <>
+          <FormatProvider compact={compactFormat}>
             {/* Filter bar */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
                 {FILTERS.map(f => (
                   <button
                     key={f.key}
                     onClick={() => handleFilterChange(f.key)}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    className={`pb-1 text-xs border-b-2 transition-colors ${
                       filterPreset === f.key
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-500 hover:text-gray-700'
+                        ? 'font-semibold text-foreground border-foreground'
+                        : 'font-medium text-muted-foreground border-transparent hover:text-foreground'
                     }`}
                   >
-                    {f.label}
+                    {f.key === 'today' ? `${f.label} — ${todayLabel}` : f.label}
                   </button>
                 ))}
               </div>
@@ -2488,20 +2046,20 @@ export default function Dashboard() {
                   <input
                     type="date" value={customFrom}
                     onChange={e => setCustomFrom(e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-blue-500"
+                    className="text-xs border border-border rounded-full px-3 py-1.5 bg-muted text-foreground outline-none focus:border-primary"
                   />
-                  <span className="text-gray-400 text-xs">to</span>
+                  <span className="text-muted-foreground text-xs">to</span>
                   <input
                     type="date" value={customTo}
                     onChange={e => setCustomTo(e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-blue-500"
+                    className="text-xs border border-border rounded-full px-3 py-1.5 bg-muted text-foreground outline-none focus:border-primary"
                   />
                   <button
                     onClick={handleApply}
                     disabled={loading}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-full hover:bg-primary/90 disabled:opacity-50 transition-colors"
                   >
-                    Apply
+                    Go
                   </button>
                 </>
               )}
@@ -2510,7 +2068,7 @@ export default function Dashboard() {
                 onClick={handleFetchLive}
                 disabled={loading}
                 title="Fetch the latest data from Tally and save it to the database"
-                className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
               >
                 <Zap className="w-3 h-3" />
                 Fetch Live
@@ -2533,182 +2091,183 @@ export default function Dashboard() {
               {loading && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
             </div>
 
-            {/* KPI cards — row 1: Sales, Cash, Banks (+ Receivables, Payables for Today only) */}
-            <div className={`grid gap-4 ${filterPreset === 'today' ? 'grid-cols-5' : filterPreset === 'ytd' ? 'grid-cols-4' : 'grid-cols-3'}`}>
-              {(() => {
-                const periodTarget = fetched
-                  ? computeTargetForPeriod(filterPreset, customFrom, customTo, monthlyTargets)
-                  : null
-                const targetInfo = (periodTarget && total > 0)
-                  ? { target: periodTarget, achieved: (total / periodTarget) * 100 }
-                  : null
-                return (
-                  <KpiCard
-                    title="Total Sales"
-                    value={fetched ? formatCurrency(total) : '—'}
-                    subtitle={
-                      activePeriod
-                        ? activePeriod.from === activePeriod.to
-                          ? new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : `${new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(activePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
-                        : 'Loading…'
-                    }
-                    icon={TrendingUp}
-                    targetInfo={targetInfo}
-                    prevValue={filterPreset === 'today' && fetched && prevDaySales !== null
-                      ? { amount: prevDaySales, current: total }
-                      : null}
-                    trendData={fetched ? salesTrend : undefined}
-                  />
-                )
-              })()}
-              {filterPreset === 'ytd' && (
-                <GrossMarginCard
+            {filterPreset === 'today' ? (
+              /* Today view — new shadcn-style widget layout (matches the shadcn dashboard mockup) */
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+                <SalesWidget current={fetched ? total : null} previous={fetched ? prevDaySales : null} />
+                <SalesChartWidget data={fetched ? salesTrend : []} />
+                <CashWidget
+                  inflow={fetched ? cashInflow : null}
+                  outflow={fetched ? cashOutflow : null}
+                  inHand={fetched ? cashInHand : null}
+                />
+                <BankWidget
+                  inflow={fetched ? bankInflow : null}
+                  outflow={fetched ? bankOutflow : null}
+                  balance={fetched ? bankBalance : null}
+                />
+                <ReceivablesWidget total={fetched ? receivables : null} />
+                <PayablesWidget total={fetched ? payables : null} />
+                <DebtorsWidget
+                  data={fetched ? topDebtors.slice(0, 8) : []}
+                  onDownload={fetched && topDebtors.length > 0 ? exportTopDebtorsToXls : undefined}
+                  downloadPending={exportingDebtors}
+                />
+                <ItemsWidget
+                  data={fetched ? topItems.map(item => ({ name: item.name, amount: item.amount })) : []}
+                  onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
+                  downloadPending={exportingItems}
+                />
+              </div>
+            ) : filterPreset === 'ytd' ? (
+              /* YTD view — new shadcn-style widget layout (matches the shadcn dashboard mockup) */
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+                <SalesWidget
+                  title="Sales (YTD)"
+                  current={fetched ? total : null}
+                  previous={null}
+                  targetInfo={(() => {
+                    const periodTarget = fetched
+                      ? computeTargetForPeriod(filterPreset, customFrom, customTo, monthlyTargets)
+                      : null
+                    return (periodTarget && total > 0)
+                      ? { target: periodTarget, achieved: (total / periodTarget) * 100 }
+                      : null
+                  })()}
+                />
+                <GrossMarginWidget
                   value={fetched ? grossMargin : null}
                   pct={fetched ? grossMarginPct : null}
                   targetPct={dashboardSettings.ytd?.grossMarginTarget ?? null}
                 />
-              )}
-              {filterPreset === 'ytd' && (
-                <EbitdaCard
+                <EbitdaWidget
                   value={fetched ? ebitda : null}
                   pct={fetched ? ebitdaPct : null}
                 />
-              )}
-              {filterPreset === 'ytd' && (
-                <NetProfitCard
+                <NetMarginWidget
                   value={fetched ? netProfit : null}
                   pct={fetched ? netProfitPct : null}
                 />
-              )}
-              <CashCard
-                inflow={fetched ? cashInflow : null}
-                outflow={fetched ? cashOutflow : null}
-                inHand={fetched ? cashInHand : null}
-              />
-              <BankCard
-                inflow={fetched ? bankInflow : null}
-                outflow={fetched ? bankOutflow : null}
-                balance={fetched ? bankBalance : null}
-              />
-              {filterPreset === 'today' && (
-                <>
-                  <ReceivablesCard balance={fetched ? receivables : null} />
-                  <PayablesCard    balance={fetched ? payables    : null} />
-                </>
-              )}
-            </div>
-
-            {/* Table panels — Top Performing Items | Top Performing Debtors | Slow Moving Stocks | Debtor Balances */}
-            <div className="grid grid-cols-4 gap-4">
-              <DataTableCard
-                title="Top Performing Items"
-                onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
-                downloadPending={exportingItems}
-                columns={[
-                  { label: 'Description' },
-                  { label: 'Qty',     right: true },
-                  { label: 'Amt (₹)', right: true },
-                ]}
-                loading={!fetched}
-                rows={fetched && topItems.length > 0
-                  ? topItems.map(item => ({
-                      cells: [
-                        item.name,
-                        `${item.qty % 1 === 0 ? item.qty : item.qty.toFixed(2)}${item.unit ? ' ' + item.unit : ''}`,
-                        formatCurrency(item.amount),
-                      ],
-                    }))
-                  : fetched
-                    ? [{ cells: ['No items found', '', ''], dim: true }]
-                    : undefined}
-              />
-              <DataTableCard
-                title="Top Performing Debtors"
-                onDownload={fetched && topDebtors.length > 0 ? exportTopDebtorsToXls : undefined}
-                downloadPending={exportingDebtors}
-                columns={[
-                  { label: 'Party' },
-                  { label: 'Amt (₹)', right: true },
-                ]}
-                loading={!fetched}
-                rows={fetched && topDebtors.length > 0
-                  ? topDebtors.slice(0, 8).map((d, i) => ({
-                      cells: [
-                        `${i + 1}. ${d.name}`,
-                        formatCurrency(d.amount),
-                      ],
-                    }))
-                  : fetched
-                    ? [{ cells: ['No debtors found', ''], dim: true }]
-                    : undefined}
-              />
-              <DataTableCard
-                title="Slow Moving Stocks"
-                onDownload={fetched && slowStock.length > 0 ? exportSlowStockToXls : undefined}
-                downloadPending={exportingSlowStock}
-                columns={[
-                  { label: 'Stocks' },
-                  { label: 'Days', right: true },
-                ]}
-                loading={!fetched}
-                rows={fetched && slowStock.length > 0
-                  ? slowStock.slice(0, 8).map(item => ({
-                      cells: [
-                        item.name,
-                        <span className={item.daysSince >= 90 ? 'text-red-500' : item.daysSince >= 30 ? 'text-amber-500' : 'text-gray-500'}>
-                          {item.daysSince}d
-                        </span>,
-                      ],
-                    }))
-                  : fetched
-                    ? [{ cells: ['No slow-moving items found', ''], dim: true }]
-                    : undefined}
-              />
-              <DataTableCard
-                title="Debtor Balances"
-                onDownload={fetched && debtorBalances.length > 0 ? exportDebtorBalancesToXls : undefined}
-                downloadPending={exportingDebtorBalances}
-                columns={[
-                  { label: 'Party' },
-                  { label: 'Balance (₹)', right: true },
-                ]}
-                // debtorBalancesLoading is its own spinner, independent of
-                // the rest of the tab (`fetched`) — this card's batched fetch
-                // can still be running well after every other KPI has
-                // already rendered, and must show that rather than a stale
-                // or empty state.
-                loading={!fetched || debtorBalancesLoading}
-                rows={fetched && !debtorBalancesLoading && debtorBalances.length > 0
-                  ? debtorBalances.slice(0, 8).map((d, i) => ({
-                      cells: [
-                        `${i + 1}. ${d.name}`,
-                        formatCurrency(d.balance),
-                      ],
-                    }))
-                  : fetched && !debtorBalancesLoading
-                    ? [{ cells: ['No outstanding balances found', ''], dim: true }]
-                    : undefined}
-              />
-            </div>
+                <SalesChartWidget
+                  title="Sales Trend — Monthly (YTD)"
+                  data={fetched ? salesTrend : []}
+                  className="lg:col-span-4"
+                />
+                <CashWidget
+                  inflow={fetched ? cashInflow : null}
+                  outflow={fetched ? cashOutflow : null}
+                  inHand={fetched ? cashInHand : null}
+                />
+                <BankWidget
+                  inflow={fetched ? bankInflow : null}
+                  outflow={fetched ? bankOutflow : null}
+                  balance={fetched ? bankBalance : null}
+                />
+                <ReceivablesWidget total={fetched ? receivables : null} />
+                <PayablesWidget total={fetched ? payables : null} />
+                <DebtorsWidget
+                  data={fetched ? topDebtors.slice(0, 8) : []}
+                  onDownload={fetched && topDebtors.length > 0 ? exportTopDebtorsToXls : undefined}
+                  downloadPending={exportingDebtors}
+                />
+                <ItemsWidget
+                  data={fetched ? topItems.map(item => ({ name: item.name, amount: item.amount })) : []}
+                  onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
+                  downloadPending={exportingItems}
+                />
+                <StocksWidget
+                  data={fetched ? slowStock.slice(0, 8) : []}
+                  onDownload={fetched && slowStock.length > 0 ? exportSlowStockToXls : undefined}
+                  downloadPending={exportingSlowStock}
+                />
+              </div>
+            ) : (
+              /* Custom range — same shadcn-style widget layout as Today/YTD */
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+                <SalesWidget
+                  title={`Sales (${
+                    activePeriod
+                      ? activePeriod.from === activePeriod.to
+                        ? new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                        : `${new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(activePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                      : 'Loading…'
+                  })`}
+                  current={fetched ? total : null}
+                  previous={null}
+                  targetInfo={(() => {
+                    const periodTarget = fetched
+                      ? computeTargetForPeriod(filterPreset, customFrom, customTo, monthlyTargets)
+                      : null
+                    return (periodTarget && total > 0)
+                      ? { target: periodTarget, achieved: (total / periodTarget) * 100 }
+                      : null
+                  })()}
+                />
+                <GrossMarginWidget
+                  value={fetched ? grossMargin : null}
+                  pct={fetched ? grossMarginPct : null}
+                  targetPct={null}
+                />
+                <EbitdaWidget
+                  value={fetched ? ebitda : null}
+                  pct={fetched ? ebitdaPct : null}
+                />
+                <NetMarginWidget
+                  value={fetched ? netProfit : null}
+                  pct={fetched ? netProfitPct : null}
+                />
+                <SalesChartWidget
+                  title="Sales Trend"
+                  data={fetched ? salesTrend : []}
+                  className="lg:col-span-4"
+                />
+                <CashWidget
+                  inflow={fetched ? cashInflow : null}
+                  outflow={fetched ? cashOutflow : null}
+                  inHand={fetched ? cashInHand : null}
+                />
+                <BankWidget
+                  inflow={fetched ? bankInflow : null}
+                  outflow={fetched ? bankOutflow : null}
+                  balance={fetched ? bankBalance : null}
+                />
+                <ReceivablesWidget total={fetched ? receivables : null} />
+                <PayablesWidget total={fetched ? payables : null} />
+                <DebtorsWidget
+                  data={fetched ? topDebtors.slice(0, 8) : []}
+                  onDownload={fetched && topDebtors.length > 0 ? exportTopDebtorsToXls : undefined}
+                  downloadPending={exportingDebtors}
+                />
+                <ItemsWidget
+                  data={fetched ? topItems.map(item => ({ name: item.name, amount: item.amount })) : []}
+                  onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
+                  downloadPending={exportingItems}
+                />
+                <StocksWidget
+                  data={fetched ? slowStock.slice(0, 8) : []}
+                  onDownload={fetched && slowStock.length > 0 ? exportSlowStockToXls : undefined}
+                  downloadPending={exportingSlowStock}
+                />
+              </div>
+            )}
 
             {/* Error */}
             {error && (
-              <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 dark:bg-red-950/30 dark:border-red-900">
                 <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                <p className="text-xs text-red-600">No data available. Please ensure Tally is open and click Refresh.</p>
+                <p className="text-xs text-red-600 dark:text-red-400">No data available. Please ensure Tally is open and click Refresh.</p>
               </div>
             )}
 
             {/* Uncached range hint — DB has never seen this range; distinct from "genuinely zero vouchers" */}
             {!error && !loading && fetched && uncachedRange && (
-              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 dark:bg-amber-950/30 dark:border-amber-900">
                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                <p className="text-xs text-amber-700">No cached data for this range yet — click Fetch Live to pull it from Tally.</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">No cached data for this range yet — click Fetch Live to pull it from Tally.</p>
               </div>
             )}
 
-          </>
+          </FormatProvider>
         )}
 
         {/* ══════════════════ ANALYSIS TAB ══════════════════ */}
@@ -2716,19 +2275,19 @@ export default function Dashboard() {
           <div className="space-y-5">
 
             {/* Filter bar — fully independent of the Performance tab's filter above */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
                 {ANALYSIS_FILTERS.map(f => (
                   <button
                     key={f.key}
                     onClick={() => handleAnalysisFilterChange(f.key)}
-                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                    className={`pb-1 text-xs border-b-2 transition-colors ${
                       analysisFilterPreset === f.key
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-500 hover:text-gray-700'
+                        ? 'font-semibold text-foreground border-foreground'
+                        : 'font-medium text-muted-foreground border-transparent hover:text-foreground'
                     }`}
                   >
-                    {f.label}
+                    {f.key === 'today' ? `${f.label} — ${todayLabel}` : f.label}
                   </button>
                 ))}
               </div>
@@ -2738,20 +2297,20 @@ export default function Dashboard() {
                   <input
                     type="date" value={analysisCustomFrom}
                     onChange={e => setAnalysisCustomFrom(e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-blue-500"
+                    className="text-xs border border-border rounded-full px-3 py-1.5 bg-muted text-foreground outline-none focus:border-primary"
                   />
-                  <span className="text-gray-400 text-xs">to</span>
+                  <span className="text-muted-foreground text-xs">to</span>
                   <input
                     type="date" value={analysisCustomTo}
                     onChange={e => setAnalysisCustomTo(e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-blue-500"
+                    className="text-xs border border-border rounded-full px-3 py-1.5 bg-muted text-foreground outline-none focus:border-primary"
                   />
                   <button
                     onClick={handleAnalysisApply}
                     disabled={analysisLoading}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    className="px-4 py-1.5 bg-primary text-primary-foreground text-xs font-semibold rounded-full hover:bg-primary/90 disabled:opacity-50 transition-colors"
                   >
-                    Apply
+                    Go
                   </button>
                 </>
               )}
@@ -2760,7 +2319,7 @@ export default function Dashboard() {
                 onClick={handleAnalysisFetchLive}
                 disabled={analysisLoading}
                 title="Fetch the latest data from Tally and save it to the database"
-                className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
               >
                 <Zap className="w-3 h-3" />
                 Fetch Live
@@ -2777,7 +2336,7 @@ export default function Dashboard() {
             )}
 
             {analysisActivePeriod && (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Showing: {analysisActivePeriod.from === analysisActivePeriod.to
                   ? new Date(analysisActivePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                   : `${new Date(analysisActivePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(analysisActivePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`}
@@ -2785,7 +2344,7 @@ export default function Dashboard() {
             )}
 
             {/* 9 ratio KPI cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
               {(() => {
                 const ytdDaysForRatios = daysSinceFyStart(analysisActivePeriod?.to ?? todayStr())
                 const dayMultipliers = {
@@ -2796,15 +2355,15 @@ export default function Dashboard() {
                 const r = computeRatios(analysisInputs, dayMultipliers)
                 return (
                   <>
-                    <RatioKpiCard title="DSO" subtitle="Days Sales Outstanding" icon={Users} value={r.dso} suffix=" days" />
-                    <RatioKpiCard title="DIO" subtitle="Days Inventory Outstanding" icon={Store} value={r.dio} suffix=" days" />
-                    <RatioKpiCard title="DPO" subtitle="Days Payables Outstanding" icon={Building2} value={r.dpo} suffix=" days" />
-                    <RatioKpiCard title="CCC" subtitle="Cash Conversion Cycle" icon={RefreshCw} value={r.ccc} suffix=" days" />
-                    <RatioKpiCard title="Current Ratio" subtitle="Current Assets Ledgers / Current Liabilities Ledgers" icon={CheckCircle} value={r.currentRatio} />
-                    <RatioKpiCard title="Quick Ratio" subtitle="Quick Assets Ledgers / Quick Liabilities Ledgers" icon={Zap} value={r.quickRatio} />
-                    <RatioKpiCard title="ROCE" subtitle="Return on Capital Employed" icon={TrendingUp} value={r.roce} suffix="%" />
-                    <RatioKpiCard title="ROE" subtitle="Return on Equity" icon={Wallet} value={r.roe} suffix="%" />
-                    <RatioKpiCard title="Debt/Equity" subtitle="Borrowings vs Equity" icon={AlertTriangle} value={r.debtEquity} />
+                    <RatioWidget title="DSO" subtitle="Days Sales Outstanding" icon={CalendarDays} value={r.dso} suffix=" days" />
+                    <RatioWidget title="DIO" subtitle="Days Inventory Outstanding" icon={Package} value={r.dio} suffix=" days" />
+                    <RatioWidget title="DPO" subtitle="Days Payables Outstanding" icon={Clock} value={r.dpo} suffix=" days" />
+                    <RatioWidget title="CCC" subtitle="Cash Conversion Cycle (DSO + DIO − DPO)" icon={RefreshCw} value={r.ccc} suffix=" days" />
+                    <RatioWidget title="Current Ratio" subtitle="Current Assets / Current Liabilities" icon={Scale} value={r.currentRatio} suffix=" times" />
+                    <RatioWidget title="Quick Ratio" subtitle="Quick Assets / Current Liabilities" icon={Zap} value={r.quickRatio} suffix=" times" />
+                    <RatioWidget title="ROCE" subtitle="Return on Capital Employed" icon={TrendingUp} value={r.roce} suffix="%" />
+                    <RatioWidget title="ROE" subtitle="Return on Equity" icon={LineChart} value={r.roe} suffix="%" />
+                    <RatioWidget title="Debt / Equity" icon={Landmark} value={r.debtEquity} suffix=" times" />
                   </>
                 )
               })()}
@@ -2818,9 +2377,9 @@ export default function Dashboard() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-1">
               <Lightbulb className="w-4 h-4 text-amber-500" />
-              <p className="text-sm font-semibold text-gray-700">AI-Powered Analysis on YTD Basis</p>
+              <p className="text-sm font-semibold text-foreground">AI-Powered Analysis on YTD Basis</p>
               {cfoLoading ? (
-                <span className="ml-auto flex items-center gap-1.5 text-[11px] text-gray-400">
+                <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <RefreshCw className="w-3 h-3 animate-spin" /> Generating…
                 </span>
               ) : (
@@ -2829,7 +2388,7 @@ export default function Dashboard() {
                     <button
                       onClick={printCfoReport}
                       title="Generate a PDF of this report (opens the print dialog — choose Save as PDF)"
-                      className="flex items-center gap-1 text-[11px] font-medium text-gray-600 hover:text-gray-800"
+                      className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
                     >
                       <Download className="w-3 h-3" /> Generate PDF
                     </button>
@@ -2846,12 +2405,12 @@ export default function Dashboard() {
             </div>
 
             {cfoLoading && !cfoReport ? (
-              <div className="h-40 flex flex-col items-center justify-center gap-2 text-gray-400 border border-dashed border-gray-200 rounded-xl">
+              <div className="h-40 flex flex-col items-center justify-center gap-2 text-muted-foreground border border-dashed border-border rounded-xl">
                 <RefreshCw className="w-5 h-5 animate-spin" />
                 <p className="text-sm">Generating your YTD report…</p>
               </div>
             ) : !cfoReport ? (
-              <div className="h-40 flex flex-col items-center justify-center gap-1 text-gray-400 border border-dashed border-gray-200 rounded-xl">
+              <div className="h-40 flex flex-col items-center justify-center gap-1 text-muted-foreground border border-dashed border-border rounded-xl">
                 <p className="text-sm font-medium">{cfoError ? "Couldn't generate the report" : 'No report yet'}</p>
                 <p className="text-xs">Click Regenerate to try again.</p>
               </div>
@@ -2862,15 +2421,15 @@ export default function Dashboard() {
                 )}
 
                 {/* Report Header */}
-                <div className="bg-white border border-gray-200 rounded-xl p-5">
-                  <p className="text-lg font-bold text-gray-900">{company?.name ?? 'Company'}</p>
-                  <p className="text-sm text-gray-600 mt-0.5">Financial Performance Summary on YTD Basis</p>
+                <div className="bg-card border border-border rounded-xl p-5">
+                  <p className="text-lg font-bold text-foreground">{company?.name ?? 'Company'}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">Financial Performance Summary on YTD Basis</p>
                   <div className="flex items-center justify-between gap-4 mt-1">
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-muted-foreground">
                       Reporting Period: {activePeriod ? `${formatDate(activePeriod.from)} – ${formatDate(activePeriod.to)}` : '—'}
                     </p>
                     {cfoGeneratedAt && (
-                      <p className="text-xs text-gray-400 shrink-0">
+                      <p className="text-xs text-muted-foreground shrink-0">
                         {cfoGeneratedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     )}
@@ -2903,7 +2462,7 @@ export default function Dashboard() {
                     />
                   </div>
                   <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50 p-4">
-                    <p className="text-sm text-gray-700 leading-relaxed">
+                    <p className="text-sm text-foreground leading-relaxed">
                       <span className="font-bold text-brand-700">Critical Margin Structural Anomaly: </span>
                       {cfoKpis?.grossMarginPct == null || cfoKpis?.netProfitPct == null ? (
                         <span>No data available — Gross Margin and/or Net Profit could not be computed for this period.</span>
@@ -2962,18 +2521,18 @@ export default function Dashboard() {
                       { label: 'Bank Balance', value: bank, color: bank < 0 ? 'bg-red-500' : 'bg-emerald-600' },
                     ]
                     return (
-                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-3">Bank &amp; Cash Liquidity Comparison</p>
+                      <div className="bg-muted border border-border rounded-xl p-4">
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Bank &amp; Cash Liquidity Comparison</p>
                         {hasData ? (
                           <div className="space-y-3">
                             {rows.map((row, i) => (
                               <div key={i} className="flex items-center gap-3">
-                                <span className="w-24 shrink-0 text-xs text-gray-600">{row.label}</span>
+                                <span className="w-24 shrink-0 text-xs text-muted-foreground">{row.label}</span>
                                 <div className="flex-1 flex items-center gap-2">
                                   <div className="flex-1 max-w-md">
                                     <div className={`h-6 rounded ${row.color}`} style={{ width: `${Math.max((Math.abs(row.value) / maxAbs) * 100, 3)}%` }} />
                                   </div>
-                                  <span className="text-xs font-semibold text-gray-700 whitespace-nowrap">
+                                  <span className="text-xs font-semibold text-foreground whitespace-nowrap">
                                     {formatCompactLakhs(row.value)}{row.value < 0 ? ' (OD)' : ''}
                                   </span>
                                 </div>
@@ -2981,7 +2540,7 @@ export default function Dashboard() {
                             ))}
                           </div>
                         ) : (
-                          <p className="text-xs text-gray-400 italic">No data available.</p>
+                          <p className="text-xs text-muted-foreground italic">No data available.</p>
                         )}
                       </div>
                     )
@@ -2991,7 +2550,7 @@ export default function Dashboard() {
                 {/* Working Capital & Efficiency Ratios */}
                 <div>
                   <ReportSectionHeading n={3} title="Working Capital & Efficiency Ratios" />
-                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="border border-border rounded-xl overflow-hidden">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-brand-600">
@@ -3010,12 +2569,12 @@ export default function Dashboard() {
                           { label: 'Return on Capital Employed (ROCE)', value: cfoRatios?.roce ?? null, suffix: '%',     assess: roceAssessment(cfoRatios?.roce ?? null), badge: null },
                           { label: 'Return on Equity (ROE)',           value: cfoRatios?.roe  ?? null, suffix: '%',     assess: roeAssessment(cfoRatios?.roe ?? null),   badge: null },
                         ]).map((row, i) => (
-                          <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
-                            <td className="py-2.5 px-3 text-gray-800 font-semibold align-top">{row.label}</td>
+                          <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : 'bg-card'}>
+                            <td className="py-2.5 px-3 text-foreground font-semibold align-top">{row.label}</td>
                             <td className="py-2.5 px-3 text-center text-brand-700 font-bold whitespace-nowrap align-top">
                               {row.value != null ? `${row.value.toFixed(1)}${row.suffix}` : '—'}
                             </td>
-                            <td className="py-2.5 px-3 text-gray-600 leading-relaxed align-top">
+                            <td className="py-2.5 px-3 text-muted-foreground leading-relaxed align-top">
                               {row.badge && (
                                 <span className="inline-block mr-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 align-middle">{row.badge}</span>
                               )}
@@ -3031,10 +2590,10 @@ export default function Dashboard() {
                 {/* Strategic Actions for Management */}
                 <div>
                   <ReportSectionHeading n={4} title="Strategic Actions for Management" />
-                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="bg-card border border-border rounded-xl p-4">
                     <ul className="space-y-3">
                       {cfoReport.keyActionItems.map((item, i) => (
-                        <li key={i} className="flex gap-2 text-sm text-gray-700 leading-relaxed">
+                        <li key={i} className="flex gap-2 text-sm text-foreground leading-relaxed">
                           <span className="text-brand-600 shrink-0">•</span>
                           <span>{renderActionItem(item)}</span>
                         </li>

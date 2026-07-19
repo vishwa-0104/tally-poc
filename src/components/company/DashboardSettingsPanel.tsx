@@ -55,26 +55,26 @@ function CheckList({
     onChange(selected.includes(name) ? selected.filter(x => x !== name) : [...selected, name])
   return (
     <div>
-      <p className="text-xs font-semibold text-gray-700 mb-1.5">{label}</p>
+      <p className="text-xs font-semibold text-foreground mb-1.5">{label}</p>
       {loading ? (
-        <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
           <Loader2 className="w-3 h-3 animate-spin" /> Loading…
         </div>
       ) : options.length === 0 ? (
-        <p className="text-xs text-gray-400 italic py-1">No options found — sync ledgers/voucher types from Settings first</p>
+        <p className="text-xs text-muted-foreground italic py-1">No options found — sync ledgers/voucher types from Settings first</p>
       ) : (
-        <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-44 overflow-y-auto">
+        <div className="border border-border rounded-lg divide-y divide-border max-h-44 overflow-y-auto">
           {options.map(opt => (
-            <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50">
+            <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-muted">
               <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)}
                 className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
-              <span className="text-xs text-gray-700">{opt}</span>
+              <span className="text-xs text-foreground">{opt}</span>
             </label>
           ))}
         </div>
       )}
       {selected.length === 0 && !loading && options.length > 0 && (
-        <p className="text-[11px] text-gray-400 italic mt-1">{hint}</p>
+        <p className="text-[11px] text-muted-foreground italic mt-1">{hint}</p>
       )}
       {selected.length > 0 && <p className="text-[11px] text-blue-600 mt-1">{selected.length} selected</p>}
     </div>
@@ -108,7 +108,7 @@ function SearchCheckList({
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-xs font-semibold text-gray-700">{label}</p>
+        <p className="text-xs font-semibold text-foreground">{label}</p>
         <div className="flex items-center gap-2">
           {selected.length > 0 && (
             <button
@@ -131,11 +131,11 @@ function SearchCheckList({
         </div>
       </div>
       {loading ? (
-        <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
           <Loader2 className="w-3 h-3 animate-spin" /> Loading…
         </div>
       ) : options.length === 0 ? (
-        <p className="text-xs text-gray-400 italic py-1">No options found — sync ledgers/voucher types from Settings first</p>
+        <p className="text-xs text-muted-foreground italic py-1">No options found — sync ledgers/voucher types from Settings first</p>
       ) : (
         <>
           <input
@@ -143,22 +143,22 @@ function SearchCheckList({
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search…"
-            className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 mb-1"
+            className="w-full px-2.5 py-1.5 text-xs border border-border rounded-lg outline-none focus:border-blue-500 mb-1"
           />
-          <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-40 overflow-y-auto">
+          <div className="border border-border rounded-lg divide-y divide-border max-h-40 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="text-xs text-gray-400 italic px-3 py-2">No matches</p>
+              <p className="text-xs text-muted-foreground italic px-3 py-2">No matches</p>
             ) : (
               <>
                 {visible.map(opt => (
-                  <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-50">
+                  <label key={opt} className="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-muted">
                     <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)}
                       className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
-                    <span className="text-xs text-gray-700">{opt}</span>
+                    <span className="text-xs text-foreground">{opt}</span>
                   </label>
                 ))}
                 {hiddenCount > 0 && (
-                  <p className="text-[11px] text-gray-400 italic px-3 py-1.5">
+                  <p className="text-[11px] text-muted-foreground italic px-3 py-1.5">
                     +{hiddenCount} more — type to search
                   </p>
                 )}
@@ -168,10 +168,10 @@ function SearchCheckList({
         </>
       )}
       {selected.length === 0 && !loading && options.length > 0 && (
-        <p className="text-[11px] text-gray-400 italic mt-1">{hint}</p>
+        <p className="text-[11px] text-muted-foreground italic mt-1">{hint}</p>
       )}
       {selected.length > 0 && (
-        <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+        <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
           <span className="font-medium">{label}:</span>{' '}
           <span className="text-blue-600">
             {selected.slice(0, 3).join(', ')}
@@ -190,9 +190,9 @@ function DaysModeRadio({
   label: string; mode: 'ytd' | '365'; onChange: (v: 'ytd' | '365') => void; ytdDaysPreview: number
 }) {
   return (
-    <div className="border-t border-gray-100 pt-4">
-      <p className="text-xs font-semibold text-gray-700 mb-2">{label}</p>
-      <div className="flex items-center gap-5 text-xs text-gray-700">
+    <div className="border-t border-border pt-4">
+      <p className="text-xs font-semibold text-foreground mb-2">{label}</p>
+      <div className="flex items-center gap-5 text-xs text-foreground">
         <label className="flex items-center gap-1.5 cursor-pointer">
           <input type="radio" checked={mode === 'ytd'} onChange={() => onChange('ytd')} className="accent-blue-600" />
           Year-to-date ({ytdDaysPreview} days)
@@ -494,18 +494,18 @@ export function DashboardSettingsPanel({ companyId }: Props) {
 
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-5">Configure the ledger/voucher-type filters and monthly sales targets that drive the Dashboard's Performance and Analysis tabs.</p>
+      <p className="text-xs text-muted-foreground mb-5">Configure the ledger/voucher-type filters and monthly sales targets that drive the Dashboard's Performance and Analysis tabs.</p>
 
       {/* Top-level sub-tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-5">
+      <div className="flex gap-1 bg-muted rounded-lg p-1 mb-5">
         {TOP_TABS.map(t => (
           <button
             key={t.key}
             onClick={() => setTopTab(t.key)}
             className={`flex-1 py-1.5 rounded-md text-xs font-semibold transition-all ${
               topTab === t.key
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             {t.label}
@@ -517,15 +517,15 @@ export function DashboardSettingsPanel({ companyId }: Props) {
       {topTab === 'performance' && (
         <div>
           {/* Date-filter sub-tabs */}
-          <div className="flex gap-1 bg-gray-50 border border-gray-100 rounded-lg p-1 mb-5">
+          <div className="flex gap-1 bg-muted border border-border rounded-lg p-1 mb-5">
             {PERF_TABS.map(t => (
               <button
                 key={t.key}
                 onClick={() => setPerfTab(t.key)}
                 className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                   perfTab === t.key
-                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-card text-foreground shadow-sm border border-border'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {t.label}
@@ -539,19 +539,19 @@ export function DashboardSettingsPanel({ companyId }: Props) {
 
               {/* Section A — Sales Budget */}
               <div>
-                <p className="text-xs font-semibold text-gray-700 mb-3">
+                <p className="text-xs font-semibold text-foreground mb-3">
                   Sales Budget
-                  <span className="font-normal text-gray-400 ml-1">({fyLabel}, excl. GST)</span>
+                  <span className="font-normal text-muted-foreground ml-1">({fyLabel}, excl. GST)</span>
                 </p>
                 {loadingBudget ? (
-                  <div className="h-24 flex items-center justify-center text-sm text-gray-400">Loading…</div>
+                  <div className="h-24 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>
                 ) : (
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                     {FY_MONTHS.map(({ month, label }) => (
                       <div key={month} className="flex items-center gap-2">
-                        <label className="text-xs text-gray-600 w-24 shrink-0">{label}</label>
+                        <label className="text-xs text-muted-foreground w-24 shrink-0">{label}</label>
                         <div className="relative flex-1">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">₹</span>
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₹</span>
                           <input
                             type="number"
                             min="0"
@@ -559,7 +559,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                             placeholder="0"
                             value={budgetValues[month] ?? ''}
                             onChange={e => setBudgetValues(v => ({ ...v, [month]: e.target.value }))}
-                            className="w-full pl-6 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 bg-white"
+                            className="w-full pl-6 pr-2 py-1.5 text-xs border border-border rounded-lg outline-none focus:border-blue-500 bg-card"
                           />
                         </div>
                       </div>
@@ -567,9 +567,9 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                   </div>
                 )}
                 {totalTarget > 0 && (
-                  <div className="flex justify-between items-center border-t border-gray-100 pt-2 mt-3 text-xs">
-                    <span className="text-gray-500">Annual Target</span>
-                    <span className="font-semibold text-gray-800">
+                  <div className="flex justify-between items-center border-t border-border pt-2 mt-3 text-xs">
+                    <span className="text-muted-foreground">Annual Target</span>
+                    <span className="font-semibold text-foreground">
                       ₹{totalTarget.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </span>
                   </div>
@@ -577,7 +577,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
               </div>
 
               {/* Section B — Sales Accounts (ledgers) */}
-              <div className="border-t border-gray-100 pt-5">
+              <div className="border-t border-border pt-5">
                 <SearchCheckList
                   label="Sales Accounts"
                   hint="Default: all vouchers matching voucher type filter below"
@@ -589,7 +589,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
               </div>
 
               {/* Section C — Sales Voucher Filters */}
-              <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+              <div className="border-t border-border pt-5 grid grid-cols-2 gap-5">
                 <SearchCheckList
                   label="Sales — Include Vouchers"
                   hint="Default: voucher types containing 'sales'"
@@ -609,7 +609,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
               </div>
 
               {/* Section C — Cash Ledgers */}
-              <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+              <div className="border-t border-border pt-5 grid grid-cols-2 gap-5">
                 <CheckList
                   label="Cash-in-Hand"
                   hint="Default: all Cash-in-Hand ledgers"
@@ -621,7 +621,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
               </div>
 
               {/* Section D — Bank Ledgers */}
-              <div className="border-t border-gray-100 pt-5">
+              <div className="border-t border-border pt-5">
                 <CheckList
                   label="Bank Accounts"
                   hint="Default: ledgers whose name contains 'bank'"
@@ -651,7 +651,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                 />
               </div>
 
-              <div className="border-t border-gray-100 pt-5 grid grid-cols-2 gap-5">
+              <div className="border-t border-border pt-5 grid grid-cols-2 gap-5">
                 <SearchCheckList
                   label="Purchase — Include Vouchers"
                   hint="Default: voucher types containing 'purchase'"
@@ -670,7 +670,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                 />
               </div>
 
-              <div className="border-t border-gray-100 pt-5">
+              <div className="border-t border-border pt-5">
                 <SearchCheckList
                   label="Direct Expense Ledgers"
                   hint="e.g. Freight, Wages, Power — leave empty to exclude direct expenses"
@@ -743,7 +743,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                   {/* EBITDA addback ledgers */}
                   <div className="border-t border-blue-100 pt-4">
                     <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-3">EBITDA Addback Ledgers</p>
-                    <p className="text-[10px] text-gray-400 italic mb-3">Depreciation, Tax, Interest etc. — added back to Net Profit → EBITDA</p>
+                    <p className="text-[10px] text-muted-foreground italic mb-3">Depreciation, Tax, Interest etc. — added back to Net Profit → EBITDA</p>
                     <div className="space-y-3">
                       <SearchCheckList
                         label="EBITDA Ledgers"
@@ -777,8 +777,8 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                 </div>
               </div>
 
-              <div className="border-t border-gray-100 pt-5">
-                <p className="text-xs font-semibold text-gray-700 mb-1.5">Gross Margin Target (%)</p>
+              <div className="border-t border-border pt-5">
+                <p className="text-xs font-semibold text-foreground mb-1.5">Gross Margin Target (%)</p>
                 <div className="relative w-40">
                   <input
                     type="number"
@@ -788,11 +788,11 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                     placeholder="e.g. 40"
                     value={ytdGrossMarginTarget}
                     onChange={e => setYtdGrossMarginTarget(e.target.value)}
-                    className="w-full pr-7 pl-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 bg-white"
+                    className="w-full pr-7 pl-3 py-1.5 text-xs border border-border rounded-lg outline-none focus:border-blue-500 bg-card"
                   />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
                 </div>
-                <p className="text-[11px] text-gray-400 italic mt-1">Target GM% to track achievement on the dashboard</p>
+                <p className="text-[11px] text-muted-foreground italic mt-1">Target GM% to track achievement on the dashboard</p>
               </div>
 
             </div>
@@ -804,15 +804,15 @@ export function DashboardSettingsPanel({ companyId }: Props) {
       {topTab === 'analysis' && (
         <div>
           {/* Ratio sub-tab bar */}
-          <div className="flex gap-1 bg-gray-50 border border-gray-100 rounded-lg p-1 mb-5 flex-wrap">
+          <div className="flex gap-1 bg-muted border border-border rounded-lg p-1 mb-5 flex-wrap">
             {RATIO_TABS.map(rt => (
               <button
                 key={rt.key}
                 onClick={() => setActiveRatioTab(rt.key)}
                 className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                   activeRatioTab === rt.key
-                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-card text-foreground shadow-sm border border-border'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {rt.label}
@@ -824,7 +824,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
           {activeRatioTab === 'dso' && (
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Sales (Analysis Tab)</p>
-              <p className="text-[11px] text-gray-400 italic mb-4">
+              <p className="text-[11px] text-muted-foreground italic mb-4">
                 Used for DSO and Net Profit on the Analysis tab only — deliberately separate from the
                 Today tab's Sales Accounts, so changing one never affects the other.
               </p>
@@ -855,7 +855,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                     loading={loadingOpts}
                   />
                 </div>
-                <p className="text-[11px] text-gray-400 italic">
+                <p className="text-[11px] text-muted-foreground italic">
                   DSO's Debtors figure uses Tally's standard Sundry Debtors closing balance — no
                   setting needed for that half.
                 </p>
@@ -868,7 +868,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
           {activeRatioTab === 'dio' && (
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Purchases &amp; Direct Expenses (DIO)</p>
-              <p className="text-[11px] text-gray-400 italic mb-4">
+              <p className="text-[11px] text-muted-foreground italic mb-4">
                 DIO's own COGS inputs — deliberately separate from the YTD tab's Purchase Accounts/
                 Direct Expense Ledgers (which feed Gross Margin/Net Profit), so tuning DIO never
                 silently moves Net Profit/ROCE/ROE.
@@ -908,7 +908,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                   onChange={setDioDirectExpenseLedgers}
                   loading={loadingOpts}
                 />
-                <p className="text-[11px] text-gray-400 italic">
+                <p className="text-[11px] text-muted-foreground italic">
                   Opening/Closing Stock use Tally's standard Stock-in-Hand closing balance — no
                   setting needed for those.
                 </p>
@@ -921,7 +921,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
           {activeRatioTab === 'dpo' && (
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Purchases (DPO)</p>
-              <p className="text-[11px] text-gray-400 italic mb-4">
+              <p className="text-[11px] text-muted-foreground italic mb-4">
                 DPO's own Purchases figure — deliberately separate from the YTD tab's Purchase
                 Accounts (Gross Margin/Net Profit) and from DIO's own Purchases.
               </p>
@@ -952,7 +952,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                     loading={loadingOpts}
                   />
                 </div>
-                <p className="text-[11px] text-gray-400 italic">
+                <p className="text-[11px] text-muted-foreground italic">
                   Creditors uses Tally's standard Sundry Creditors closing balance — no setting
                   needed for that half.
                 </p>
@@ -965,7 +965,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
           {activeRatioTab === 'current' && (
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Current Ratio</p>
-              <p className="text-[11px] text-gray-400 italic mb-4">
+              <p className="text-[11px] text-muted-foreground italic mb-4">
                 Current Ratio = Σ(Current Assets Groups) / Σ(Current Liabilities Groups) — pick Tally
                 GROUPS, not individual ledgers; each group's own closing balance already includes
                 everything nested under it. There's no default fallback, so leaving either empty
@@ -998,7 +998,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
           {activeRatioTab === 'quick' && (
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Quick Ratio</p>
-              <p className="text-[11px] text-gray-400 italic mb-4">
+              <p className="text-[11px] text-muted-foreground italic mb-4">
                 Quick Ratio = Σ(Quick Assets Groups) / Σ(Quick Liabilities Groups) — pick Tally
                 GROUPS, not individual ledgers; each group's own closing balance already includes
                 everything nested under it. There's no default fallback, so leaving either empty
@@ -1031,7 +1031,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
           {activeRatioTab === 'roce' && (
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">ROCE</p>
-              <p className="text-[11px] text-gray-400 italic mb-4">
+              <p className="text-[11px] text-muted-foreground italic mb-4">
                 Tally has no standard group for these — name the specific ledgers. Any left empty
                 shows "No data available" on the ROCE card rather than a guessed number.
               </p>
@@ -1098,7 +1098,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
           {activeRatioTab === 'roe' && (
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">ROE</p>
-              <p className="text-[11px] text-gray-400 italic mb-4">
+              <p className="text-[11px] text-muted-foreground italic mb-4">
                 Numerator reuses the existing Net Profit (YTD) figure — no setting needed for that.
                 These 3 make up the denominator. Any left empty defaults to 0 for Internal Borrowings/
                 Intangible Assets (commonly zero); Equity must be set for ROE to compute at all.
@@ -1139,7 +1139,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
           {activeRatioTab === 'debtEquity' && (
             <div>
               <p className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-1">Debt/Equity</p>
-              <p className="text-[11px] text-gray-400 italic mb-4">
+              <p className="text-[11px] text-muted-foreground italic mb-4">
                 (Total Interest Bearing Loans − Cash − Bank) / (Equity + Loans from Directors) — every
                 component here is its own setting, independent of Cash/Bank/Equity used elsewhere.
                 Loans and Equity must be set for this to compute; Cash/Bank/Director Loans default to 0.
@@ -1196,7 +1196,7 @@ export function DashboardSettingsPanel({ companyId }: Props) {
         </div>
       )}
 
-      <div className="flex justify-end pt-6 mt-6 border-t border-gray-100">
+      <div className="flex justify-end pt-6 mt-6 border-t border-border">
         <Button variant="teal" loading={saving} onClick={handleSave}>Save Dashboard Settings</Button>
       </div>
     </div>

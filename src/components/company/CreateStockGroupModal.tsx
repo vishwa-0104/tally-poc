@@ -64,17 +64,17 @@ export function CreateStockGroupModal({
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/20 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-sm">
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
-          <h3 className="text-sm font-bold text-gray-900">Create Stock Group</h3>
-          <button onClick={onClose} disabled={saving} className="text-gray-400 hover:text-gray-600 disabled:opacity-40">
+          <h3 className="text-sm font-bold text-foreground">Create Stock Group</h3>
+          <button onClick={onClose} disabled={saving} className="text-muted-foreground hover:text-muted-foreground disabled:opacity-40">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="px-5 pb-5 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Name *</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">Name *</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -85,7 +85,7 @@ export function CreateStockGroupModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Under</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">Under</label>
             <select
               value={under}
               onChange={(e) => setUnder(e.target.value)}

@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import { StatusBadge } from '@/components/ui/Badge'
-import { Button } from '@/components/ui/Button'
+import { Badge } from '@/shadcn/components/ui/badge'
+import { Button } from '@/shadcn/components/ui/button'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/shadcn/components/ui/table'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { useBillStore, useAuthStore } from '@/store'
-import type { Bill } from '@/types'
+import type { Bill, BillStatus } from '@/types'
 
 const PAGE_SIZE = 10
 
@@ -26,12 +27,31 @@ const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Failed',   value: 'failed'   },
 ]
 
+const statusBadgeMap: Record<BillStatus, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
+  synced:  { variant: 'default',     label: 'Synced'        },
+  parsed:  { variant: 'secondary',   label: 'Parsed'        },
+  mapped:  { variant: 'outline',     label: 'Ready to Sync' },
+  pending: { variant: 'secondary',   label: 'Pending'       },
+  error:   { variant: 'destructive', label: 'Sync Error'    },
+}
+
+function BillStatusBadge({ status }: { status: BillStatus }) {
+  const { variant, label } = statusBadgeMap[status]
+  return <Badge variant={variant}>{label}</Badge>
+}
+
 function cutoffDate(days: DayFilter): Date {
   const d = new Date()
   d.setDate(d.getDate() - days)
   d.setHours(0, 0, 0, 0)
   return d
 }
+
+const pillClass = (active: boolean) =>
+  cn(
+    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+    active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80',
+  )
 
 interface BillsTableProps {
   bills: Bill[]
@@ -98,7 +118,7 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
         icon={FileText}
         title="No bills yet"
         description="Upload your first purchase bill to get started"
-        action={<Button variant="teal" onClick={onUpload}>Upload Bill</Button>}
+        action={<Button onClick={onUpload}>Upload Bill</Button>}
       />
     )
   }
@@ -111,88 +131,80 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
   return (
     <div>
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-gray-100 bg-gray-50">
-        <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5">
+      <div className="flex flex-wrap items-center gap-2 px-2 pb-4">
+        <div className="flex flex-wrap gap-2">
           {DAY_OPTIONS.map((opt) => (
             <button
               key={opt.value}
+              type="button"
               onClick={() => { setDayFilter(opt.value); setPage(1) }}
-              className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
-                dayFilter === opt.value
-                  ? 'bg-teal-600 text-white'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
+              className={pillClass(dayFilter === opt.value)}
             >
               {opt.label}
             </button>
           ))}
         </div>
 
-        <div className="w-px h-5 bg-gray-200" />
+        <span className="mx-1 w-px self-stretch bg-border" />
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {STATUS_OPTIONS.map((opt) => (
             <button
               key={opt.value}
+              type="button"
               onClick={() => toggleStatus(opt.value)}
-              className={`px-3 py-1 text-xs rounded-full font-medium border transition-colors ${
-                statusFilter.has(opt.value)
-                  ? opt.value === 'synced'
-                    ? 'bg-emerald-100 border-emerald-300 text-emerald-700'
-                    : opt.value === 'failed'
-                    ? 'bg-red-100 border-red-300 text-red-700'
-                    : 'bg-amber-100 border-amber-300 text-amber-700'
-                  : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'
-              }`}
+              className={pillClass(statusFilter.has(opt.value))}
             >
               {opt.label}
             </button>
           ))}
         </div>
 
-        <span className="ml-auto text-xs text-gray-400">
+        <span className="ml-auto text-xs text-muted-foreground">
           {filteredBills.length} bill{filteredBills.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {filteredBills.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">
+        <div className="py-12 text-center text-sm text-muted-foreground">
           No bills match the selected filters.
         </div>
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse" aria-label="Bills list">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  {['Bill No.', 'Vendor', 'Date', 'Amount', 'Status', 'Action', ''].map((h, i) => (
-                    <th key={i} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="min-w-[640px]" aria-label="Bills list">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Bill No.</TableHead>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {pageBills.map((bill) => (
-                  <tr key={bill.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600">
+                  <TableRow key={bill.id}>
+                    <TableCell className="font-mono text-xs">
                       {bill.billNumber}
                       {bill.billType === 'misc' && (
-                        <span className="ml-1.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-semibold">Misc</span>
+                        <Badge variant="secondary" className="ml-1.5">Misc</Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-800">{bill.vendorName}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{formatDate(bill.billDate)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-800">{formatCurrency(bill.totalAmount)}</td>
-                    <td className="px-4 py-3 text-center"><StatusBadge status={bill.status} /></td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="font-medium">{bill.vendorName}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(bill.billDate)}</TableCell>
+                    <TableCell className="font-semibold">{formatCurrency(bill.totalAmount)}</TableCell>
+                    <TableCell><BillStatusBadge status={bill.status} /></TableCell>
+                    <TableCell className="text-right">
                       {(bill.status === 'parsed' || bill.status === 'mapped') && (
-                        <Button variant="teal" size="sm" onClick={() => navigate(`/company/bills/${bill.id}`)}>
+                        <Button size="sm" onClick={() => navigate(`/company/bills/${bill.id}`)}>
                           Map & Sync
                         </Button>
                       )}
                       {bill.status === 'error' && (
-                        <Button variant="danger" size="sm" onClick={() => navigate(`/company/bills/${bill.id}`)}>
+                        <Button variant="destructive" size="sm" onClick={() => navigate(`/company/bills/${bill.id}`)}>
                           Retry
                         </Button>
                       )}
@@ -201,64 +213,66 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
                           View
                         </Button>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-destructive"
                         onClick={() => handleDelete(bill)}
                         disabled={deleting === bill.id}
-                        className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-40 transition-colors"
                         title="Delete bill"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
-              <span className="text-xs text-gray-500">
+            <div className="mt-4 flex flex-col gap-2 px-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
                 Showing {start}–{end} of {filteredBills.length} bills
-              </span>
+              </p>
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={page === 1}
-                  className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Previous page"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  <ChevronLeft className="w-4 h-4 text-gray-600" />
-                </button>
+                  <ChevronLeft className="size-3.5" />
+                  Previous
+                </Button>
 
                 {buildPageNumbers(page, totalPages).map((p, i) =>
                   p === '…' ? (
-                    <span key={`ellipsis-${i}`} className="px-2 text-xs text-gray-500 select-none">…</span>
+                    <span key={`ellipsis-${i}`} className="px-2 text-xs text-muted-foreground select-none">…</span>
                   ) : (
-                    <button
+                    <Button
                       key={p}
+                      variant={p === page ? 'default' : 'outline'}
+                      size="sm"
+                      className="w-7 p-0"
                       onClick={() => setPage(p as number)}
-                      className={`w-7 h-7 text-xs rounded font-medium transition-colors ${
-                        p === page
-                          ? 'bg-teal-600 text-white'
-                          : 'text-gray-600 hover:bg-gray-200'
-                      }`}
                     >
                       {p}
-                    </button>
+                    </Button>
                   )
                 )}
 
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={page === totalPages}
-                  className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Next page"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 >
-                  <ChevronRight className="w-4 h-4 text-gray-600" />
-                </button>
+                  Next
+                  <ChevronRight className="size-3.5" />
+                </Button>
               </div>
             </div>
           )}

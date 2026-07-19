@@ -34,15 +34,15 @@ export function Modal({ open, onClose, title, subtitle, children, footer, wide }
         {/* Header */}
         <div className="flex items-start justify-between p-6 pb-0">
           <div>
-            <h2 id="modal-title" className="text-lg font-bold text-gray-900">{title}</h2>
-            {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+            <h2 id="modal-title" className="text-lg font-bold text-foreground">{title}</h2>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-lg bg-muted hover:bg-muted/70 flex items-center justify-center transition-colors"
             aria-label="Close modal"
           >
-            <X className="w-4 h-4 text-gray-600" />
+            <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
         {/* Body */}

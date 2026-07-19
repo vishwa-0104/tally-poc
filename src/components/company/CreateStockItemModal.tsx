@@ -92,11 +92,11 @@ export function CreateStockItemModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
         {/* Header — fixed */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 flex-shrink-0">
-          <h2 className="text-base font-bold text-gray-900">Create Stock Item in Tally</h2>
-          <button onClick={onClose} disabled={creating} className="text-gray-400 hover:text-gray-600 disabled:opacity-40">
+          <h2 className="text-base font-bold text-foreground">Create Stock Item in Tally</h2>
+          <button onClick={onClose} disabled={creating} className="text-muted-foreground hover:text-muted-foreground disabled:opacity-40">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -106,7 +106,7 @@ export function CreateStockItemModal({
         <div className="space-y-4 pb-2">
           {/* Name */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Name *</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">Name *</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -118,7 +118,7 @@ export function CreateStockItemModal({
           {/* Group */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-gray-700">
+              <label className="text-xs font-semibold text-foreground">
                 Group *
                 {stockGroups.length === 0 && (
                   <span className="ml-2 text-amber-500 font-normal">— sync stock groups in Settings first</span>
@@ -127,7 +127,7 @@ export function CreateStockItemModal({
               <button
                 type="button"
                 onClick={() => setGroupModalOpen(true)}
-                className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 font-medium"
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 font-medium"
               >
                 <Plus className="w-3.5 h-3.5" />
                 New
@@ -148,7 +148,7 @@ export function CreateStockItemModal({
 
           {/* Unit */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+            <label className="block text-xs font-semibold text-foreground mb-1.5">
               Unit *
               {stockUnits.length === 0 && (
                 <span className="ml-2 text-amber-500 font-normal">— sync stock units in Settings first</span>
@@ -169,7 +169,7 @@ export function CreateStockItemModal({
 
           {/* GST Applicable */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">GST Applicable</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">GST Applicable</label>
             <select
               value={gstApplicable}
               onChange={(e) => setGstApplicable(e.target.value as 'Yes' | 'No')}
@@ -184,7 +184,7 @@ export function CreateStockItemModal({
           {gstApplicable === 'Yes' && (
             <>
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Taxability</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">Taxability</label>
                 <select
                   value={taxability}
                   onChange={(e) => setTaxability(e.target.value)}
@@ -198,17 +198,17 @@ export function CreateStockItemModal({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">HSN No</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">HSN No</label>
                 <input
                   value={hsnCode}
                   readOnly
-                  className="input-base w-full bg-gray-50 text-gray-500 cursor-not-allowed select-none"
+                  className="input-base w-full bg-muted text-muted-foreground cursor-not-allowed select-none"
                 />
               </div>
 
               {taxability === 'Taxable' && (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">GST Rate %</label>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">GST Rate %</label>
                   <select
                     value={gstRate}
                     onChange={(e) => setGstRate(e.target.value as '5' | '18' | '40')}
@@ -222,7 +222,7 @@ export function CreateStockItemModal({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">Description</label>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">Description</label>
                 <input
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -235,7 +235,7 @@ export function CreateStockItemModal({
 
           {/* Type of Supply */}
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1.5">Type of Supply</label>
+            <label className="block text-xs font-semibold text-foreground mb-1.5">Type of Supply</label>
             <select
               value={typeOfSupply}
               onChange={(e) => setTypeOfSupply(e.target.value)}
@@ -257,7 +257,7 @@ export function CreateStockItemModal({
         </div>
 
         {/* Actions — fixed at bottom */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-border flex-shrink-0">
           <Button type="button" variant="outline" onClick={onClose} disabled={creating}>
             Close
           </Button>

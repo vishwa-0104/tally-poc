@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { Upload, Loader2, FileText } from 'lucide-react'
+import { Loader2, FileText, Landmark, CheckCircle, Clock, AlertCircle } from 'lucide-react'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
-import { Button } from '@/components/ui/Button'
+import { UploadCard } from '@/components/company'
 import { BankStatementsTable } from '@/components/company/BankStatementsTable'
+import { Card, CardHeader, CardTitle, CardContent } from '@/shadcn/components/ui/card'
+import { CompanyPageHeader } from '@/shadcn/components/company-page-header'
+import { cn } from '@/lib/utils'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { useBankStore } from '@/store/bankStore'
 import { api } from '@/lib/api'
@@ -34,6 +36,10 @@ export default function BankStatement() {
   )
   if (!companiesLoaded) return null
   if (!hasBankVoucher) return <Navigate to="/company" replace />
+
+  const synced  = statements.filter((r) => r.status === 'synced').length
+  const pending = statements.filter((r) => r.status === 'pending' || r.status === 'partially_synced').length
+  const errors  = statements.filter((r) => r.status === 'error').length
 
   const handleFileSelect = async (file: File) => {
     setParsing(true)
@@ -100,41 +106,56 @@ export default function BankStatement() {
     }
   }
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file) handleFileSelect(file)
-  }
-
   return (
     <>
-      <PageHeader
+      <CompanyPageHeader
         title={company?.name ? `${company.name} — My Bank` : 'My Bank'}
         subtitle="Upload and sync bank statement transactions to Tally"
-        actions={
-          <>
-            <ExtensionStatus />
-            {statements.length > 0 && (
-              <Button variant="teal" size="sm" disabled={parsing} onClick={() => fileRef.current?.click()}>
-                <Upload className="w-3.5 h-3.5" />
-                Upload Statement
-              </Button>
-            )}
-          </>
-        }
+        actions={<ExtensionStatus />}
       />
 
-      <div
-        className="p-4 md:p-7"
-        onDrop={handleDrop}
-        onDragOver={(e) => e.preventDefault()}
-      >
-        <div className="card overflow-hidden">
-          <BankStatementsTable
-            statements={statements}
-            onUpload={() => fileRef.current?.click()}
+      <div className="p-4 md:p-7">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 mb-7">
+          <UploadCard
+            title="Upload Bank Statement"
+            multiple={false}
+            disabled={parsing}
+            onSubmit={(files) => { if (files[0]) handleFileSelect(files[0]) }}
           />
+
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            {[
+              { label: 'Total Statements', value: statements.length, color: 'text-foreground',                        icon: Landmark    },
+              { label: 'Synced',           value: synced,            color: 'text-emerald-600 dark:text-emerald-400', icon: CheckCircle },
+              { label: 'Pending',          value: pending,           color: 'text-orange-600 dark:text-orange-400',   icon: Clock       },
+              { label: 'Errors',           value: errors,            color: 'text-red-600 dark:text-red-400',         icon: AlertCircle },
+            ].map(({ label, value, color, icon: Icon }) => (
+              <Card key={label} className="widget-card flex flex-col justify-center p-4 sm:p-6">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs sm:text-sm text-muted-foreground">{label}</p>
+                  <div className="mb-2 sm:mb-3 flex size-8 sm:size-10 items-center justify-center rounded-full bg-muted">
+                    <Icon className={cn('size-4 sm:size-5', color)} />
+                  </div>
+                </div>
+                <p className={cn('text-2xl sm:text-4xl font-bold tabular-nums tracking-tight', color)}>
+                  {value}
+                </p>
+              </Card>
+            ))}
+          </div>
         </div>
+
+        <Card className="widget-card">
+          <CardHeader>
+            <CardTitle>Bank Statements</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BankStatementsTable
+              statements={statements}
+              onUpload={() => fileRef.current?.click()}
+            />
+          </CardContent>
+        </Card>
       </div>
 
       <input
@@ -152,15 +173,15 @@ export default function BankStatement() {
       {/* Parsing overlay */}
       {parsing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-xs w-full mx-4">
-            <div className="w-14 h-14 rounded-xl bg-teal-50 flex items-center justify-center">
-              <FileText className="w-7 h-7 text-teal-600" />
+          <div className="bg-card border border-border rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-xs w-full mx-4">
+            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+              <FileText className="w-7 h-7 text-primary" />
             </div>
-            <Loader2 className="w-6 h-6 text-teal-600 animate-spin" />
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
             <div className="text-center">
-              <p className="text-sm font-semibold text-gray-900">Parsing bank statement…</p>
+              <p className="text-sm font-semibold text-foreground">Parsing bank statement…</p>
               {parseFile && (
-                <p className="text-xs text-gray-400 mt-1 truncate max-w-56" title={parseFile}>
+                <p className="text-xs text-muted-foreground mt-1 truncate max-w-56" title={parseFile}>
                   {parseFile}
                 </p>
               )}

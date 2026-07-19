@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Zap, CheckCircle2 } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
+import { ChevronLeft, ChevronRight, Zap, Loader2, CheckCircle2 } from 'lucide-react'
+import { Button } from '@/shadcn/components/ui/button'
 import { cn, formatCurrency } from '@/lib/utils'
 import { makeFingerprint } from '@/store/bankStore'
 import type { BankTransaction, ParsedBankStatement, TallyLedger } from '@/types'
@@ -106,15 +106,15 @@ export function BankMappingForm({
   return (
     <div className="flex flex-col h-full">
       {/* Bank ledger header */}
-      <div className="px-6 py-4 border-b border-gray-100 bg-white flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+      <div className="px-6 py-4 border-b border-border bg-background flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span>{statement.bankName}</span>
           {statement.accountNumber && (
-            <span className="text-xs text-gray-400 font-normal">· A/c {statement.accountNumber}</span>
+            <span className="text-xs text-muted-foreground font-normal">· A/c {statement.accountNumber}</span>
           )}
         </div>
         <div className="flex items-center gap-2 ml-auto">
-          <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Bank Ledger *</label>
+          <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Bank Ledger *</label>
           <div className="relative">
             <input
               list="bank-ledger-list"
@@ -144,7 +144,7 @@ export function BankMappingForm({
             <col className="w-[9%]" />
             <col className="w-[9%]" />
           </colgroup>
-          <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+          <thead className="sticky top-0 z-10 bg-muted border-b border-border">
             <tr>
               <th className="px-3 py-2.5 text-left">
                 <input
@@ -154,22 +154,22 @@ export function BankMappingForm({
                   className="rounded"
                 />
               </th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600 whitespace-nowrap">Date</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Description</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Ledger</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Voucher Type</th>
-              <th className="px-2 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">Debit<br /><span className="font-normal text-gray-400">(Bank Cr)</span></th>
-              <th className="px-2 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">Credit<br /><span className="font-normal text-gray-400">(Bank Dr)</span></th>
-              <th className="px-2 py-2.5 text-right font-semibold text-gray-600">Amount</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">Date</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Description</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Ledger</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Voucher Type</th>
+              <th className="px-2 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap">Debit<br /><span className="font-normal text-muted-foreground/70">(Bank Cr)</span></th>
+              <th className="px-2 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap">Credit<br /><span className="font-normal text-muted-foreground/70">(Bank Dr)</span></th>
+              <th className="px-2 py-2.5 text-right font-semibold text-muted-foreground">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-border">
             {pageRows.map((row) => (
               <tr
                 key={row.id}
                 className={cn(
                   'transition-colors',
-                  row.synced ? 'bg-emerald-50/50' : 'hover:bg-gray-50',
+                  row.synced ? 'bg-emerald-500/10' : 'hover:bg-muted/50',
                   !row.selected && !row.synced && 'opacity-40',
                 )}
               >
@@ -182,13 +182,13 @@ export function BankMappingForm({
                     className="rounded disabled:cursor-not-allowed"
                   />
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-600">{row.date}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{row.date}</td>
                 <td className="px-3 py-2">
-                  <span className="block text-gray-800 break-words leading-snug line-clamp-3">{row.description}</span>
+                  <span className="block text-foreground break-words leading-snug line-clamp-3">{row.description}</span>
                 </td>
                 <td className="px-3 py-1.5">
                   {row.synced ? (
-                    <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
                       <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
                       Already Synced
                     </span>
@@ -201,8 +201,8 @@ export function BankMappingForm({
                         placeholder="Select ledger…"
                         autoComplete="off"
                         className={cn(
-                          'w-full text-xs px-2.5 py-1 border border-gray-200 rounded-lg bg-white text-gray-800 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10',
-                          row.selected && !row.ledger.trim() && 'border-amber-300 bg-amber-50',
+                          'w-full text-xs px-2.5 py-1 border border-border rounded-lg bg-background text-foreground outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10',
+                          row.selected && !row.ledger.trim() && 'border-amber-500/50 bg-amber-500/10',
                         )}
                       />
                       <datalist id={`ledger-list-${row.id}`}>
@@ -216,18 +216,18 @@ export function BankMappingForm({
                     value={row.voucherType}
                     disabled={row.synced}
                     onChange={(e) => updateRow(row.id, { voucherType: e.target.value })}
-                    className="w-full text-xs px-2.5 py-1 border border-gray-200 rounded-lg bg-white text-gray-800 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 disabled:bg-gray-50 disabled:text-gray-400"
+                    className="w-full text-xs px-2.5 py-1 border border-border rounded-lg bg-background text-foreground outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10 disabled:bg-muted disabled:text-muted-foreground"
                   >
                     {BANK_VOUCHER_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </td>
-                <td className="px-2 py-2 text-right text-teal-700 font-medium truncate" title={row.debit != null ? formatCurrency(row.debit) : '—'}>
+                <td className="px-2 py-2 text-right text-emerald-600 dark:text-emerald-400 font-medium truncate" title={row.debit != null ? formatCurrency(row.debit) : '—'}>
                   {row.debit != null ? formatCurrency(row.debit) : '—'}
                 </td>
-                <td className="px-2 py-2 text-right text-red-600 font-medium truncate" title={row.credit != null ? formatCurrency(row.credit) : '—'}>
+                <td className="px-2 py-2 text-right text-red-600 dark:text-red-400 font-medium truncate" title={row.credit != null ? formatCurrency(row.credit) : '—'}>
                   {row.credit != null ? formatCurrency(row.credit) : '—'}
                 </td>
-                <td className="px-2 py-2 text-right font-semibold text-gray-800 truncate" title={formatCurrency(Math.abs(row.debit ?? row.credit ?? 0))}>
+                <td className="px-2 py-2 text-right font-semibold text-foreground truncate" title={formatCurrency(Math.abs(row.debit ?? row.credit ?? 0))}>
                   {formatCurrency(Math.abs(row.debit ?? row.credit ?? 0))}
                 </td>
               </tr>
@@ -237,23 +237,23 @@ export function BankMappingForm({
       </div>
 
       {/* Footer: pagination + sync */}
-      <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-white gap-4 flex-wrap">
+      <div className="flex items-center justify-between px-6 py-3 border-t border-border bg-background gap-4 flex-wrap">
         {/* Pagination */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-xs text-gray-600">
+          <span className="text-xs text-muted-foreground">
             Page {page} of {totalPages} · {rows.length} rows
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -261,19 +261,17 @@ export function BankMappingForm({
 
         {/* Summary + sync */}
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-muted-foreground">
             {mappedCount} of {selectedCount} selected rows mapped
           </span>
           {!bankLedger.trim() && (
-            <span className="text-xs text-amber-600 font-medium">Set Bank Ledger first</span>
+            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Set Bank Ledger first</span>
           )}
           <Button
-            variant="teal"
             onClick={handleSync}
-            loading={syncing}
             disabled={!readyToSync || syncing}
           >
-            <Zap className="w-3.5 h-3.5 mr-1.5" />
+            {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
             Push {mappedCount > 0 ? `${mappedCount} Vouchers` : ''}
           </Button>
         </div>

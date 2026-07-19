@@ -136,15 +136,15 @@ export function CashBookMappingForm({
   return (
     <div className="flex flex-col h-full">
       {/* Cash ledger header */}
-      <div className="px-6 py-4 border-b border-gray-100 bg-white flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+      <div className="px-6 py-4 border-b border-border bg-card flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span>{statement.bankName}</span>
           {statement.accountNumber && (
-            <span className="text-xs text-gray-400 font-normal">· A/c {statement.accountNumber}</span>
+            <span className="text-xs text-muted-foreground font-normal">· A/c {statement.accountNumber}</span>
           )}
         </div>
         <div className="flex items-center gap-2 ml-auto">
-          <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">Cash Ledger *</label>
+          <label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Cash Ledger *</label>
           <div className="relative">
             <input
               list="cash-ledger-main-list"
@@ -175,32 +175,32 @@ export function CashBookMappingForm({
             <col style={{ width: 80 }} />
             <col style={{ width: 80 }} />
           </colgroup>
-          <thead className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200">
+          <thead className="sticky top-0 z-10 bg-muted border-b border-border">
             <tr>
               <th className="px-3 py-2.5 text-left">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} className="rounded" />
               </th>
-              <th className="px-2 py-2.5 text-left font-semibold text-gray-600 whitespace-nowrap">Date</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Description</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Ledger</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Narration</th>
-              <th className="px-3 py-2.5 text-left font-semibold text-gray-600 whitespace-nowrap">Voucher Type</th>
-              <th className="px-2 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">
-                Debit<br /><span className="font-normal text-gray-400">(Dr)</span>
+              <th className="px-2 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">Date</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Description</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Ledger</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground">Narration</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-muted-foreground whitespace-nowrap">Voucher Type</th>
+              <th className="px-2 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap">
+                Debit<br /><span className="font-normal text-muted-foreground">(Dr)</span>
               </th>
-              <th className="px-2 py-2.5 text-right font-semibold text-gray-600 whitespace-nowrap">
-                Credit<br /><span className="font-normal text-gray-400">(Cr)</span>
+              <th className="px-2 py-2.5 text-right font-semibold text-muted-foreground whitespace-nowrap">
+                Credit<br /><span className="font-normal text-muted-foreground">(Cr)</span>
               </th>
-              <th className="px-2 py-2.5 text-right font-semibold text-gray-600">Amount</th>
+              <th className="px-2 py-2.5 text-right font-semibold text-muted-foreground">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-border">
             {pageRows.map((row) => (
               <tr
                 key={row.id}
                 className={cn(
                   'transition-colors',
-                  row.synced ? 'bg-emerald-50/50' : 'hover:bg-gray-50',
+                  row.synced ? 'bg-emerald-50/50' : 'hover:bg-muted',
                   !row.selected && !row.synced && 'opacity-40',
                 )}
               >
@@ -219,11 +219,11 @@ export function CashBookMappingForm({
                     value={row.entryDate}
                     disabled={row.synced}
                     onChange={(e) => updateRow(row.id, { entryDate: e.target.value })}
-                    className="w-full text-xs px-1.5 py-1 border border-gray-200 rounded-lg bg-white text-gray-800 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 disabled:bg-gray-50 disabled:text-gray-400"
+                    className="w-full text-xs px-1.5 py-1 border border-border rounded-lg bg-card text-foreground outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 disabled:bg-muted disabled:text-muted-foreground"
                   />
                 </td>
                 <td className="px-3 py-2">
-                  <span className="block text-gray-800 break-words leading-snug line-clamp-3">{row.description}</span>
+                  <span className="block text-foreground break-words leading-snug line-clamp-3">{row.description}</span>
                 </td>
                 <td className="px-3 py-1.5">
                   {row.synced ? (
@@ -240,7 +240,7 @@ export function CashBookMappingForm({
                         placeholder="Select ledger…"
                         autoComplete="off"
                         className={cn(
-                          'w-full text-xs px-2.5 py-1 border border-gray-200 rounded-lg bg-white text-gray-800 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10',
+                          'w-full text-xs px-2.5 py-1 border border-border rounded-lg bg-card text-foreground outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10',
                           row.selected && !row.ledger.trim() && 'border-amber-300 bg-amber-50',
                         )}
                       />
@@ -257,7 +257,7 @@ export function CashBookMappingForm({
                     disabled={row.synced}
                     onChange={(e) => updateRow(row.id, { narration: e.target.value })}
                     placeholder="Narration…"
-                    className="w-full text-xs px-2.5 py-1 border border-gray-200 rounded-lg bg-white text-gray-800 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 disabled:bg-gray-50 disabled:text-gray-400"
+                    className="w-full text-xs px-2.5 py-1 border border-border rounded-lg bg-card text-foreground outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 disabled:bg-muted disabled:text-muted-foreground"
                   />
                 </td>
                 <td className="px-3 py-1.5">
@@ -265,12 +265,12 @@ export function CashBookMappingForm({
                     value={row.voucherType}
                     disabled={row.synced}
                     onChange={(e) => updateRow(row.id, { voucherType: e.target.value })}
-                    className="w-full text-xs px-2.5 py-1 border border-gray-200 rounded-lg bg-white text-gray-800 outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 disabled:bg-gray-50 disabled:text-gray-400"
+                    className="w-full text-xs px-2.5 py-1 border border-border rounded-lg bg-card text-foreground outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 disabled:bg-muted disabled:text-muted-foreground"
                   >
                     {VOUCHER_TYPES.map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </td>
-                <td className="px-2 py-2 text-right text-teal-700 font-medium truncate"
+                <td className="px-2 py-2 text-right text-emerald-600 dark:text-emerald-400 font-medium truncate"
                   title={row.debit != null ? formatCurrency(row.debit) : '—'}>
                   {row.debit != null ? formatCurrency(row.debit) : '—'}
                 </td>
@@ -278,7 +278,7 @@ export function CashBookMappingForm({
                   title={row.credit != null ? formatCurrency(row.credit) : '—'}>
                   {row.credit != null ? formatCurrency(row.credit) : '—'}
                 </td>
-                <td className="px-2 py-2 text-right font-semibold text-gray-800 truncate"
+                <td className="px-2 py-2 text-right font-semibold text-foreground truncate"
                   title={formatCurrency(Math.abs(row.debit ?? row.credit ?? 0))}>
                   {formatCurrency(Math.abs(row.debit ?? row.credit ?? 0))}
                 </td>
@@ -289,29 +289,29 @@ export function CashBookMappingForm({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100 bg-white gap-4 flex-wrap">
+      <div className="flex items-center justify-between px-6 py-3 border-t border-border bg-card gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-xs text-gray-600">
+          <span className="text-xs text-muted-foreground">
             Page {page} of {totalPages} · {rows.length} rows
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="p-1 rounded hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-muted-foreground">
             {mappedCount} of {selectedCount} selected rows mapped
           </span>
           {!cashLedger.trim() && (

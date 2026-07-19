@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { RefreshCw, CheckCircle, AlertTriangle, CreditCard, Plus, Trash2, Landmark, BookOpen } from 'lucide-react'
-import { PageHeader } from '@/components/shared'
+import { CompanyPageHeader } from '@/shadcn/components/company-page-header'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { Button } from '@/components/ui/Button'
 import { DashboardSettingsPanel } from '@/components/company/DashboardSettingsPanel'
@@ -42,7 +42,7 @@ function LedgerSelect({ label, value, ledgerOptions, onChange }: LedgerSelectPro
 
   return (
     <div className="mb-3">
-      <label htmlFor={id} className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
       <input
         id={id}
         list={`${id}-list`}
@@ -76,11 +76,11 @@ interface SyncRowProps {
 
 function SyncRow({ label, count, loading, lastSync, onSync }: SyncRowProps) {
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+    <div className="flex items-center gap-3 py-2.5 border-b border-border last:border-0">
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-gray-700">{label}</p>
+        <p className="text-xs font-semibold text-foreground">{label}</p>
         {count > 0 && (
-          <p className="text-[10px] text-teal-600 font-medium flex items-center gap-1 mt-0.5">
+          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 mt-0.5">
             <CheckCircle className="w-3 h-3" /> {count} synced
           </p>
         )}
@@ -91,7 +91,7 @@ function SyncRow({ label, count, loading, lastSync, onSync }: SyncRowProps) {
           {count > 0 ? 'Refresh' : 'Sync'}
         </Button>
         {lastSync && (
-          <p className="text-[10px] text-gray-500">{formatSyncTs(lastSync)}</p>
+          <p className="text-[10px] text-muted-foreground">{formatSyncTs(lastSync)}</p>
         )}
       </div>
     </div>
@@ -117,15 +117,15 @@ function TabBar({ active, onChange, showBankCash }: TabBarProps) {
     { id: 'subscription', label: 'Subscription' },
   ]
   return (
-    <div className="flex border-b border-gray-200 mb-5">
+    <div className="flex border-b border-border mb-5">
       {tabs.map((t) => (
         <button
           key={t.id}
           onClick={() => onChange(t.id)}
           className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
             active === t.id
-              ? 'border-teal-600 text-teal-700'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
           {t.label}
@@ -388,7 +388,7 @@ export default function CompanySettings() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Accounting Software connection and ledger defaults" />
+      <CompanyPageHeader title="Settings" subtitle="Accounting Software connection and ledger defaults" />
 
       <div className="p-4 md:p-7 max-w-3xl">
         <div className="card p-6">
@@ -403,7 +403,7 @@ export default function CompanySettings() {
 
               {/* Server URL */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
                   Server URL
                 </label>
                 <div className="flex gap-2">
@@ -415,29 +415,29 @@ export default function CompanySettings() {
                   />
                   <Button variant="outline" size="sm" onClick={handleSaveTallyUrl}>Save</Button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Leave blank to use company port <span className="font-mono">(localhost:{company?.port ?? 9000})</span>.
                 </p>
               </div>
 
               {/* Tally Company Name */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
                   Company Name
                 </label>
                 <input
                   value={companyName}
                   disabled
-                  className="input-base w-full bg-gray-100 text-gray-500 cursor-not-allowed"
+                  className="input-base w-full bg-muted text-muted-foreground cursor-not-allowed"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Automatically set from the selected company. Scopes ledger and stock syncs to this company only.
                 </p>
               </div>
 
               {/* Voucher type */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
                   Purchase Voucher Type
                 </label>
                 <div className="flex gap-2">
@@ -456,7 +456,7 @@ export default function CompanySettings() {
                   </Button>
                   <Button variant="outline" size="sm" onClick={handleSaveVoucherType}>Save</Button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Click <strong>Fetch</strong> to load types, then pick one. Must match exactly as it appears in Accounting Software.
                 </p>
               </div>
@@ -464,7 +464,7 @@ export default function CompanySettings() {
               {/* Debit Voucher Type — only when feature is enabled */}
               {debitVoucherEnabled && (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
                     Debit Voucher Type
                   </label>
                   <div className="flex gap-2">
@@ -483,7 +483,7 @@ export default function CompanySettings() {
                     </Button>
                     <Button variant="outline" size="sm" loading={savingDebitVType} onClick={handleSaveDebitVoucherType}>Save</Button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Voucher type used when creating a Debit Note in Accounting Software. Fetches the same list as Purchase Voucher Type.
                   </p>
                 </div>
@@ -492,7 +492,7 @@ export default function CompanySettings() {
               {/* Credit Voucher Type — only when feature is enabled */}
               {creditVoucherEnabled && (
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5 tracking-wide">
+                  <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
                     Credit Voucher Type
                   </label>
                   <div className="flex gap-2">
@@ -511,7 +511,7 @@ export default function CompanySettings() {
                     </Button>
                     <Button variant="outline" size="sm" loading={savingCreditVType} onClick={handleSaveCreditVoucherType}>Save</Button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Voucher type used when creating a Credit Note in Accounting Software. Fetches the same list as Purchase Voucher Type.
                   </p>
                 </div>
@@ -519,8 +519,8 @@ export default function CompanySettings() {
 
               {/* Tally data sync */}
               <div>
-                <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Data Sync</p>
-                <p className="text-xs text-gray-500 mb-3">Sync once — data is saved to DB and available without Accounting Software open.</p>
+                <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-1">Data Sync</p>
+                <p className="text-xs text-muted-foreground mb-3">Sync once — data is saved to DB and available without Accounting Software open.</p>
                 <SyncRow label="Ledgers"      count={storedLedgers.length}     loading={syncing}         lastSync={company?.syncTimestamps?.ledgers}     onSync={handleSyncLedgers} />
                 <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}    lastSync={company?.syncTimestamps?.stockItems}  onSync={handleSyncStockItems} />
                 <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups}   lastSync={company?.syncTimestamps?.stockGroups} onSync={handleSyncStockGroups} />
@@ -537,17 +537,17 @@ export default function CompanySettings() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 {company?.mapping && (
-                  <span className="flex items-center gap-1 text-xs text-teal-600 font-medium">
+                  <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
                     <CheckCircle className="w-3.5 h-3.5" /> Configured
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500 mb-5">
+              <p className="text-xs text-muted-foreground mb-5">
                 Assign one Accounting Software ledger to each GST category. Used as defaults when syncing bills.
               </p>
 
               {/* Purchase Ledgers */}
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Purchase Ledgers</p>
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">Purchase Ledgers</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
                 <LedgerSelect label="Interstate 18%"       value={mapping.purchase_interstate_18} ledgerOptions={ledgerOptions} onChange={set('purchase_interstate_18')} />
                 <LedgerSelect label="Intra-state 18%"      value={mapping.purchase_up_18}         ledgerOptions={ledgerOptions} onChange={set('purchase_up_18')} />
@@ -559,7 +559,7 @@ export default function CompanySettings() {
               </div>
 
               {/* CGST / SGST */}
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">CGST / SGST</p>
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">CGST / SGST</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
                 <LedgerSelect label="CGST 9% (18% GST)"    value={mapping.input_cgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_cgst_9')} />
                 <LedgerSelect label="SGST 9% (18% GST)"    value={mapping.input_sgst_9}   ledgerOptions={ledgerOptions} onChange={set('input_sgst_9')} />
@@ -570,7 +570,7 @@ export default function CompanySettings() {
               </div>
 
               {/* IGST */}
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">IGST</p>
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">IGST</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
                 <LedgerSelect label="IGST 5%"  value={mapping.igst_5}  ledgerOptions={ledgerOptions} onChange={set('igst_5')} />
                 <LedgerSelect label="IGST 18%" value={mapping.igst_18} ledgerOptions={ledgerOptions} onChange={set('igst_18')} />
@@ -578,11 +578,11 @@ export default function CompanySettings() {
               </div>
 
               {/* Round Off */}
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide mb-3">Round Off</p>
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">Round Off</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 mb-5">
                 <LedgerSelect label="Round Off Ledger" value={mapping.roundoff_ledger} ledgerOptions={ledgerOptions} onChange={set('roundoff_ledger')} />
               </div>
-              <p className="text-xs text-gray-500 -mt-3 mb-5">
+              <p className="text-xs text-muted-foreground -mt-3 mb-5">
                 Defaults to <span className="font-mono">Round Off</span> if blank.
               </p>
 
@@ -606,9 +606,9 @@ export default function CompanySettings() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <Landmark className="w-3.5 h-3.5 text-cyan-600" />
-                    <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Bank Default Ledgers</p>
+                    <p className="text-xs font-bold text-foreground uppercase tracking-wide">Bank Default Ledgers</p>
                   </div>
-                  <p className="text-xs text-gray-500 mb-4">
+                  <p className="text-xs text-muted-foreground mb-4">
                     Map a bank keyword (e.g. <span className="font-mono">HDFC</span>, <span className="font-mono">ICICI</span>) to a Tally ledger.
                     When you upload a bank statement, the bank ledger is auto-filled if the bank name contains the keyword.
                   </p>
@@ -616,7 +616,7 @@ export default function CompanySettings() {
                   {/* Add row */}
                   <div className="flex gap-2 mb-3">
                     <div className="flex-1">
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Bank Keyword</label>
+                      <label className="block text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Bank Keyword</label>
                       <input
                         value={bankKeywordInput}
                         onChange={(e) => setBankKeywordInput(e.target.value)}
@@ -626,7 +626,7 @@ export default function CompanySettings() {
                       />
                     </div>
                     <div className="flex-[2]">
-                      <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Tally Ledger</label>
+                      <label className="block text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Tally Ledger</label>
                       <input
                         list="bank-default-ledger-list"
                         value={bankLedgerInput}
@@ -655,19 +655,19 @@ export default function CompanySettings() {
 
                   {/* Saved entries */}
                   {bankDefaults.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic py-2">No bank defaults configured yet.</p>
+                    <p className="text-xs text-muted-foreground italic py-2">No bank defaults configured yet.</p>
                   ) : (
-                    <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+                    <div className="rounded-lg border border-border divide-y divide-border">
                       {bankDefaults.map((entry, idx) => (
                         <div key={idx} className="flex items-center gap-3 px-3 py-2.5">
                           <span className="text-xs font-semibold text-cyan-700 bg-cyan-50 border border-cyan-200 rounded px-2 py-0.5 whitespace-nowrap">
                             {entry.keyword}
                           </span>
-                          <span className="text-gray-400 text-xs">→</span>
-                          <span className="text-xs text-gray-700 flex-1 truncate">{entry.ledger}</span>
+                          <span className="text-muted-foreground text-xs">→</span>
+                          <span className="text-xs text-foreground flex-1 truncate">{entry.ledger}</span>
                           <button
                             onClick={() => removeBankDefault(idx)}
-                            className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                            className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -683,9 +683,9 @@ export default function CompanySettings() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-                    <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Cash Book Default Ledgers</p>
+                    <p className="text-xs font-bold text-foreground uppercase tracking-wide">Cash Book Default Ledgers</p>
                   </div>
-                  <p className="text-xs text-gray-500 mb-4">
+                  <p className="text-xs text-muted-foreground mb-4">
                     Add one or more cash/ledger accounts. The <span className="font-semibold">first entry</span> is automatically
                     pre-filled as the cash ledger when you open any cash book record.
                   </p>
@@ -719,9 +719,9 @@ export default function CompanySettings() {
 
                   {/* Saved entries */}
                   {cashDefaults.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic py-2">No cash book defaults configured yet.</p>
+                    <p className="text-xs text-muted-foreground italic py-2">No cash book defaults configured yet.</p>
                   ) : (
-                    <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+                    <div className="rounded-lg border border-border divide-y divide-border">
                       {cashDefaults.map((ledger, idx) => (
                         <div key={idx} className="flex items-center gap-3 px-3 py-2.5">
                           {idx === 0 && (
@@ -729,10 +729,10 @@ export default function CompanySettings() {
                               Default
                             </span>
                           )}
-                          <span className="text-xs text-gray-700 flex-1 truncate">{ledger}</span>
+                          <span className="text-xs text-foreground flex-1 truncate">{ledger}</span>
                           <button
                             onClick={() => removeCashDefault(idx)}
-                            className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                            className="p-1 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -764,7 +764,7 @@ export default function CompanySettings() {
 
             const barColor  = blocked || isExpired ? 'bg-red-500' :
                               pct >= 90 ? 'bg-red-500' :
-                              pct >= 70 ? 'bg-amber-400' : 'bg-teal-500'
+                              pct >= 70 ? 'bg-amber-400' : 'bg-primary'
 
             return (
               <div className="space-y-5">
@@ -788,46 +788,46 @@ export default function CompanySettings() {
                 )}
 
                 {/* Usage */}
-                <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+                <div className="rounded-xl border border-border p-4 space-y-3">
                   <div className="flex items-center gap-2 mb-1">
-                    <CreditCard className="w-3.5 h-3.5 text-teal-600" />
-                    <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Parse Usage This Month</p>
+                    <CreditCard className="w-3.5 h-3.5 text-primary" />
+                    <p className="text-xs font-bold text-foreground uppercase tracking-wide">Parse Usage This Month</p>
                   </div>
                   <div className="flex items-end justify-between">
-                    <span className="text-2xl font-bold text-gray-800">{used}</span>
-                    <span className="text-xs text-gray-500 mb-1">of {limit} bills</span>
+                    <span className="text-2xl font-bold text-foreground">{used}</span>
+                    <span className="text-xs text-muted-foreground mb-1">of {limit} bills</span>
                   </div>
-                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                     <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${pct}%` }} />
                   </div>
-                  <p className="text-[11px] text-gray-500">{pct}% used — {Math.max(0, limit - used)} remaining</p>
+                  <p className="text-[11px] text-muted-foreground">{pct}% used — {Math.max(0, limit - used)} remaining</p>
                 </div>
 
                 {/* Dates */}
-                <div className="space-y-1.5 text-xs text-gray-600">
+                <div className="space-y-1.5 text-xs text-muted-foreground">
                   {renewedAt && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Last renewed</span>
+                      <span className="text-muted-foreground">Last renewed</span>
                       <span className="font-medium">{renewedAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                     </div>
                   )}
                   {expiresAt && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">{isExpired ? 'Expired on' : 'Expires on'}</span>
-                      <span className={cn('font-medium', isExpired ? 'text-red-600' : daysLeft !== null && daysLeft <= 7 ? 'text-amber-600' : 'text-gray-700')}>
+                      <span className="text-muted-foreground">{isExpired ? 'Expired on' : 'Expires on'}</span>
+                      <span className={cn('font-medium', isExpired ? 'text-red-600' : daysLeft !== null && daysLeft <= 7 ? 'text-amber-600' : 'text-foreground')}>
                         {expiresAt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </span>
                     </div>
                   )}
                   {!expiresAt && (
                     <div className="flex justify-between">
-                      <span className="text-gray-500">Subscription</span>
-                      <span className="font-medium text-teal-600">No expiry (free tier)</span>
+                      <span className="text-muted-foreground">Subscription</span>
+                      <span className="font-medium text-primary">No expiry (free tier)</span>
                     </div>
                   )}
                 </div>
 
-                <p className="text-[11px] text-gray-400 pt-1">
+                <p className="text-[11px] text-muted-foreground pt-1">
                   To increase your limit or renew your subscription, please contact your administrator.
                 </p>
               </div>

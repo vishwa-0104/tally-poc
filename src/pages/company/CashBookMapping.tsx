@@ -3,6 +3,8 @@ import { useParams, useNavigate, Navigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { ArrowLeft } from 'lucide-react'
 import { CashBookMappingForm } from '@/components/company/CashBookMappingForm'
+import { CompanyPageHeader } from '@/shadcn/components/company-page-header'
+import { Button } from '@/shadcn/components/ui/button'
 import { useAuthStore, useCompanyStore } from '@/store'
 import { useCashBookStore, makeCashBookFingerprint } from '@/store/cashBookStore'
 import { syncBankToTally } from '@/services/tallyService'
@@ -55,9 +57,9 @@ export default function CashBookMapping() {
 
   if (!record) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
         <p className="text-sm">Cash book record not found.</p>
-        <button onClick={() => navigate('/company/cash-book')} className="text-xs text-teal-600 hover:underline">
+        <button onClick={() => navigate('/company/cash-book')} className="text-xs text-primary hover:underline">
           ← Back to Cash Book
         </button>
       </div>
@@ -120,30 +122,23 @@ export default function CashBookMapping() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-gray-100 bg-white flex-shrink-0">
-        <button
-          onClick={() => navigate('/company/cash-book')}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Cash Book
-        </button>
-        <span className="text-gray-300">|</span>
-        <div className="flex items-center gap-2 min-w-0">
-          <h1 className="text-sm font-bold text-gray-900 truncate">{record.bookName}</h1>
-          {record.accountNumber && (
-            <span className="text-xs text-gray-400 hidden sm:inline">· {record.accountNumber}</span>
-          )}
-          <span className="text-xs text-gray-400">· {record.totalCount} transactions</span>
-          <span className="text-[10px] text-gray-400 font-mono hidden md:inline">({record.fileName})</span>
-        </div>
-        {record.status === 'error' && record.syncError && (
-          <span className="ml-auto text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5 truncate max-w-xs" title={record.syncError}>
-            Last error: {record.syncError}
-          </span>
-        )}
-      </div>
+      <CompanyPageHeader
+        title={record.bookName}
+        subtitle={`${record.accountNumber ? record.accountNumber + ' · ' : ''}${record.totalCount} transactions · ${record.fileName}`}
+        actions={
+          <>
+            {record.status === 'error' && record.syncError && (
+              <span className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/30 rounded px-2 py-0.5 truncate max-w-xs" title={record.syncError}>
+                Last error: {record.syncError}
+              </span>
+            )}
+            <Button variant="outline" size="sm" onClick={() => navigate('/company/cash-book')}>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Cash Book
+            </Button>
+          </>
+        }
+      />
 
       {/* Mapping form fills remaining height */}
       <div className="flex-1 overflow-hidden">

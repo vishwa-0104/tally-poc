@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import { PageHeader } from '@/components/shared'
+import { CompanyPageHeader } from '@/shadcn/components/company-page-header'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { MappingForm } from '@/components/company/MappingForm'
@@ -101,9 +101,9 @@ export default function BillMapping() {
 
   if (!bill) {
     return (
-      <div className="p-10 text-center text-gray-500">
+      <div className="p-10 text-center text-muted-foreground">
         <p>Bill not found.</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/company')}>
+        <Button variant="outline" className="mt-4" onClick={() => navigate('/company/bills')}>
           Back to Bills
         </Button>
       </div>
@@ -401,11 +401,11 @@ export default function BillMapping() {
 
   return (
     <>
-      <PageHeader
+      <CompanyPageHeader
         title="Map & Sync Bill"
         subtitle={`${bill.billNumber} — ${bill.vendorName}`}
         actions={
-          <Button variant="outline" size="sm" onClick={() => navigate('/company')}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/company/bills')}>
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to Bills
           </Button>
@@ -486,7 +486,7 @@ export default function BillMapping() {
         >
           <div className="flex gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-gray-700 space-y-2">
+            <div className="text-sm text-foreground space-y-2">
               <p>
                 A bill with number <span className="font-semibold">{duplicateWarning.billNumber}</span> from{' '}
                 <span className="font-semibold">{duplicateWarning.vendorName}</span> already exists.
@@ -495,10 +495,10 @@ export default function BillMapping() {
                 Status:{' '}
                 {duplicateWarning.status === 'synced' && <span className="font-medium text-emerald-700">Already synced</span>}
                 {duplicateWarning.status === 'mapped' && <span className="font-medium text-blue-700">Already mapped, not yet synced</span>}
-                {duplicateWarning.status === 'parsed' && <span className="font-medium text-gray-700">Already parsed</span>}
+                {duplicateWarning.status === 'parsed' && <span className="font-medium text-foreground">Already parsed</span>}
                 {duplicateWarning.status === 'error' && <span className="font-medium text-red-700">Previous sync attempt failed</span>}
               </p>
-              <p className="text-gray-500">You can still sync this bill if it's intentional.</p>
+              <p className="text-muted-foreground">You can still sync this bill if it's intentional.</p>
             </div>
           </div>
         </Modal>

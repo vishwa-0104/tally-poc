@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw, ChevronDown, ChevronRight, AlertCircle, RotateCcw } from 'lucide-react'
-import { PageHeader } from '@/components/shared'
+import { CompanyPageHeader } from '@/shadcn/components/company-page-header'
 import { EmptyState } from '@/components/ui'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -22,7 +22,7 @@ export default function CompanySyncLog() {
 
   return (
     <>
-      <PageHeader title="Sync Log" subtitle="History of all sync operations" />
+      <CompanyPageHeader title="Sync Log" subtitle="History of all sync operations" />
 
       <div className="p-4 md:p-7 space-y-6">
 
@@ -36,7 +36,7 @@ export default function CompanySyncLog() {
 
         {/* Synced table */}
         <div>
-          <h2 className="text-sm font-bold text-gray-800 mb-3">Successful Syncs ({synced.length})</h2>
+          <h2 className="text-sm font-bold text-foreground mb-3">Successful Syncs ({synced.length})</h2>
           <div className="card overflow-hidden">
             {synced.length === 0 ? (
               <EmptyState
@@ -47,23 +47,23 @@ export default function CompanySyncLog() {
             ) : (
               <table className="w-full border-collapse" aria-label="Synced bills">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr className="bg-muted border-b border-border">
                     {['Bill No.', 'Vendor', 'Amount', 'Bill Date', 'Synced At', 'Vendor Ledger', 'Result'].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">{h}</th>
+                      <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {synced.map((b) => (
-                    <tr key={b.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{b.billNumber}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-800">{b.vendorName}</td>
-                      <td className="px-4 py-3 text-sm font-semibold text-gray-800">{formatCurrency(b.totalAmount)}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500">{formatDate(b.billDate)}</td>
-                      <td className="px-4 py-3 text-xs text-gray-500">
+                    <tr key={b.id} className="border-b border-border last:border-0 hover:bg-muted">
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{b.billNumber}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-foreground">{b.vendorName}</td>
+                      <td className="px-4 py-3 text-sm font-semibold text-foreground">{formatCurrency(b.totalAmount)}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(b.billDate)}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
                         {b.syncedAt ? new Date(b.syncedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500 font-mono">{b.tallyMapping?.vendorLedger ?? '—'}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground font-mono">{b.tallyMapping?.vendorLedger ?? '—'}</td>
                       <td className="px-4 py-3"><span className="badge badge-green">Success</span></td>
                     </tr>
                   ))}
@@ -76,13 +76,13 @@ export default function CompanySyncLog() {
         {/* Errors table */}
         {errors.length > 0 && (
           <div>
-            <h2 className="text-sm font-bold text-gray-800 mb-3">Failed Syncs ({errors.length})</h2>
+            <h2 className="text-sm font-bold text-foreground mb-3">Failed Syncs ({errors.length})</h2>
             <div className="card overflow-hidden">
               <table className="w-full border-collapse" aria-label="Failed syncs">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr className="bg-muted border-b border-border">
                     {['', 'Bill No.', 'Vendor', 'Amount', 'Error Summary', 'Action'].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">{h}</th>
+                      <th key={h} className="px-4 py-2.5 text-left text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -119,10 +119,10 @@ export default function CompanySyncLog() {
 
 function SummaryCard({ label, value, color }: { label: string; value: number | string; color: string }) {
   const colorMap: Record<string, string> = {
-    green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    red:   'bg-red-50    text-red-700    border-red-200',
-    teal:  'bg-teal-50   text-teal-700   border-teal-200',
-    gray:  'bg-gray-50   text-gray-700   border-gray-200',
+    green: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+    red:   'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30',
+    teal:  'bg-primary/10 text-primary border-primary/30',
+    gray:  'bg-muted text-foreground border-border',
   }
   return (
     <div className={`rounded-xl border px-5 py-4 ${colorMap[color] ?? colorMap.gray}`}>
@@ -147,18 +147,18 @@ function ErrorRow({ billNumber, vendorName, totalAmount, syncError, onRetry }: E
   return (
     <>
       <tr
-        className="border-b border-gray-100 hover:bg-red-50/40 cursor-pointer"
+        className="border-b border-border hover:bg-red-50/40 cursor-pointer"
         onClick={() => setExpanded((e) => !e)}
       >
-        <td className="px-3 py-3 w-6 text-gray-500">
+        <td className="px-3 py-3 w-6 text-muted-foreground">
           {expanded
             ? <ChevronDown className="w-3.5 h-3.5" />
             : <ChevronRight className="w-3.5 h-3.5" />
           }
         </td>
-        <td className="px-4 py-3 font-mono text-xs text-gray-500">{billNumber}</td>
-        <td className="px-4 py-3 text-sm font-medium text-gray-800">{vendorName}</td>
-        <td className="px-4 py-3 text-sm font-semibold text-gray-800">{formatCurrency(totalAmount)}</td>
+        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{billNumber}</td>
+        <td className="px-4 py-3 text-sm font-medium text-foreground">{vendorName}</td>
+        <td className="px-4 py-3 text-sm font-semibold text-foreground">{formatCurrency(totalAmount)}</td>
         <td className="px-4 py-3 text-xs text-red-600">{summary}</td>
         <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
           <Button variant="outline" size="sm" onClick={onRetry}>
@@ -168,10 +168,10 @@ function ErrorRow({ billNumber, vendorName, totalAmount, syncError, onRetry }: E
         </td>
       </tr>
       {expanded && (
-        <tr className="border-b border-gray-100 bg-red-50/30">
+        <tr className="border-b border-border bg-red-50/30">
           <td />
           <td colSpan={5} className="px-4 pb-3 pt-1">
-            <div className="flex gap-2 p-3 bg-white border border-red-200 rounded-lg">
+            <div className="flex gap-2 p-3 bg-card border border-red-200 rounded-lg">
               <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-red-700 font-mono leading-relaxed break-all">{syncError ?? 'No error details available'}</p>
             </div>

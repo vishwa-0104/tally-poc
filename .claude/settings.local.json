@@ -32,7 +32,10 @@
       "Bash(npm uninstall *)",
       "Skill(dataviz)",
       "Bash(npx vite *)",
-      "Bash(textutil -convert txt \"/Users/vishwnath.yadav/Downloads/Executive_Financial_Summary.docx\" -output \"/private/tmp/claude-502/-Users-vishwnath-yadav-Desktop-projects-tally-bill-sync/8a891a5d-4473-416c-a105-d057f2f8fef2/scratchpad/Executive_Financial_Summary.txt\")"
+      "Bash(textutil -convert txt \"/Users/vishwnath.yadav/Downloads/Executive_Financial_Summary.docx\" -output \"/private/tmp/claude-502/-Users-vishwnath-yadav-Desktop-projects-tally-bill-sync/8a891a5d-4473-416c-a105-d057f2f8fef2/scratchpad/Executive_Financial_Summary.txt\")",
+      "Bash(grep -rn '\"ring \\\\| ring \\\\|`ring \\\\|{ring \\\\|\\(ring ' src --include=\"*.tsx\")",
+      "Bash(node -e \"const l=require\\('./node_modules/lucide-react'\\); console.log\\(['Landmark','Printer','BadgeDollarSign','CreditCard','ArrowDownRight','ArrowUpRight','ArrowRight'].map\\(n=>n+':'+\\(n in l\\)\\).join\\(' '\\)\\)\")",
+      "Bash(cd *)"
     ]
   }
 }

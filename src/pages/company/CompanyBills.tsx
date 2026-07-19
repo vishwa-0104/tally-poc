@@ -1,38 +1,79 @@
-import { useState } from 'react'
-import { Upload, Loader } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Loader, X, Receipt, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
-import { PageHeader } from '@/components/shared'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
-import { StatCard } from '@/components/ui'
-import { Button } from '@/components/ui/Button'
-import { BillsTable, UploadModal } from '@/components/company'
+import { BillsTable, UploadCard, UploadModal } from '@/components/company'
+import { Card, CardHeader, CardTitle, CardContent } from '@/shadcn/components/ui/card'
+import { Badge } from '@/shadcn/components/ui/badge'
+import { CompanyPageHeader } from '@/shadcn/components/company-page-header'
+import { cn } from '@/lib/utils'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { parseBillWithAI, parsedDataToBill } from '@/services'
 
 type BillType = 'purchase' | 'debit' | 'misc' | 'credit'
 
+interface UploadCardConfig {
+  key: string
+  title: string
+  initialType: 'purchase' | 'debit' | 'credit'
+  isMisc: boolean
+}
+
 export default function CompanyBills() {
   const [showUpload, setShowUpload]               = useState(false)
-  const [uploadInitialType, setUploadInitialType] = useState<'purchase' | 'debit'>('purchase')
+  const [uploadInitialType, setUploadInitialType] = useState<'purchase' | 'debit' | 'credit'>('purchase')
   const [uploadIsMisc, setUploadIsMisc]           = useState(false)
+  const [pendingFiles, setPendingFiles]           = useState<File[]>([])
   const [bulkParsing, setBulkParsing] = useState(false)
   const [bulkDone, setBulkDone]       = useState(0)
   const [bulkTotal, setBulkTotal]     = useState(0)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const { activeCompanyId }  = useAuthStore()
   const { getBills, addBill } = useBillStore()
   const { getCompany, incrementBillCount } = useCompanyStore()
 
   const company = activeCompanyId ? getCompany(activeCompanyId) : null
-  const bills   = activeCompanyId ? getBills(activeCompanyId) : []
+  const allBills = activeCompanyId ? getBills(activeCompanyId) : []
   const debitVoucherEnabled  = company?.features?.some((f) => f.feature === 'debit_voucher'  && f.enabled) ?? false
   const creditVoucherEnabled = company?.features?.some((f) => f.feature === 'credit_voucher' && f.enabled) ?? false
+
+  // Sidebar "Vouchers" links (Purchase/Expenses/Debit Note/Credit Note) all point
+  // here with a ?type= filter — there's no separate page per voucher type, they're
+  // all just billType/tallyMapping flags on the same Bills list.
+  const typeFilter = searchParams.get('type')
+  const filterLabel = typeFilter === 'misc' ? 'Expenses' : typeFilter === 'debit' ? 'Debit Notes' : typeFilter === 'credit' ? 'Credit Notes' : null
+  const bills = useMemo(() => {
+    if (!typeFilter) return allBills
+    return allBills.filter((b) => {
+      if (typeFilter === 'misc')   return b.billType === 'misc' && !b.tallyMapping?.isDebit && !b.tallyMapping?.isCredit
+      if (typeFilter === 'debit')  return b.billType === 'debit' || (b.billType === 'misc' && b.tallyMapping?.isDebit)
+      if (typeFilter === 'credit') return b.billType === 'misc' && b.tallyMapping?.isCredit
+      return true
+    })
+  }, [allBills, typeFilter])
 
   const synced  = bills.filter((b) => b.status === 'synced').length
   const pending = bills.filter((b) => ['parsed', 'mapped'].includes(b.status)).length
   const errors  = bills.filter((b) => b.status === 'error').length
+
+  // Each voucher view offers a contextual set of upload entry points, mirroring
+  // the initialType/isMiscUpload combinations the old header buttons used to preset.
+  const uploadCardConfigs: UploadCardConfig[] = useMemo(() => {
+    if (typeFilter === 'misc')   return [{ key: 'expenses',     title: 'Upload Expenses Bills',           initialType: 'purchase', isMisc: true  }]
+    if (typeFilter === 'credit') return [{ key: 'credit',       title: 'Upload Credit Notes',             initialType: 'credit',   isMisc: true  }]
+    if (typeFilter === 'debit')
+      return [
+        { key: 'debit',      title: 'Upload Debit Notes',              initialType: 'debit', isMisc: false },
+        { key: 'misc-debit', title: 'Upload Miscellaneous Debit Notes', initialType: 'debit', isMisc: true  },
+      ]
+    return [
+      { key: 'purchase', title: 'Upload Purchase Bills',      initialType: 'purchase', isMisc: false },
+      { key: 'misc',     title: 'Upload Miscellaneous Bills', initialType: 'purchase', isMisc: true  },
+    ]
+  }, [typeFilter])
 
   const handleParsed = (billId: string) => {
     navigate(`/company/bills/${billId}`)
@@ -80,81 +121,98 @@ export default function CompanyBills() {
     }
   }
 
+  const openUpload = (files: File[], initialType: 'purchase' | 'debit' | 'credit', isMisc: boolean) => {
+    setUploadInitialType(initialType)
+    setUploadIsMisc(isMisc)
+    setPendingFiles(files)
+    setShowUpload(true)
+  }
+
+  const uploadDisabled = bulkParsing || !!company?.parseBlocked
+
   return (
     <>
-      <PageHeader
+      <CompanyPageHeader
         title={company?.name ?? 'Bills'}
-        subtitle={company?.gstin ? `GSTIN: ${company.gstin}` : 'Your purchase bills'}
+        subtitle={filterLabel ? `Showing: ${filterLabel}` : company?.gstin ? `GSTIN: ${company.gstin}` : 'Your purchase bills'}
         actions={
           <>
-            <ExtensionStatus />
-            {/* {company && (() => {
-              const used    = company.parseBillsUsed
-              const limit   = company.parseBillsLimit
-              const pct     = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
-              const expired = company.subscriptionExpiresAt && new Date(company.subscriptionExpiresAt) < new Date()
-              const color   = company.parseBlocked || expired ? 'text-red-600 border-red-200 bg-red-50' :
-                              pct >= 90 ? 'text-red-600 border-red-200 bg-red-50' :
-                              pct >= 70 ? 'text-amber-600 border-amber-200 bg-amber-50' :
-                              'text-teal-700 border-teal-200 bg-teal-50'
-              return (
-                <span className={cn('hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border', color)}>
-                  {used} / {limit} bills parsed
-                </span>
-              )
-            })()} */}
             {bulkParsing && (
-              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-medium rounded-full border border-teal-200">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium rounded-full border border-primary/30">
                 <Loader className="w-3 h-3 animate-spin" />
                 Parsing {bulkDone} / {bulkTotal} bills…
               </span>
             )}
-            <span className="relative group">
-              <Button variant="teal" size="sm" onClick={() => { setUploadInitialType('purchase'); setUploadIsMisc(false); setShowUpload(true) }} disabled={bulkParsing || !!company?.parseBlocked}>
-                <Upload className="w-3.5 h-3.5" />
-                Upload Bills
-              </Button>
-              {company?.parseBlocked && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-gray-800 text-[11px] text-white px-2 py-1 rounded whitespace-nowrap z-10 pointer-events-none">
-                  Parsing disabled by admin
-                </div>
-              )}
-            </span>
-            <span className="relative group">
-              <Button variant="outline" size="sm" onClick={() => { setUploadInitialType('purchase'); setUploadIsMisc(true); setShowUpload(true) }} disabled={bulkParsing || !!company?.parseBlocked}>
-                Upload Misc Bill
-              </Button>
-              {company?.parseBlocked && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-gray-800 text-[11px] text-white px-2 py-1 rounded whitespace-nowrap z-10 pointer-events-none">
-                  Parsing disabled by admin
-                </div>
-              )}
-            </span>
+            <ExtensionStatus />
           </>
         }
       />
 
       <div className="p-4 md:p-7">
-        {/* Stats */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-7">
-          <StatCard label="Total Bills" value={bills.length} sub="All time"                accent="blue"  />
-          <StatCard label="Synced"      value={synced}       sub="In ERP"                accent="green" />
-          <StatCard label="Pending"     value={pending}      sub="Needs mapping or sync"   accent="amber" />
-          <StatCard label="Errors"      value={errors}       sub="Need attention"          accent="red"   />
+        {filterLabel && (
+          <div className="flex items-center gap-2 mb-4">
+            <Badge variant="secondary" className="gap-1">
+              {filterLabel}
+              <Link to="/company/bills" title="Clear filter" className="hover:opacity-70">
+                <X className="w-3 h-3" />
+              </Link>
+            </Badge>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 mb-7">
+          <div className={cn('grid grid-cols-1 gap-4', uploadCardConfigs.length > 1 && 'sm:grid-cols-2')}>
+            {uploadCardConfigs.map((cfg) => (
+              <UploadCard
+                key={cfg.key}
+                title={cfg.title}
+                disabled={uploadDisabled}
+                disabledMessage={company?.parseBlocked ? 'Parsing disabled by admin' : undefined}
+                onSubmit={(files) => openUpload(files, cfg.initialType, cfg.isMisc)}
+              />
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            {[
+              { label: 'Total Bills', value: bills.length, color: 'text-foreground',                        icon: Receipt     },
+              { label: 'Synced',      value: synced,        color: 'text-emerald-600 dark:text-emerald-400', icon: CheckCircle },
+              { label: 'Pending',     value: pending,       color: 'text-orange-600 dark:text-orange-400',   icon: Clock       },
+              { label: 'Errors',      value: errors,        color: 'text-red-600 dark:text-red-400',         icon: AlertCircle },
+            ].map(({ label, value, color, icon: Icon }) => (
+              <Card key={label} className="widget-card flex flex-col justify-center p-4 sm:p-6">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs sm:text-sm text-muted-foreground">{label}</p>
+                  <div className="mb-2 sm:mb-3 flex size-8 sm:size-10 items-center justify-center rounded-full bg-muted">
+                    <Icon className={cn('size-4 sm:size-5', color)} />
+                  </div>
+                </div>
+                <p className={cn('text-2xl sm:text-4xl font-bold tabular-nums tracking-tight', color)}>
+                  {value}
+                </p>
+              </Card>
+            ))}
+          </div>
         </div>
 
         {/* Bills table */}
-        <div className="card overflow-hidden">
-          <BillsTable bills={bills} onUpload={() => setShowUpload(true)} />
-        </div>
+        <Card className="widget-card">
+          <CardHeader>
+            <CardTitle>Uploaded Bills</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BillsTable bills={bills} onUpload={() => openUpload([], uploadCardConfigs[0].initialType, uploadCardConfigs[0].isMisc)} />
+          </CardContent>
+        </Card>
       </div>
 
       <UploadModal
         open={showUpload}
-        onClose={() => { setShowUpload(false); setUploadInitialType('purchase'); setUploadIsMisc(false) }}
+        onClose={() => { setShowUpload(false); setUploadInitialType('purchase'); setUploadIsMisc(false); setPendingFiles([]) }}
         onParsed={handleParsed}
         onMultipleFiles={handleMultipleFiles}
         initialType={uploadInitialType}
+        initialFiles={pendingFiles}
         debitVoucherEnabled={debitVoucherEnabled}
         creditVoucherEnabled={creditVoucherEnabled}
         isMiscUpload={uploadIsMisc}

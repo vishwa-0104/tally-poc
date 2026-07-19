@@ -54,7 +54,8 @@ export default function App() {
 
       {/* ── Company portal ── */}
       <Route path="/company" element={<CompanyLayout />}>
-        <Route index                  element={<CompanyBills />} />
+        <Route index                  element={<Navigate to="dashboard" replace />} />
+        <Route path="bills"           element={<CompanyBills />} />
         <Route path="bills/:billId"   element={<BillMapping />} />
         <Route path="sync-log"        element={<CompanySyncLog />} />
         <Route path="settings"        element={<CompanySettings />} />
