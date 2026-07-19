@@ -1,9 +1,11 @@
 node_modules
 dist
+release
 .env
 .env.local
 .env.*.local
 .env.production
+.env.electron
 .DS_Store
 cert.pem
 key.pem

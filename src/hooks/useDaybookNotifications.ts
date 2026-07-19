@@ -52,6 +52,21 @@ function ytdRange(): { from: string; to: string } {
   return { from: fmt(fyStart), to: fmt(today) }
 }
 
+// Web build: derive from window.location (same-origin, correct as-is).
+// Electron build: window.location is file:// (no meaningful host), so this
+// derives the real ws(s):// origin from VITE_API_BASE_URL instead — same
+// env var api.ts already uses, no separate one needed.
+function resolveWsOrigin(): string {
+  const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined
+  if (apiBase) {
+    const url = new URL(apiBase, 'http://localhost')
+    const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${url.host}`
+  }
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}`
+}
+
 function getToken(): string | null {
   const raw = localStorage.getItem('tally-auth')
   if (!raw) return null
@@ -91,8 +106,7 @@ export function useDaybookNotifications(companyId: string) {
       const token = getToken()
       if (!token) return
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const url = `${protocol}//${window.location.host}/api/ws?token=${encodeURIComponent(token)}&companyId=${encodeURIComponent(companyId)}`
+      const url = `${resolveWsOrigin()}/api/ws?token=${encodeURIComponent(token)}&companyId=${encodeURIComponent(companyId)}`
       ws = new WebSocket(url)
 
       ws.onmessage = (event) => {

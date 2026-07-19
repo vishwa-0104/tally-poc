@@ -65,7 +65,7 @@
     08 : End If
 
 [Collection: TBSPushResp]
-    Data Source   : HTTP JSON : "http://127.0.0.1/api/tally-hook"
+    Data Source   : HTTP JSON : "http://127.0.0.1:8765/api/tally-hook"
     RemoteRequest : TBSPushReq : UTF8
 
 [Report: TBSPushReq]
@@ -124,10 +124,17 @@
 ;   requests the notify handler fires per edit and contributing to Tally
 ;   hanging under load. Removed rather than trying to guard against the
 ;   double-fire, since the button was redundant once FormAccept works.
+;
+;   PORT :8765 (added for the Electron desktop client, 2026-07-19): plain
+;   127.0.0.1 with no port implies :80, which needs elevated/admin privileges
+;   to bind on every OS tested — not something a normal installed desktop app
+;   should require just for this listener. electron/hook-server.cjs listens
+;   on 8765 by default (electron/.env.electron's TALLY_HOOK_PORT) — keep both
+;   in sync if either changes.
 ; =============================================================================
 
 [#Form: Voucher]
-    On  : FormAccept : Yes : HTTP Post : ("http://127.0.0.1/api/tally-hook?company=" + ##SVCurrentCompany + "&d=" + $$String:$Date + "&n=" + $VoucherNumber + "&t=" + $VoucherTypeName + "&ai=" + $$String:$AlterID + "&g=" + $Guid + "&p=" + $PartyLedgerName + "&a=" + $$String:$Amount) : ASCII : TBSNotifyReq
+    On  : FormAccept : Yes : HTTP Post : ("http://127.0.0.1:8765/api/tally-hook?company=" + ##SVCurrentCompany + "&d=" + $$String:$Date + "&n=" + $VoucherNumber + "&t=" + $VoucherTypeName + "&ai=" + $$String:$AlterID + "&g=" + $Guid + "&p=" + $PartyLedgerName + "&a=" + $$String:$Amount) : ASCII : TBSNotifyReq
 
 [Report: TBSNotifyReq]
     Form : TBSNotifyReq

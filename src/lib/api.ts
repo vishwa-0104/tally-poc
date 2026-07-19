@@ -2,7 +2,11 @@ import axios from 'axios'
 import type { DashboardSettings } from '@/types'
 import type { TallyVoucher, SlowStockItem, DebtorBalance, TopItem, SalesPartyRow } from '@/services/tallyService'
 
-export const api = axios.create({ baseURL: '/api' })
+// Web build (served same-origin behind Nginx) keeps the relative default;
+// Electron loads the bundle from file://, where a relative '/api' has no
+// meaningful host, so that build sets VITE_API_BASE_URL to the real domain
+// at build time (see .env.electron.example).
+export const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api' })
 
 export async function getNextVoucherCounter(companyId: string): Promise<number> {
   const { data } = await api.post<{ counter: number }>(`/companies/${companyId}/voucher-counter/next`)
