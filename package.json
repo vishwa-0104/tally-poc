@@ -17,10 +17,10 @@
     "docker:logs": "docker-compose logs -f",
     "docker:psql": "docker-compose exec postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-tally_bill_sync}",
     "docker:psql-prod": "docker compose exec postgres psql -U ${POSTGRES_USER:-postgres} ${POSTGRES_DB:-tally_bill_sync}",
-    "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:3000 && NODE_ENV=development electron .\"",
-    "electron:preview": "ELECTRON_BUILD=true tsc && ELECTRON_BUILD=true vite build --mode electron && NODE_ENV=production electron .",
-    "electron:build": "ELECTRON_BUILD=true tsc && ELECTRON_BUILD=true vite build --mode electron && electron-builder",
-    "electron:build:dir": "ELECTRON_BUILD=true tsc && ELECTRON_BUILD=true vite build --mode electron && electron-builder --dir"
+    "electron:dev": "concurrently -k \"vite\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "electron:preview": "cross-env ELECTRON_BUILD=true tsc && cross-env ELECTRON_BUILD=true vite build --mode electron && cross-env NODE_ENV=production electron .",
+    "electron:build": "cross-env ELECTRON_BUILD=true tsc && cross-env ELECTRON_BUILD=true vite build --mode electron && electron-builder",
+    "electron:build:dir": "cross-env ELECTRON_BUILD=true tsc && cross-env ELECTRON_BUILD=true vite build --mode electron && electron-builder --dir"
   },
   "build": {
     "appId": "com.tallybillsync.desktop",
@@ -76,6 +76,7 @@
     "@typescript-eslint/parser": "^7.0.2",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
+    "cross-env": "^10.1.0",
     "electron": "^28.0.0",
     "electron-builder": "^24.9.1",
     "electron-updater": "^6.1.7",
