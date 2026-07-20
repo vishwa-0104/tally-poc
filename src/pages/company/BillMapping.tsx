@@ -88,7 +88,7 @@ export default function BillMapping() {
   const isMiscDebitBill   = bill?.billType === 'misc' && bill?.tallyMapping?.isDebit  === true
   const isCreditBill      = bill?.billType === 'credit'
   const isMiscCreditBill  = bill?.billType === 'misc' && bill?.tallyMapping?.isCredit === true
-  const isReturn          = isDebitBill || isMiscDebitBill || isCreditBill || isMiscCreditBill
+  const isReturn          = isDebitBill || isMiscDebitBill
   const debitVoucherTypeSetting  = (company?.mapping as Record<string, string> | null)?.debit_voucher_type  ?? 'Debit Note'
   const creditVoucherTypeSetting = (company?.mapping as Record<string, string> | null)?.credit_voucher_type ?? 'Credit Note'
   const isCreditNote = isCreditBill || isMiscCreditBill
