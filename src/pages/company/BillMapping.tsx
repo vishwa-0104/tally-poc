@@ -93,6 +93,7 @@ export default function BillMapping() {
   const creditVoucherTypeSetting = (company?.mapping as Record<string, string> | null)?.credit_voucher_type ?? 'Credit Note'
   const isCreditNote = isCreditBill || isMiscCreditBill
   const voucherType  = isCreditNote ? creditVoucherTypeSetting : isReturn ? debitVoucherTypeSetting : (company?.voucherType ?? 'GST PURCHASE')
+  console.log('[BillMapping] voucher classification:', { billType: bill?.billType, isCreditNote, isReturn, voucherType })
 
   // Only live-fetch from Tally if no ledgers are stored yet
   const { ledgers: liveLedgers, loading: ledgersLoading } = useTallyLedgers(
