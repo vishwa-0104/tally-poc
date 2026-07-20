@@ -140,10 +140,11 @@ interface MappingFormProps {
   godownEnabled?: boolean
   discountColumnEnabled?: boolean
   debitVoucherEnabled?: boolean
+  creditVoucherEnabled?: boolean
   defaultVoucherType?: string
   godowns?: TallyGodown[]
   stockUnits?: TallyStockUnit[]
-  billType?: 'purchase' | 'debit' | 'misc'
+  billType?: 'purchase' | 'debit' | 'misc' | 'credit'
   onSaveMapping: (data: MappingInput) => void
   onSyncToTally: (data: MappingInput) => void
 }
@@ -164,6 +165,7 @@ export function MappingForm({
   godownEnabled = false,
   discountColumnEnabled = false,
   debitVoucherEnabled = false,
+  creditVoucherEnabled = false,
   defaultVoucherType = 'GST PURCHASE',
   godowns = [],
   stockUnits = [],
@@ -573,7 +575,7 @@ export function MappingForm({
       )}
 
       {/* ── Vendor ── */}
-      <div className={cn('mt-5', debitVoucherEnabled && 'grid grid-cols-2 gap-x-4')}>
+      <div className={cn('mt-5', (debitVoucherEnabled || creditVoucherEnabled) && 'grid grid-cols-2 gap-x-4')}>
         <LedgerInput
           id="vendor"
           label="Vendor Ledger"
@@ -591,7 +593,7 @@ export function MappingForm({
             </button>
           ) : undefined}
         />
-        {debitVoucherEnabled && (
+        {(debitVoucherEnabled || creditVoucherEnabled) && (
           <div>
             <label className="block text-xs font-semibold text-foreground mb-1.5 tracking-wide">
               Voucher Type

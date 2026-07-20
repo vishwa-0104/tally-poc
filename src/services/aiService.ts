@@ -7,7 +7,7 @@ export type { ParsedBillData }
 export async function parseBillWithAI(
   file: File,
   onProgress?: (step: number) => void,
-  billType: 'purchase' | 'debit' | 'misc' = 'purchase',
+  billType: 'purchase' | 'debit' | 'misc' | 'credit' = 'purchase',
   companyId?: string,
 ): Promise<ParsedBillData> {
   onProgress?.(0)
@@ -34,7 +34,7 @@ export function parsedDataToBill(
   data: ParsedBillData,
   companyId: string,
   imageUrl?: string,
-  billType: 'purchase' | 'debit' | 'misc' = 'purchase',
+  billType: 'purchase' | 'debit' | 'misc' | 'credit' = 'purchase',
 ): Bill {
   const lineItems = data.lineItems.map((item, i) => ({ ...item, id: `li_${Date.now()}_${i}` }))
   return {

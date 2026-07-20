@@ -97,7 +97,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
     const effectiveType  = overrideType ?? selectedType
     const isMiscDebit    = isMiscUpload && effectiveType === 'debit'
     const isMiscCredit   = isMiscUpload && effectiveType === 'credit'
-    const billTypeToSave: 'purchase' | 'debit' | 'misc' = isMiscUpload ? 'misc' : effectiveType as 'purchase' | 'debit'
+    const billTypeToSave: 'purchase' | 'debit' | 'misc' | 'credit' = isMiscUpload ? 'misc' : effectiveType as 'purchase' | 'debit' | 'credit'
     const f  = overrideFile !== undefined ? overrideFile : file
     const mf = overrideMultiFiles !== undefined ? overrideMultiFiles : multiFiles
 
@@ -232,7 +232,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
                   {isMiscUpload ? 'Misc. Debit Note' : 'Debit Note'}
                 </button>
               )}
-              {creditVoucherEnabled && isMiscUpload && (
+              {creditVoucherEnabled && (
                 <button
                   type="button"
                   onClick={() => setSelectedType('credit')}
@@ -243,7 +243,7 @@ export function UploadModal({ open, onClose, onParsed, onMultipleFiles, initialT
                       : 'bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-primary',
                   )}
                 >
-                  Misc. Credit Note
+                  {isMiscUpload ? 'Misc. Credit Note' : 'Credit Note'}
                 </button>
               )}
             </div>

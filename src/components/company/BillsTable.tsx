@@ -192,6 +192,12 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
                       {bill.billType === 'misc' && (
                         <Badge variant="secondary" className="ml-1.5">Misc</Badge>
                       )}
+                      {bill.billType === 'debit' && (
+                        <Badge variant="secondary" className="ml-1.5">Debit Note</Badge>
+                      )}
+                      {bill.billType === 'credit' && (
+                        <Badge variant="secondary" className="ml-1.5">Credit Note</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="font-medium">{bill.vendorName}</TableCell>
                     <TableCell className="text-muted-foreground">{formatDate(bill.billDate)}</TableCell>

@@ -48,6 +48,7 @@ export default function BillMapping() {
   const godownEnabled          = company?.features?.some((f) => f.feature === COMPANY_FEATURES.GODOWN          && f.enabled) ?? false
   const discountColumnEnabled  = company?.features?.some((f) => f.feature === COMPANY_FEATURES.DISCOUNT_COLUMN && f.enabled) ?? false
   const debitVoucherEnabled    = company?.features?.some((f) => f.feature === COMPANY_FEATURES.DEBIT_VOUCHER   && f.enabled) ?? false
+  const creditVoucherEnabled   = company?.features?.some((f) => f.feature === COMPANY_FEATURES.CREDIT_VOUCHER  && f.enabled) ?? false
   useEffect(() => {
     if (companyId && companies.length === 0) {
       fetchCompanies().catch((err) => console.error('[BillMapping] Failed to load companies:', err))
@@ -85,11 +86,13 @@ export default function BillMapping() {
   const tallyCompany = companyName
   const isDebitBill       = bill?.billType === 'debit'
   const isMiscDebitBill   = bill?.billType === 'misc' && bill?.tallyMapping?.isDebit  === true
+  const isCreditBill      = bill?.billType === 'credit'
   const isMiscCreditBill  = bill?.billType === 'misc' && bill?.tallyMapping?.isCredit === true
-  const isReturn          = isDebitBill || isMiscDebitBill
+  const isReturn          = isDebitBill || isMiscDebitBill || isCreditBill || isMiscCreditBill
   const debitVoucherTypeSetting  = (company?.mapping as Record<string, string> | null)?.debit_voucher_type  ?? 'Debit Note'
   const creditVoucherTypeSetting = (company?.mapping as Record<string, string> | null)?.credit_voucher_type ?? 'Credit Note'
-  const voucherType  = isMiscCreditBill ? creditVoucherTypeSetting : isReturn ? debitVoucherTypeSetting : (company?.voucherType ?? 'GST PURCHASE')
+  const isCreditNote = isCreditBill || isMiscCreditBill
+  const voucherType  = isCreditNote ? creditVoucherTypeSetting : isReturn ? debitVoucherTypeSetting : (company?.voucherType ?? 'GST PURCHASE')
 
   // Only live-fetch from Tally if no ledgers are stored yet
   const { ledgers: liveLedgers, loading: ledgersLoading } = useTallyLedgers(
@@ -447,6 +450,7 @@ export default function BillMapping() {
               godownEnabled={godownEnabled}
               discountColumnEnabled={discountColumnEnabled}
               debitVoucherEnabled={debitVoucherEnabled}
+              creditVoucherEnabled={creditVoucherEnabled}
               defaultVoucherType={voucherType}
               godowns={storedGodowns}
               stockUnits={storedStockUnits}

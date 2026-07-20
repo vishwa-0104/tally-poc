@@ -270,7 +270,7 @@ export interface Bill {
   syncedAt?: string
   syncError?: string
   lineItems: LineItem[]
-  billType?: 'purchase' | 'debit' | 'misc'
+  billType?: 'purchase' | 'debit' | 'misc' | 'credit'
   createdAt: string
 }
 

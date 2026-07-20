@@ -50,7 +50,7 @@ export default function CompanyBills() {
     return allBills.filter((b) => {
       if (typeFilter === 'misc')   return b.billType === 'misc' && !b.tallyMapping?.isDebit && !b.tallyMapping?.isCredit
       if (typeFilter === 'debit')  return b.billType === 'debit' || (b.billType === 'misc' && b.tallyMapping?.isDebit)
-      if (typeFilter === 'credit') return b.billType === 'misc' && b.tallyMapping?.isCredit
+      if (typeFilter === 'credit') return b.billType === 'credit' || (b.billType === 'misc' && b.tallyMapping?.isCredit)
       return true
     })
   }, [allBills, typeFilter])
@@ -63,7 +63,11 @@ export default function CompanyBills() {
   // the initialType/isMiscUpload combinations the old header buttons used to preset.
   const uploadCardConfigs: UploadCardConfig[] = useMemo(() => {
     if (typeFilter === 'misc')   return [{ key: 'expenses',     title: 'Upload Expenses Bills',           initialType: 'purchase', isMisc: true  }]
-    if (typeFilter === 'credit') return [{ key: 'credit',       title: 'Upload Credit Notes',             initialType: 'credit',   isMisc: true  }]
+    if (typeFilter === 'credit')
+      return [
+        { key: 'credit',      title: 'Upload Credit Notes',              initialType: 'credit', isMisc: false },
+        { key: 'misc-credit', title: 'Upload Miscellaneous Credit Notes', initialType: 'credit', isMisc: true  },
+      ]
     if (typeFilter === 'debit')
       return [
         { key: 'debit',      title: 'Upload Debit Notes',              initialType: 'debit', isMisc: false },
@@ -89,9 +93,8 @@ export default function CompanyBills() {
     let failed = 0
     for (const file of files) {
       try {
-        const safeType = billType === 'credit' ? 'misc' : billType
-        const parsed = await parseBillWithAI(file, undefined, safeType, activeCompanyId)
-        let bill     = parsedDataToBill(parsed, activeCompanyId!, undefined, safeType)
+        const parsed = await parseBillWithAI(file, undefined, billType, activeCompanyId)
+        let bill     = parsedDataToBill(parsed, activeCompanyId!, undefined, billType)
         if (isMiscDebit)  bill = { ...bill, tallyMapping: { isDebit:  true } }
         if (isMiscCredit) bill = { ...bill, tallyMapping: { isCredit: true } }
         addBill(bill)
