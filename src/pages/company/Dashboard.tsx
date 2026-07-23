@@ -243,15 +243,14 @@ const TABS: { key: Tab; label: string }[] = [
 // underlying logic/state intact, just don't render the buttons.
 const FILTERS: { key: FilterPreset; label: string }[] = [
   { key: 'today',   label: 'Today'        },
-  { key: 'ytd',     label: 'YTD'          },
+  { key: 'ytd',     label: 'Year to Date (YTD)'          },
   { key: 'custom',  label: 'Custom'       }
 ]
 
 // Analysis tab's own filter — independent of the Performance tab's FILTERS/
 // filterPreset state above, so switching one never affects the other.
 const ANALYSIS_FILTERS: { key: FilterPreset; label: string }[] = [
-  { key: 'today',  label: 'Today'  },
-  { key: 'ytd',    label: 'YTD'    },
+  { key: 'ytd',    label: 'Year to Date (YTD)'    },
 ]
 
 // Raw inputs behind the 9 ratio KPIs. null = genuinely unavailable (never a
@@ -534,7 +533,7 @@ export default function Dashboard() {
   const fyYear = getCurrentFyYear()
   const todayLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
-  const [compactFormat,   setCompactFormat]   = useState(false)
+  const [compactFormat,   setCompactFormat]   = useState(true)
   const [activeTab,       setActiveTab]       = useState<Tab>('performance')
   const [filterPreset,    setFilterPreset]    = useState<FilterPreset>('today')
   const [customFrom,      setCustomFrom]      = useState(todayStr())
@@ -576,6 +575,7 @@ export default function Dashboard() {
   const [error,         setError]         = useState<string | null>(null)
   const [activePeriod,  setActivePeriod]  = useState<{ from: string; to: string } | null>(null)
   const [uncachedRange, setUncachedRange] = useState(false) // true when the DB has never seen this range — hints "click Apply"
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null) // set only by an explicit Fetch Live click, cleared only by the next one
 
   // ── Analysis tab — fully independent filter/state from the Performance tab above ──
   const [analysisFilterPreset, setAnalysisFilterPreset] = useState<FilterPreset>('ytd')
@@ -584,6 +584,7 @@ export default function Dashboard() {
   const [analysisLoading,      setAnalysisLoading]      = useState(false)
   const [analysisFetched,      setAnalysisFetched]      = useState(false)
   const [analysisUncachedRange, setAnalysisUncachedRange] = useState(false)
+  const [analysisLastFetchedAt, setAnalysisLastFetchedAt] = useState<Date | null>(null) // set only by an explicit Fetch Live click, cleared only by the next one
   const [analysisActivePeriod, setAnalysisActivePeriod] = useState<{ from: string; to: string } | null>(null)
   const [analysisInputs,       setAnalysisInputs]       = useState<AnalysisInputs>(emptyAnalysisInputs)
 
@@ -1663,6 +1664,7 @@ export default function Dashboard() {
 
   const handleAnalysisFetchLive = () => {
     setAnalysisUncachedRange(false)
+    setAnalysisLastFetchedAt(new Date())
     fetchAnalysisData(analysisFilterPreset, analysisCustomFrom, analysisCustomTo)
   }
 
@@ -1769,6 +1771,22 @@ export default function Dashboard() {
     window.print()
   }
 
+  // Shared PDF export for the Performance / KPI Analytics tabs — same
+  // window.print() + document.title-swap trick as printCfoReport, generalized
+  // with a label and period so each tab's file gets a sensible default name.
+  const printDashboardReport = (label: string, period: { from: string; to: string } | null) => {
+    const originalTitle = document.title
+    const safeName = (company?.name ?? 'Company').replace(/[\\/:*?"<>|]/g, '').trim()
+    document.title = `${safeName} - ${label}${period ? ` - ${period.from}_${period.to}` : ''}`
+    const restoreTitle = () => {
+      document.title = originalTitle
+      window.removeEventListener('afterprint', restoreTitle)
+    }
+    window.addEventListener('afterprint', restoreTitle)
+    toast('In the print dialog, open "More settings" and uncheck "Headers and footers" for a clean PDF.', { duration: 6000, icon: '💡' })
+    window.print()
+  }
+
   const reloadMeta = () => {
     if (!companyId) return
     fetchSalesTargets(companyId, fyYear)
@@ -1848,6 +1866,7 @@ export default function Dashboard() {
   // also persists the result to the DB for future DB-only reads.
   const handleFetchLive = () => {
     setUncachedRange(false)
+    setLastFetchedAt(new Date())
     fetchData(filterPreset, customFrom, customTo)
   }
 
@@ -1990,10 +2009,6 @@ export default function Dashboard() {
                 Extension not connected
               </span>
             )}
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-              <Switch checked={compactFormat} onCheckedChange={setCompactFormat} size="sm" />
-              In Thousands
-            </label>
           </>
         }
       />
@@ -2005,10 +2020,10 @@ export default function Dashboard() {
             <button
               key={t.key}
               onClick={() => handleTabChange(t.key)}
-              className={`text-sm transition-colors ${
+              className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${
                 activeTab === t.key
-                  ? 'font-semibold text-foreground'
-                  : 'font-medium text-muted-foreground hover:text-foreground'
+                  ? 'font-semibold text-foreground bg-accent'
+                  : 'font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50'
               }`}
             >
               {t.label}
@@ -2074,6 +2089,20 @@ export default function Dashboard() {
                 Fetch Live
               </button>
 
+              <button
+                onClick={() => printDashboardReport('Performance Dashboard', activePeriod)}
+                disabled={!fetched}
+                title="Generate a PDF of this dashboard (opens the print dialog — choose Save as PDF)"
+                className="flex items-center gap-1 px-3 py-1.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
+              >
+                <Download className="w-3 h-3" />
+                Save
+              </button>
+
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                <Switch checked={compactFormat} onCheckedChange={setCompactFormat} size="sm" />
+                In Thousands
+              </label>
               {fetched && purchaseVouchers.length > 0 && (
                 <button
                   onClick={exportPurchasesToXls}
@@ -2088,7 +2117,29 @@ export default function Dashboard() {
                 </button>
               )}
 
+              {lastFetchedAt && (
+                <span className="ml-auto text-[11px] text-muted-foreground">
+                  Last fetched: {lastFetchedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+
               {loading && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+            </div>
+
+            <div className="print-report space-y-4">
+            {/* Print-only report header — hidden on screen, shown only in the PDF/print output */}
+            <div className="hidden print:block">
+              <p className="text-lg font-bold text-foreground">{company?.name ?? 'Company'}</p>
+              {company?.gstin && <p className="text-sm text-muted-foreground">GSTIN: {company.gstin}</p>}
+              <p className="text-sm font-semibold text-foreground mt-2">Performance Dashboard</p>
+              {activePeriod && (
+                <p className="text-xs text-muted-foreground">
+                  Reporting Period: {activePeriod.from === activePeriod.to
+                    ? new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : `${new Date(activePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(activePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                </p>
+              )}
+              <div className="border-t-2 border-brand-600 mt-3 mb-1" />
             </div>
 
             {filterPreset === 'today' ? (
@@ -2250,6 +2301,7 @@ export default function Dashboard() {
                 />
               </div>
             )}
+            </div>
 
             {/* Error */}
             {error && (
@@ -2325,6 +2377,22 @@ export default function Dashboard() {
                 Fetch Live
               </button>
 
+              <button
+                onClick={() => printDashboardReport('KPI Analytics', analysisActivePeriod)}
+                disabled={!analysisFetched}
+                title="Generate a PDF of this dashboard (opens the print dialog — choose Save as PDF)"
+                className="flex items-center gap-1 px-3 py-1.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
+              >
+                <Download className="w-3 h-3" />
+                Save
+              </button>
+
+              {analysisLastFetchedAt && (
+                <span className="ml-auto text-[11px] text-muted-foreground">
+                  Last fetched: {analysisLastFetchedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+
               {analysisLoading && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
             </div>
 
@@ -2336,12 +2404,28 @@ export default function Dashboard() {
             )}
 
             {analysisActivePeriod && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground print:hidden">
                 Showing: {analysisActivePeriod.from === analysisActivePeriod.to
                   ? new Date(analysisActivePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                   : `${new Date(analysisActivePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(analysisActivePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`}
               </p>
             )}
+
+            <div className="print-report space-y-4">
+            {/* Print-only report header — hidden on screen, shown only in the PDF/print output */}
+            <div className="hidden print:block">
+              <p className="text-lg font-bold text-foreground">{company?.name ?? 'Company'}</p>
+              {company?.gstin && <p className="text-sm text-muted-foreground">GSTIN: {company.gstin}</p>}
+              <p className="text-sm font-semibold text-foreground mt-2">KPI Analytics</p>
+              {analysisActivePeriod && (
+                <p className="text-xs text-muted-foreground">
+                  Reporting Period: {analysisActivePeriod.from === analysisActivePeriod.to
+                    ? new Date(analysisActivePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : `${new Date(analysisActivePeriod.from).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – ${new Date(analysisActivePeriod.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`}
+                </p>
+              )}
+              <div className="border-t-2 border-brand-600 mt-3 mb-1" />
+            </div>
 
             {/* 9 ratio KPI cards */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
@@ -2367,6 +2451,7 @@ export default function Dashboard() {
                   </>
                 )
               })()}
+            </div>
             </div>
 
           </div>

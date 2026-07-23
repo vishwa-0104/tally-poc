@@ -1091,7 +1091,7 @@ export function MappingForm({
                       <tr className="border-t-2 border-border">
                         <td colSpan={baseColSpan} className="px-3 py-2 text-right text-xs font-bold text-foreground">Total Amount</td>
                         <td className="px-3 py-2" colSpan={3}>
-                          <input {...register('totalAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-bold text-primary border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
+                          <input {...register('totalAmount')} type="number" step="any" className="w-24 px-1 py-1 text-xs font-bold text-foreground border border-border rounded focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
                         </td>
                       </tr>
                     </>

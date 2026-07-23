@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Loader, X, Receipt, CheckCircle, Clock, AlertCircle } from 'lucide-react'
-import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { Loader, Receipt, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { ExtensionStatus } from '@/components/shared/ExtensionStatus'
 import { BillsTable, UploadCard, UploadModal } from '@/components/company'
 import { Card, CardHeader, CardTitle, CardContent } from '@/shadcn/components/ui/card'
-import { Badge } from '@/shadcn/components/ui/badge'
 import { CompanyPageHeader } from '@/shadcn/components/company-page-header'
 import { cn } from '@/lib/utils'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
@@ -44,7 +43,6 @@ export default function CompanyBills() {
   // here with a ?type= filter — there's no separate page per voucher type, they're
   // all just billType/tallyMapping flags on the same Bills list.
   const typeFilter = searchParams.get('type')
-  const filterLabel = typeFilter === 'misc' ? 'Expenses' : typeFilter === 'debit' ? 'Debit Notes' : typeFilter === 'credit' ? 'Credit Notes' : null
   const bills = useMemo(() => {
     if (!typeFilter) return allBills
     return allBills.filter((b) => {
@@ -137,7 +135,7 @@ export default function CompanyBills() {
     <>
       <CompanyPageHeader
         title={company?.name ?? 'Bills'}
-        subtitle={filterLabel ? `Showing: ${filterLabel}` : company?.gstin ? `GSTIN: ${company.gstin}` : 'Your purchase bills'}
+        subtitle={company?.gstin ? `GSTIN: ${company.gstin}` : 'Your purchase bills'}
         actions={
           <>
             {bulkParsing && (
@@ -152,17 +150,6 @@ export default function CompanyBills() {
       />
 
       <div className="p-4 md:p-7">
-        {filterLabel && (
-          <div className="flex items-center gap-2 mb-4">
-            <Badge variant="secondary" className="gap-1">
-              {filterLabel}
-              <Link to="/company/bills" title="Clear filter" className="hover:opacity-70">
-                <X className="w-3 h-3" />
-              </Link>
-            </Badge>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 mb-7">
           <div className={cn('grid grid-cols-1 gap-4', uploadCardConfigs.length > 1 && 'sm:grid-cols-2')}>
             {uploadCardConfigs.map((cfg) => (

@@ -109,8 +109,8 @@ export default function BankStatement() {
   return (
     <>
       <CompanyPageHeader
-        title={company?.name ? `${company.name} — My Bank` : 'My Bank'}
-        subtitle="Upload and sync bank statement transactions to Tally"
+        title={company?.name ?? 'My Bank'}
+        subtitle={company?.gstin ? `GSTIN: ${company.gstin}` : 'Upload and sync bank statement transactions to Tally'}
         actions={<ExtensionStatus />}
       />
 

@@ -23,11 +23,11 @@ export function ExtensionStatus() {
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700"
+      className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700"
       role="status"
       aria-live="polite"
     >
-      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+      <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-black-600" />
       Connected
     </div>
   )

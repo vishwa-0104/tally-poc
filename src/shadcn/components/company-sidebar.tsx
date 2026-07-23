@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   ChevronLeft,
@@ -44,6 +44,10 @@ export function CompanySidebar({
   const location = useLocation()
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
 
+  useEffect(() => {
+    if (collapsed) setOpenGroups({})
+  }, [collapsed])
+
   const showAsCollapsed = collapsed && !isOverlay
   // Several nav items (Purchase/Expenses/Debit Note/Credit Note) point at the same
   // pathname with different `?type=` query strings — pathname-only matching would
@@ -71,7 +75,7 @@ export function CompanySidebar({
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border bg-card transition-all duration-300',
+        'fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border bg-sidebar-bg transition-all duration-300',
         isOverlay
           ? collapsed
             ? '-translate-x-full'
@@ -103,7 +107,7 @@ export function CompanySidebar({
         </button>
       )}
 
-      <div className={cn('flex items-center border-b border-border px-4 py-5', showAsCollapsed ? 'justify-center' : 'gap-3')}>
+      <div className={cn('flex items-center border-border px-4 py-5', showAsCollapsed ? 'justify-center' : 'gap-3')}>
         <Avatar size={showAsCollapsed ? 'sm' : 'default'}>
           <AvatarFallback className="bg-primary text-primary-foreground font-bold text-lg">
             S

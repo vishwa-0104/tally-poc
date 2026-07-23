@@ -107,8 +107,8 @@ export default function CashBook() {
   return (
     <>
       <CompanyPageHeader
-        title={company?.name ? `${company.name} — Cash Book` : 'Cash Book'}
-        subtitle="Upload and sync cash book transactions to Tally"
+        title={company?.name ?? 'Cash Book'}
+        subtitle={company?.gstin ? `GSTIN: ${company.gstin}` : 'Upload and sync cash book transactions to Tally'}
         actions={<ExtensionStatus />}
       />
 

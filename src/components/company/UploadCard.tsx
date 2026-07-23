@@ -53,7 +53,7 @@ export function UploadCard({ title, onSubmit, multiple = true, disabled = false,
   const acceptedTypes = '.pdf,.png,.jpg,.jpeg'
 
   return (
-    <Card className="widget-card">
+    <Card className="widget-card @container">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
@@ -63,7 +63,7 @@ export function UploadCard({ title, onSubmit, multiple = true, disabled = false,
           onDrop={handleDrop}
           onClick={() => !disabled && inputRef.current?.click()}
           className={cn(
-            'flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-border bg-muted/30 p-4 transition-colors sm:gap-3 sm:p-8',
+            'flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-border bg-muted/30 p-4 transition-colors @sm:gap-3 @sm:p-8',
             disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-primary/50 hover:bg-muted/50',
           )}
         >
@@ -74,11 +74,11 @@ export function UploadCard({ title, onSubmit, multiple = true, disabled = false,
               <p className="mt-1 text-xs text-muted-foreground">PDF, PNG, JPG up to 10MB</p>
             )}
           </div>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-2 flex w-full flex-col gap-2 @sm:flex-row @sm:justify-center">
             <Button
               size="sm"
               variant="secondary"
-              className="w-full sm:w-auto"
+              className="w-full @sm:w-auto"
               disabled={disabled}
               onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }}
             >
@@ -88,7 +88,7 @@ export function UploadCard({ title, onSubmit, multiple = true, disabled = false,
             <Button
               size="sm"
               variant="secondary"
-              className="w-full sm:w-auto"
+              className="w-full @sm:w-auto"
               disabled={disabled}
               onClick={(e) => { e.stopPropagation(); cameraRef.current?.click() }}
             >

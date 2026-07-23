@@ -124,7 +124,7 @@ function TabBar({ active, onChange, showBankCash }: TabBarProps) {
           onClick={() => onChange(t.id)}
           className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors -mb-px ${
             active === t.id
-              ? 'border-primary text-primary'
+              ? 'border-transparent text-gray-700'
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -388,7 +388,10 @@ export default function CompanySettings() {
 
   return (
     <>
-      <CompanyPageHeader title="Settings" subtitle="Accounting Software connection and ledger defaults" />
+      <CompanyPageHeader
+        title={companyName || 'Settings'}
+        subtitle={company?.gstin ? `GSTIN: ${company.gstin}` : 'Accounting Software connection and ledger defaults'}
+      />
 
       <div className="p-4 md:p-7 max-w-3xl">
         <div className="card p-6">

@@ -335,8 +335,8 @@ export default function BankReconciliation() {
   return (
     <>
       <CompanyPageHeader
-        title={company?.name ? `${company.name} — Reconciliation` : 'Bank Reconciliation'}
-        subtitle="Match bank statement against book records to find missing or extra entries"
+        title={company?.name ?? 'Bank Reconciliation'}
+        subtitle={company?.gstin ? `GSTIN: ${company.gstin}` : 'Match bank statement against book records to find missing or extra entries'}
         actions={
           <Button size="sm" onClick={() => setShowUpload((v) => !v)}>
             <Plus className="w-3.5 h-3.5" />

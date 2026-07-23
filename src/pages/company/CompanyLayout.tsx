@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Outlet } from 'react-router-dom'
 import {
   LayoutDashboard, FileText, Landmark,
-  ArrowLeftRight, Banknote, Handshake, Settings, Menu,
+  ArrowLeftRight, Banknote, Handshake, Settings,
   ShoppingCart, Receipt, FileMinus, FilePlus, Wallet,
 } from 'lucide-react'
 import { ProtectedRoute } from '@/components/shared'
@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useBillStore } from '@/store/billStore'
 import { useCompanyStore } from '@/store/companyStore'
 import { useThemeStore } from '@/store/themeStore'
+import { useCompanySidebarStore } from '@/store/companySidebarStore'
 import { COMPANY_FEATURES } from '@/types'
 import { useAutoSyncTally } from '@/hooks/useAutoSyncTally'
 import { useDaybookNotifications } from '@/hooks/useDaybookNotifications'
@@ -91,8 +92,7 @@ export default function CompanyLayout() {
     !settingsHidden ? [{ label: 'Settings', path: '/company/settings', icon: Settings }] : []
   ), [settingsHidden])
 
-  const [collapsed, setCollapsed] = useState(true)
-  const [isOverlay, setIsOverlay] = useState(false)
+  const { collapsed, isOverlay, setCollapsed, setIsOverlay } = useCompanySidebarStore()
 
   useEffect(() => {
     const check = () => setIsOverlay(window.innerWidth < 768)
@@ -136,16 +136,6 @@ export default function CompanyLayout() {
             isOverlay ? '' : collapsed ? 'md:ml-16' : 'md:ml-60',
           )}
         >
-          {isOverlay && collapsed && (
-            <button
-              type="button"
-              aria-label="Open menu"
-              onClick={() => setCollapsed(false)}
-              className="sticky top-3 left-3 z-20 flex size-9 items-center justify-center rounded-full border border-border bg-background shadow-sm"
-            >
-              <Menu className="size-4" />
-            </button>
-          )}
           <Outlet />
         </div>
       </div>

@@ -313,8 +313,8 @@ export default function VendorReconciliation() {
   return (
     <>
       <CompanyPageHeader
-        title={company?.name ? `${company.name} — Vendor Reconciliation` : 'Vendor Reconciliation'}
-        subtitle="Compare your Tally ledger against the vendor's ledger to find missing or extra entries"
+        title={company?.name ?? 'Vendor Reconciliation'}
+        subtitle={company?.gstin ? `GSTIN: ${company.gstin}` : "Compare your Tally ledger against the vendor's ledger to find missing or extra entries"}
         actions={
           <Button size="sm" onClick={() => setShowUpload((v) => !v)}>
             <Plus className="w-3.5 h-3.5" />
