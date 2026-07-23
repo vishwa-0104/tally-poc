@@ -341,7 +341,9 @@ function parseStockItems(xml) {
       ?? block.match(/<PARENT[^>]*>([^<]+)<\/PARENT>/i)?.[1]
       ?? ''
     )
-    const unit = decode(block.match(/<BASEUNITS[^>]*>([^<]+)<\/BASEUNITS>/i)?.[1]) || undefined
+    // BaseUnits can carry Tally's alternate-unit conversion notation, e.g.
+    // "Bag = 50 kg" — only the primary unit (left of "=") is ever wanted.
+    const unit = decode(block.match(/<BASEUNITS[^>]*>([^<]+)<\/BASEUNITS>/i)?.[1])?.split('=')[0]?.trim() || undefined
 
     const closingBalRaw = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '')
     const closingQty     = closingBalRaw ? parseFloat(closingBalRaw.replace(/,/g, '')) || 0 : undefined
@@ -748,6 +750,7 @@ async function fetchStockItemBalances(tallyUrl, tallyCompany, asOfDisplayDate) {
             <TYPE>Stock Item</TYPE>
             <NATIVEMETHOD>Name</NATIVEMETHOD>
             <NATIVEMETHOD>ClosingBalance</NATIVEMETHOD>
+            <NATIVEMETHOD>BaseUnits</NATIVEMETHOD>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -756,14 +759,15 @@ async function fetchStockItemBalances(tallyUrl, tallyCompany, asOfDisplayDate) {
 </ENVELOPE>`
 
   const responseText = await postToTally(xml, tallyUrl)
-  const balances = new Map()
+  const balances = new Map() // name → { qty, unit }
   for (const m of responseText.matchAll(/<STOCKITEM\b[^>]*>([\s\S]*?)<\/STOCKITEM>/gi)) {
     const block = m[0]
     let name = decode(block.match(/<STOCKITEM\s+NAME="([^"]+)"/i)?.[1] ?? '')
     if (!name) name = decode(block.match(/<NAME[^>]*>([^<]+)<\/NAME>/i)?.[1] ?? '')
     if (!name) continue
     const balRaw = decode(block.match(/<CLOSINGBALANCE[^>]*>([^<]+)<\/CLOSINGBALANCE>/i)?.[1] ?? '0')
-    balances.set(name, parseFloat(balRaw.replace(/,/g, '')) || 0)
+    const unit   = decode(block.match(/<BASEUNITS[^>]*>([^<]+)<\/BASEUNITS>/i)?.[1] ?? '').split('=')[0].trim()
+    balances.set(name, { qty: parseFloat(balRaw.replace(/,/g, '')) || 0, unit })
   }
   return balances
 }
@@ -843,7 +847,7 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 
   for (const [name, lastSaleDate] of Object.entries(lastSaleMap)) {
     const daysSince = Math.floor((new Date(todayISO) - new Date(lastSaleDate)) / 86400000)
-    items.push({ name, lastSaleDate, daysSince, qty: closingBalances.get(name) ?? 0 })
+    items.push({ name, lastSaleDate, daysSince, qty: closingBalances.get(name)?.qty ?? 0, unit: closingBalances.get(name)?.unit ?? '' })
     seen.add(name)
   }
 
@@ -852,9 +856,9 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
   let carriedForwardCount = 0
   for (const name of allItemNames) {
     if (seen.has(name)) continue
-    const hadStock = (openingBalances.get(name) ?? 0) !== 0 || (closingBalances.get(name) ?? 0) !== 0
+    const hadStock = (openingBalances.get(name)?.qty ?? 0) !== 0 || (closingBalances.get(name)?.qty ?? 0) !== 0
     if (!hadStock) continue
-    items.push({ name, lastSaleDate: marchEndISO, daysSince: marchEndDaysSince, qty: closingBalances.get(name) ?? 0 })
+    items.push({ name, lastSaleDate: marchEndISO, daysSince: marchEndDaysSince, qty: closingBalances.get(name)?.qty ?? 0, unit: closingBalances.get(name)?.unit ?? '' })
     carriedForwardCount++
   }
   console.log(`[SlowStock] sold-this-FY items: ${seen.size} | carried-forward unsold items added: ${carriedForwardCount} | total: ${items.length}`)
@@ -1207,7 +1211,7 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
         ieBlock.match(/<ACTUALQTY[^>]*>([^<]+)<\/ACTUALQTY>/i)?.[1] ?? '0'
       )
       const qtyNum = parseFloat(qtyRaw.replace(/,/g, '')) || 0
-      const unit   = qtyRaw.replace(/^[\d.,\s-]+/, '').trim()
+      const unit   = qtyRaw.replace(/^[\d.,\s-]+/, '').trim().split('=')[0].trim()
       const amtRaw = decode(ieBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
       const amt    = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)
       inventoryEntries.push({ itemName, qty: qtyNum, unit, amount: amt })
@@ -1239,7 +1243,7 @@ function parseVouchers(xml, salesAccounts = [], salesIncludeVouchers = [], sales
             ieBlock.match(/<ACTUALQTY[^>]*>([^<]+)<\/ACTUALQTY>/i)?.[1] ?? '0'
           )
           const qtyNum = parseFloat(qtyRaw.replace(/,/g, '')) || 0
-          const unit   = qtyRaw.replace(/^[\d.,\s-]+/, '').trim()
+          const unit   = qtyRaw.replace(/^[\d.,\s-]+/, '').trim().split('=')[0].trim()
 
           const amtRaw = decode(ieBlock.match(/<AMOUNT[^>]*>([^<]+)<\/AMOUNT>/i)?.[1] ?? '0')
           const amt    = Math.abs(parseFloat(amtRaw.replace(/,/g, '')) || 0)

@@ -13,7 +13,7 @@ export function StocksWidget({
   onDownload,
   downloadPending = false,
 }: {
-  data: { name: string; daysSince: number; qty?: number }[]
+  data: { name: string; daysSince: number; qty?: number; unit?: string }[]
   onDownload?: () => void
   downloadPending?: boolean
 }) {
@@ -52,7 +52,9 @@ export function StocksWidget({
                   </span>
                   <div>
                     <p className="text-sm">{s.name}</p>
-                    {s.qty != null && <p className="text-xs text-muted-foreground">Qty: {s.qty}</p>}
+                    {s.qty != null && (
+                      <p className="text-xs text-muted-foreground">Qty: {s.qty}{s.unit ? ` ${s.unit}` : ''}</p>
+                    )}
                   </div>
                 </div>
                 <span className={`text-sm font-medium ${s.daysSince >= 90 ? "text-red-500" : s.daysSince >= 30 ? "text-amber-500" : "text-muted-foreground"}`}>
