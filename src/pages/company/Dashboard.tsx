@@ -2227,7 +2227,7 @@ export default function Dashboard() {
                   downloadPending={exportingItems}
                 />
                 <StocksWidget
-                  data={fetched ? slowStock.slice(0, 8) : []}
+                  data={fetched ? slowStock.slice(0, 10) : []}
                   onDownload={fetched && slowStock.length > 0 ? exportSlowStockToXls : undefined}
                   downloadPending={exportingSlowStock}
                 />
