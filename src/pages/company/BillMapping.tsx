@@ -10,7 +10,7 @@ import { SyncedBillView } from '@/components/company/SyncedBillView'
 import { useAuthStore, useBillStore, useCompanyStore } from '@/store'
 import { useTallyLedgers } from '@/hooks'
 import { syncToTally } from '@/services'
-import { buildTallyXml } from '@/lib/utils'
+import { buildTallyXml, billNavType } from '@/lib/utils'
 import { getNextVoucherCounter } from '@/lib/api'
 import { getTallyUrl } from './CompanySettings'
 import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
@@ -409,7 +409,10 @@ export default function BillMapping() {
         title="Map & Sync Bill"
         subtitle={`${bill.billNumber} — ${bill.vendorName}`}
         actions={
-          <Button variant="outline" size="sm" onClick={() => navigate('/company/bills')}>
+          <Button variant="outline" size="sm" onClick={() => {
+            const type = billNavType(bill)
+            navigate(`/company/bills${type ? `?type=${type}` : ''}`)
+          }}>
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to Bills
           </Button>

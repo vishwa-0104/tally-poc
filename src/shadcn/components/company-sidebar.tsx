@@ -51,15 +51,18 @@ export function CompanySidebar({
   const showAsCollapsed = collapsed && !isOverlay
   // Several nav items (Purchase/Expenses/Debit Note/Credit Note) point at the same
   // pathname with different `?type=` query strings — pathname-only matching would
-  // highlight all of them at once, so items carrying a query string need an exact
-  // pathname+type match instead of the usual prefix match.
+  // highlight all of them at once, so items carrying a query string need a type
+  // match instead of the usual "no query string" check. Both branches use a
+  // prefix match on the pathname (not just exact) so a bill's mapping page
+  // (/company/bills/:billId?type=credit) still highlights the tab it came from.
   const isActive = (path: string) => {
     const [itemPath, itemQuery] = path.split('?')
+    const pathMatches = location.pathname === itemPath || location.pathname.startsWith(itemPath + '/')
     if (itemQuery) {
       const itemType = new URLSearchParams(itemQuery).get('type')
-      return location.pathname === itemPath && new URLSearchParams(location.search).get('type') === itemType
+      return pathMatches && new URLSearchParams(location.search).get('type') === itemType
     }
-    return (location.pathname === itemPath || location.pathname.startsWith(itemPath + '/')) && !location.search
+    return pathMatches && !location.search
   }
   const handleNavClick = isOverlay ? onClose : undefined
 

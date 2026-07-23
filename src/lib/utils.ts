@@ -1,8 +1,21 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import type { Bill } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+// The `?type=` value the sidebar's Vouchers nav uses for a given bill's own
+// billType/tallyMapping flags — mirrors CompanyBills.tsx's list filter
+// predicate. Used when navigating to/from a bill's mapping page so the
+// sidebar highlights the right tab and "Back to Bills" returns to it,
+// regardless of which filtered tab (or other entry point) got you there.
+export function billNavType(bill: Pick<Bill, 'billType' | 'tallyMapping'>): 'debit' | 'credit' | 'misc' | undefined {
+  if (bill.billType === 'debit' || (bill.billType === 'misc' && bill.tallyMapping?.isDebit))  return 'debit'
+  if (bill.billType === 'credit' || (bill.billType === 'misc' && bill.tallyMapping?.isCredit)) return 'credit'
+  if (bill.billType === 'misc') return 'misc'
+  return undefined
 }
 
 export function formatCurrency(amount: number): string {

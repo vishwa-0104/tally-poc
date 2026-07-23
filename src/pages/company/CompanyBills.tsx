@@ -78,7 +78,7 @@ export default function CompanyBills() {
   }, [typeFilter])
 
   const handleParsed = (billId: string) => {
-    navigate(`/company/bills/${billId}`)
+    navigate(`/company/bills/${billId}${typeFilter ? `?type=${typeFilter}` : ''}`)
   }
 
   const handleMultipleFiles = async (files: File[], billType: BillType = 'purchase', isMiscDebit = false, isMiscCredit = false) => {

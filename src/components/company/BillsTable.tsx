@@ -6,7 +6,7 @@ import { Badge } from '@/shadcn/components/ui/badge'
 import { Button } from '@/shadcn/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/shadcn/components/ui/table'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { cn, formatCurrency, formatDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate, billNavType } from '@/lib/utils'
 import { useBillStore, useAuthStore } from '@/store'
 import type { Bill, BillStatus } from '@/types'
 
@@ -60,6 +60,10 @@ interface BillsTableProps {
 
 export function BillsTable({ bills, onUpload }: BillsTableProps) {
   const navigate = useNavigate()
+  const billPath = (bill: Bill) => {
+    const type = billNavType(bill)
+    return `/company/bills/${bill.id}${type ? `?type=${type}` : ''}`
+  }
   const [page, setPage]           = useState(1)
   const [deleting, setDeleting]   = useState<string | null>(null)
   const [dayFilter, setDayFilter] = useState<DayFilter>(7)
@@ -205,17 +209,17 @@ export function BillsTable({ bills, onUpload }: BillsTableProps) {
                     <TableCell><BillStatusBadge status={bill.status} /></TableCell>
                     <TableCell className="text-right">
                       {(bill.status === 'parsed' || bill.status === 'mapped') && (
-                        <Button size="sm" onClick={() => navigate(`/company/bills/${bill.id}`)}>
+                        <Button size="sm" onClick={() => navigate(billPath(bill))}>
                           Map & Sync
                         </Button>
                       )}
                       {bill.status === 'error' && (
-                        <Button variant="destructive" size="sm" onClick={() => navigate(`/company/bills/${bill.id}`)}>
+                        <Button variant="destructive" size="sm" onClick={() => navigate(billPath(bill))}>
                           Retry
                         </Button>
                       )}
                       {bill.status === 'synced' && (
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/company/bills/${bill.id}`)}>
+                        <Button variant="outline" size="sm" onClick={() => navigate(billPath(bill))}>
                           View
                         </Button>
                       )}
