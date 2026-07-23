@@ -14,7 +14,7 @@ export function ItemsWidget({
   onDownload,
   downloadPending = false,
 }: {
-  data: { name: string; qty?: number; amount: number }[]
+  data: { name: string; qty?: number; unit?: string; amount: number }[]
   onDownload?: () => void
   downloadPending?: boolean
 }) {
@@ -54,7 +54,9 @@ export function ItemsWidget({
                   </span>
                   <div>
                     <p className="text-sm">{item.name}</p>
-                    {item.qty != null && <p className="text-xs text-muted-foreground">Qty: {item.qty}</p>}
+                    {item.qty != null && (
+                      <p className="text-xs text-muted-foreground">Qty: {item.qty}{item.unit ? ` ${item.unit}` : ''}</p>
+                    )}
                   </div>
                 </div>
                 <span className="text-sm font-medium transition-colors group-hover:text-primary">{fmt(item.amount)}</span>

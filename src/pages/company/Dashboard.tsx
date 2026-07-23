@@ -2165,7 +2165,7 @@ export default function Dashboard() {
                   downloadPending={exportingDebtors}
                 />
                 <ItemsWidget
-                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, amount: item.amount })) : []}
+                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, unit: item.unit, amount: item.amount })) : []}
                   onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
                   downloadPending={exportingItems}
                 />
@@ -2222,7 +2222,7 @@ export default function Dashboard() {
                   downloadPending={exportingDebtors}
                 />
                 <ItemsWidget
-                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, amount: item.amount })) : []}
+                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, unit: item.unit, amount: item.amount })) : []}
                   onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
                   downloadPending={exportingItems}
                 />
@@ -2274,7 +2274,7 @@ export default function Dashboard() {
                   downloadPending={exportingDebtors}
                 />
                 <ItemsWidget
-                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, amount: item.amount })) : []}
+                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, unit: item.unit, amount: item.amount })) : []}
                   onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
                   downloadPending={exportingItems}
                 />
