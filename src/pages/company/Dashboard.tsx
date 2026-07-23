@@ -2165,7 +2165,7 @@ export default function Dashboard() {
                   downloadPending={exportingDebtors}
                 />
                 <ItemsWidget
-                  data={fetched ? topItems.map(item => ({ name: item.name, amount: item.amount })) : []}
+                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, amount: item.amount })) : []}
                   onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
                   downloadPending={exportingItems}
                 />
@@ -2222,7 +2222,7 @@ export default function Dashboard() {
                   downloadPending={exportingDebtors}
                 />
                 <ItemsWidget
-                  data={fetched ? topItems.map(item => ({ name: item.name, amount: item.amount })) : []}
+                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, amount: item.amount })) : []}
                   onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
                   downloadPending={exportingItems}
                 />
@@ -2233,8 +2233,9 @@ export default function Dashboard() {
                 />
               </div>
             ) : (
-              /* Custom range — same shadcn-style widget layout as Today/YTD */
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+              /* Custom range — matches Today's tile layout (no Gross Margin/EBITDA/Net
+                 Margin — those are YTD-only metrics that need opening/closing stock). */
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                 <SalesWidget
                   title={`Sales (${
                     activePeriod
@@ -2254,24 +2255,7 @@ export default function Dashboard() {
                       : null
                   })()}
                 />
-                <GrossMarginWidget
-                  value={fetched ? grossMargin : null}
-                  pct={fetched ? grossMarginPct : null}
-                  targetPct={null}
-                />
-                <EbitdaWidget
-                  value={fetched ? ebitda : null}
-                  pct={fetched ? ebitdaPct : null}
-                />
-                <NetMarginWidget
-                  value={fetched ? netProfit : null}
-                  pct={fetched ? netProfitPct : null}
-                />
-                <SalesChartWidget
-                  title="Sales Trend"
-                  data={fetched ? salesTrend : []}
-                  className="lg:col-span-4"
-                />
+                <SalesChartWidget data={fetched ? salesTrend : []} />
                 <CashWidget
                   inflow={fetched ? cashInflow : null}
                   outflow={fetched ? cashOutflow : null}
@@ -2290,14 +2274,9 @@ export default function Dashboard() {
                   downloadPending={exportingDebtors}
                 />
                 <ItemsWidget
-                  data={fetched ? topItems.map(item => ({ name: item.name, amount: item.amount })) : []}
+                  data={fetched ? topItems.map(item => ({ name: item.name, qty: item.qty, amount: item.amount })) : []}
                   onDownload={fetched && topItems.length > 0 ? exportTopItemsToXls : undefined}
                   downloadPending={exportingItems}
-                />
-                <StocksWidget
-                  data={fetched ? slowStock.slice(0, 8) : []}
-                  onDownload={fetched && slowStock.length > 0 ? exportSlowStockToXls : undefined}
-                  downloadPending={exportingSlowStock}
                 />
               </div>
             )}

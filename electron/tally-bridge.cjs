@@ -688,7 +688,7 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
 
   for (const [name, lastSaleDate] of Object.entries(lastSaleMap)) {
     const daysSince = Math.floor((new Date(todayISO) - new Date(lastSaleDate)) / 86400000)
-    items.push({ name, lastSaleDate, daysSince })
+    items.push({ name, lastSaleDate, daysSince, qty: closingBalances.get(name) ?? 0 })
     seen.add(name)
   }
 
@@ -699,7 +699,7 @@ async function handleFetchSlowStock(tallyUrl, tallyCompany) {
     if (seen.has(name)) continue
     const hadStock = (openingBalances.get(name) ?? 0) !== 0 || (closingBalances.get(name) ?? 0) !== 0
     if (!hadStock) continue
-    items.push({ name, lastSaleDate: marchEndISO, daysSince: marchEndDaysSince })
+    items.push({ name, lastSaleDate: marchEndISO, daysSince: marchEndDaysSince, qty: closingBalances.get(name) ?? 0 })
     carriedForwardCount++
   }
   console.log(`[SlowStock] sold-this-FY items: ${seen.size} | carried-forward unsold items added: ${carriedForwardCount} | total: ${items.length}`)

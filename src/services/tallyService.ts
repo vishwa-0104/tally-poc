@@ -311,6 +311,7 @@ export interface SlowStockItem {
   name:         string
   lastSaleDate: string   // "YYYY-MM-DD"
   daysSince:    number
+  qty:          number
 }
 
 export async function fetchSlowMovingStock(

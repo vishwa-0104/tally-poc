@@ -14,7 +14,7 @@ export function ItemsWidget({
   onDownload,
   downloadPending = false,
 }: {
-  data: { name: string; amount: number }[]
+  data: { name: string; qty?: number; amount: number }[]
   onDownload?: () => void
   downloadPending?: boolean
 }) {
@@ -52,7 +52,10 @@ export function ItemsWidget({
                   <span className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                     {i + 1}
                   </span>
-                  <span className="text-sm">{item.name}</span>
+                  <div>
+                    <p className="text-sm">{item.name}</p>
+                    {item.qty != null && <p className="text-xs text-muted-foreground">Qty: {item.qty}</p>}
+                  </div>
                 </div>
                 <span className="text-sm font-medium transition-colors group-hover:text-primary">{fmt(item.amount)}</span>
               </div>

@@ -13,7 +13,7 @@ export function StocksWidget({
   onDownload,
   downloadPending = false,
 }: {
-  data: { name: string; daysSince: number }[]
+  data: { name: string; daysSince: number; qty?: number }[]
   onDownload?: () => void
   downloadPending?: boolean
 }) {
@@ -50,7 +50,10 @@ export function StocksWidget({
                   <span className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
                     {i + 1}
                   </span>
-                  <span className="text-sm">{s.name}</span>
+                  <div>
+                    <p className="text-sm">{s.name}</p>
+                    {s.qty != null && <p className="text-xs text-muted-foreground">Qty: {s.qty}</p>}
+                  </div>
                 </div>
                 <span className={`text-sm font-medium ${s.daysSince >= 90 ? "text-red-500" : s.daysSince >= 30 ? "text-amber-500" : "text-muted-foreground"}`}>
                   {s.daysSince}d
