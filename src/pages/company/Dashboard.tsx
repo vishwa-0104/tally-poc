@@ -568,8 +568,6 @@ export default function Dashboard() {
   const [exportingSlowStock, setExportingSlowStock] = useState(false)
   const [exportingItems,     setExportingItems]     = useState(false)
   const [exportingDebtors,   setExportingDebtors]   = useState(false)
-  const [exportingPurchases, setExportingPurchases] = useState(false)
-  const [purchaseVouchers,  setPurchaseVouchers]  = useState<(TallyVoucher & { role: 'Included' | 'Excluded' })[]>([])
   const [loading,       setLoading]       = useState(false)
   const [fetched,       setFetched]       = useState(false)
   const [error,         setError]         = useState<string | null>(null)
@@ -675,18 +673,12 @@ export default function Dashboard() {
       const pf = settings.ytd as PurchaseFilterSettings | undefined
       const { purchaseAccounts, purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
 
-      // XLS export — all purchase-type vouchers by type (no ledger filter)
+      // Purchase-type vouchers by type (no ledger filter) — used for the debug summary log below
       const pvIncluded = all
         .filter(v => purchaseIncludeVouchers?.length
           ? purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
           : /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type))
         .map(v => ({ ...v, role: 'Included' as const }))
-      const pvExcluded = all
-        .filter(v => purchaseExcludeVouchers?.length
-          ? purchaseExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
-          : /debit\s*note/i.test(v.type))
-        .map(v => ({ ...v, role: 'Excluded' as const }))
-      setPurchaseVouchers([...pvIncluded, ...pvExcluded].sort((a, b) => a.date.localeCompare(b.date)))
 
       const todaySalesTotal = computeSalesTotal(all, salesSettings)
       setTotal(todaySalesTotal)
@@ -1037,20 +1029,6 @@ export default function Dashboard() {
         to,
       )
       setTopItems(fetchedTopItems)
-
-      const pf = dashboardSettings.ytd as PurchaseFilterSettings | undefined
-      const { purchaseIncludeVouchers, purchaseExcludeVouchers } = pf ?? {}
-      const pvIncluded = all
-        .filter(v => purchaseIncludeVouchers?.length
-          ? purchaseIncludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
-          : /purchase/i.test(v.type) && !/debit\s*note/i.test(v.type))
-        .map(v => ({ ...v, role: 'Included' as const }))
-      const pvExcluded = all
-        .filter(v => purchaseExcludeVouchers?.length
-          ? purchaseExcludeVouchers.some(t => v.type.toLowerCase() === t.toLowerCase())
-          : /debit\s*note/i.test(v.type))
-        .map(v => ({ ...v, role: 'Excluded' as const }))
-      setPurchaseVouchers([...pvIncluded, ...pvExcluded].sort((a, b) => a.date.localeCompare(b.date)))
 
       const totalSales = computeSalesTotal(all, salesSettings)
       setTotal(totalSales)
@@ -1903,36 +1881,6 @@ export default function Dashboard() {
   // commit the "exporting…" state before the heavy string-building runs.
   const yieldToPaint = () => new Promise(resolve => setTimeout(resolve, 0))
 
-  const exportPurchasesToXls = async () => {
-    if (purchaseVouchers.length === 0) { toast.error('No purchase vouchers to export'); return }
-    setExportingPurchases(true)
-    try {
-      await yieldToPaint()
-      const rows = [
-        ['Date', 'Voucher No', 'Voucher Type', 'Party', 'Role', 'Total Amount (with GST)', 'Taxable Amount', 'GST Amount'],
-        ...purchaseVouchers.map(v => [
-          v.date,
-          v.voucherNo,
-          v.type,
-          v.party,
-          v.role,
-          v.amount.toFixed(2),
-          v.taxableAmount.toFixed(2),
-          (v.amount - v.taxableAmount).toFixed(2),
-        ]),
-        [],
-        ['', '', '', '', 'TOTAL',
-          purchaseVouchers.reduce((s, v) => s + v.amount, 0).toFixed(2),
-          purchaseVouchers.reduce((s, v) => s + v.taxableAmount, 0).toFixed(2),
-          purchaseVouchers.reduce((s, v) => s + (v.amount - v.taxableAmount), 0).toFixed(2),
-        ],
-      ]
-      downloadXls(rows, 'vouchers')
-    } finally {
-      setExportingPurchases(false)
-    }
-  }
-
   const exportTopItemsToXls = async () => {
     if (topItems.length === 0) { toast.error('No items to export'); return }
     setExportingItems(true)
@@ -2103,19 +2051,6 @@ export default function Dashboard() {
                 <Switch checked={compactFormat} onCheckedChange={setCompactFormat} size="sm" />
                 In Thousands
               </label>
-              {fetched && purchaseVouchers.length > 0 && (
-                <button
-                  onClick={exportPurchasesToXls}
-                  disabled={exportingPurchases}
-                  title={`Export ${purchaseVouchers.length} vouchers to CSV`}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50"
-                >
-                  {exportingPurchases
-                    ? <RefreshCw className="w-3 h-3 animate-spin" />
-                    : <Download className="w-3 h-3" />}
-                  Export ({purchaseVouchers.length})
-                </button>
-              )}
 
               {lastFetchedAt && (
                 <span className="ml-auto text-[11px] text-muted-foreground">
