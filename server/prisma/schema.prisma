@@ -66,6 +66,7 @@ model Company {
   stockItemCache   StockItemCache[]
   stockGroupCache  StockGroupCache[]
   stockUnitCache   StockUnitCache[]
+  debtorBalanceCache DebtorBalanceCache[]
   stockItemAliases StockItemAlias[]
   godownCache      GodownCache[]
   voucherTypeCache VoucherTypeCache[]
@@ -211,6 +212,16 @@ model StockUnitCache {
   companyId String
   name      String
   symbol    String  @default("")
+
+  @@unique([companyId, name])
+}
+
+model DebtorBalanceCache {
+  id        String  @id @default(cuid())
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String
+  name      String
+  balance   Float
 
   @@unique([companyId, name])
 }
@@ -410,5 +421,11 @@ model DashboardSnapshot {
   // skip the AI call when the fingerprint still matches fresh data.
   cfoReport          Json?
   cfoInputsHash      String?
+  // Same fingerprint-cache convention as cfoReport/cfoInputsHash above, one
+  // pair per CFO Suggestions prompt type (executive/costSaving/workingCapital).
+  costSavingReport         Json?
+  costSavingInputsHash     String?
+  workingCapitalReport     Json?
+  workingCapitalInputsHash String?
   fetchedAt          DateTime @default(now())
 }

@@ -421,6 +421,69 @@ companiesRouter.put('/companies/:id/stock-units', async (req, res) => {
   res.json({ saved: incoming.length, syncedAt: now })
 })
 
+// GET /api/companies/:id/debtor-balances
+companiesRouter.get('/companies/:id/debtor-balances', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const balances = await prisma.debtorBalanceCache.findMany({
+    where: { companyId: req.params.id },
+    orderBy: { name: 'asc' },
+  })
+  res.json(balances)
+})
+
+// PUT /api/companies/:id/debtor-balances — replace all cached debtor balances
+companiesRouter.put('/companies/:id/debtor-balances', async (req, res) => {
+  if (!(await canAccessCompany(req.auth, req.params.id))) {
+    res.status(403).json({ error: 'Forbidden' }); return
+  }
+  const schema = z.array(z.object({
+    name:    z.string(),
+    balance: z.number(),
+  }))
+  const result = schema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: 'Invalid input' }); return
+  }
+
+  const companyId = req.params.id
+  const incoming  = result.data
+  console.log(`[DebtorBalances] PUT /${companyId}/debtor-balances — received ${incoming.length} balances`)
+
+  const CHUNK = 200
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < incoming.length; i += CHUNK) {
+      const chunk = incoming.slice(i, i + CHUNK)
+      await tx.$executeRaw`
+        INSERT INTO "DebtorBalanceCache" (id, "companyId", name, balance)
+        SELECT gen_random_uuid(), ${companyId}, d.name, d.balance
+        FROM json_to_recordset(${JSON.stringify(chunk)}::json) AS d(
+          name text, balance double precision
+        )
+        ON CONFLICT ("companyId", name) DO UPDATE SET
+          balance = EXCLUDED.balance
+      `
+    }
+    await tx.$executeRaw`
+      DELETE FROM "DebtorBalanceCache"
+      WHERE "companyId" = ${companyId}
+      AND name NOT IN (
+        SELECT name FROM json_to_recordset(${JSON.stringify(incoming.map((d) => ({ name: d.name })))}::json) AS s(name text)
+      )
+    `
+  }, { timeout: 60000 })
+
+  console.log(`[DebtorBalances] Upserted ${incoming.length} balances for company ${companyId}`)
+  const now = new Date().toISOString()
+  await prisma.$executeRaw`
+    UPDATE "Company"
+    SET "syncTimestamps" = COALESCE("syncTimestamps", '{}'::jsonb) || jsonb_build_object('debtorBalances', ${now}::text)
+    WHERE id = ${companyId}
+  `
+  res.json({ saved: incoming.length, syncedAt: now })
+})
+
 // GET /api/companies/:id/stock-item-aliases
 companiesRouter.get('/companies/:id/stock-item-aliases', async (req, res) => {
   if (!(await canAccessCompany(req.auth, req.params.id))) {
@@ -1195,6 +1258,10 @@ companiesRouter.put('/companies/:id/dashboard-snapshot', async (req, res) => {
     directorLoansTotal:          z.number().nullable().optional(),
     cfoReport:     z.record(z.any()).optional(),
     cfoInputsHash: z.string().optional(),
+    costSavingReport:         z.record(z.any()).optional(),
+    costSavingInputsHash:     z.string().optional(),
+    workingCapitalReport:     z.record(z.any()).optional(),
+    workingCapitalInputsHash: z.string().optional(),
   })
   const result = schema.safeParse(req.body)
   if (!result.success) { res.status(400).json({ error: 'Invalid input' }); return }

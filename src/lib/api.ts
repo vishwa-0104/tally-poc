@@ -121,6 +121,10 @@ export interface DashboardSnapshotPatch {
   directorLoansTotal?:          number | null
   cfoReport?:     CfoReport
   cfoInputsHash?: string
+  costSavingReport?:         CostSavingReport
+  costSavingInputsHash?:     string
+  workingCapitalReport?:     WorkingCapitalReport
+  workingCapitalInputsHash?: string
 }
 
 export interface DashboardSnapshotData extends DashboardSnapshotPatch {
@@ -201,6 +205,37 @@ export interface CfoReport {
   topRisks:                     CfoRisk[]
 }
 
+export interface CostSavingOpportunity {
+  title:                string
+  tag:                  string
+  estimatedSavingLabel: string
+  currentSituation:     string
+  actionableStrategy:   string
+  easeOfImplementation: string
+}
+
+export interface CostSavingReport {
+  totalEstimatedSavingLabel: string
+  totalEstimatedSavingNote:  string
+  opportunities:             CostSavingOpportunity[]
+}
+
+export interface WorkingCapitalLever {
+  category:              'Receivables' | 'Inventory' | 'Payables' | 'Treasury'
+  title:                 string
+  impactLabel:           string
+  actionItems:           string[]
+  implementationHorizon: string
+  expectedOutcome:       string
+}
+
+export interface WorkingCapitalReport {
+  cccSummary: string
+  levers:     WorkingCapitalLever[]
+}
+
+export type CfoReportType = 'executive' | 'costSaving' | 'workingCapital'
+
 // AI-generated financial report derived from the Analysis tab's ratio KPIs
 // plus the full YTD Performance KPI set — falls back to demo content
 // server-side if no AI key is configured or the model call fails, so this
@@ -209,8 +244,27 @@ export async function fetchCfoSuggestions(
   companyId: string,
   ratios: CfoSuggestionRatios,
   kpis: CfoKpis,
-): Promise<CfoReport> {
-  const { data } = await api.post<CfoReport>('/cfo-suggestions', { companyId, ratios, kpis })
+  reportType: 'executive',
+): Promise<CfoReport>
+export async function fetchCfoSuggestions(
+  companyId: string,
+  ratios: CfoSuggestionRatios,
+  kpis: CfoKpis,
+  reportType: 'costSaving',
+): Promise<CostSavingReport>
+export async function fetchCfoSuggestions(
+  companyId: string,
+  ratios: CfoSuggestionRatios,
+  kpis: CfoKpis,
+  reportType: 'workingCapital',
+): Promise<WorkingCapitalReport>
+export async function fetchCfoSuggestions(
+  companyId: string,
+  ratios: CfoSuggestionRatios,
+  kpis: CfoKpis,
+  reportType: CfoReportType = 'executive',
+): Promise<CfoReport | CostSavingReport | WorkingCapitalReport> {
+  const { data } = await api.post('/cfo-suggestions', { companyId, ratios, kpis, reportType })
   return data
 }
 

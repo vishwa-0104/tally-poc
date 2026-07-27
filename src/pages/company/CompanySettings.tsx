@@ -8,7 +8,7 @@ import { DashboardSettingsPanel } from '@/components/company/DashboardSettingsPa
 import { useAuthStore, useCompanyStore } from '@/store'
 import { Navigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits, fetchTallyVoucherTypes } from '@/services/tallyService'
+import { fetchTallyGodowns, fetchTallyLedgers, fetchTallyStockItems, fetchTallyStockGroups, fetchTallyStockUnits, fetchTallyVoucherTypes, fetchDebtorBalances } from '@/services/tallyService'
 import { COMPANY_FEATURES, normalizeLedgerMapping } from '@/types'
 import type { LedgerMapping, BankDefaultLedger } from '@/types'
 
@@ -139,7 +139,7 @@ function TabBar({ active, onChange, showBankCash }: TabBarProps) {
 
 export default function CompanySettings() {
   const { activeCompanyId, companies: authCompanies } = useAuthStore()
-  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb, getVoucherTypes, fetchVoucherTypesFromDb, saveVoucherTypesToDb, saveSelectedVoucherType, saveSelectedDebitVoucherType, saveSelectedCreditVoucherType } = useCompanyStore()
+  const { getCompany, getLedgers, fetchLedgersFromDb, saveLedgersToDb, updateMapping, getStockItems, fetchStockItemsFromDb, saveStockItemsToDb, getStockGroups, fetchStockGroupsFromDb, saveStockGroupsToDb, getStockUnits, fetchStockUnitsFromDb, saveStockUnitsToDb, getDebtorBalances, fetchDebtorBalancesFromDb, saveDebtorBalancesToDb, getGodowns, fetchGodownsFromDb, saveGodownsToDb, getVoucherTypes, fetchVoucherTypesFromDb, saveVoucherTypesToDb, saveSelectedVoucherType, saveSelectedDebitVoucherType, saveSelectedCreditVoucherType } = useCompanyStore()
   const company     = activeCompanyId ? getCompany(activeCompanyId) : null
   const companyId   = activeCompanyId ?? ''
   const companyName = company?.name ?? authCompanies.find((c) => c.id === activeCompanyId)?.name ?? ''
@@ -159,6 +159,7 @@ export default function CompanySettings() {
   const [syncingItems,       setSyncingItems]       = useState(false)
   const [syncingGroups,      setSyncingGroups]      = useState(false)
   const [syncingUnits,       setSyncingUnits]       = useState(false)
+  const [syncingDebtors,     setSyncingDebtors]     = useState(false)
   const [syncingGodowns,     setSyncingGodowns]     = useState(false)
   const [savingMap,          setSavingMap]          = useState(false)
   const [tallyUrl,           setTallyUrl]           = useState(() => getTallyUrl(companyId, company?.port))
@@ -174,6 +175,7 @@ export default function CompanySettings() {
   const storedStockItems  = companyId ? getStockItems(companyId)  : []
   const storedStockGroups = companyId ? getStockGroups(companyId) : []
   const storedStockUnits  = companyId ? getStockUnits(companyId)  : []
+  const storedDebtorBalances = companyId ? getDebtorBalances(companyId) : []
   const storedGodowns     = companyId ? getGodowns(companyId)     : []
   const ledgerOptions     = storedLedgers.map((l) => l.name)
 
@@ -210,6 +212,7 @@ export default function CompanySettings() {
     if (companyId && storedStockItems.length === 0)  fetchStockItemsFromDb(companyId).catch(() => {})
     if (companyId && storedStockGroups.length === 0) fetchStockGroupsFromDb(companyId).catch(() => {})
     if (companyId && storedStockUnits.length === 0)  fetchStockUnitsFromDb(companyId).catch(() => {})
+    if (companyId && storedDebtorBalances.length === 0) fetchDebtorBalancesFromDb(companyId).catch(() => {})
     if (companyId && godownEnabled && storedGodowns.length === 0) fetchGodownsFromDb(companyId).catch(() => {})
     if (companyId && voucherTypes.length === 0) fetchVoucherTypesFromDb(companyId).catch(() => {})
   }, [companyId, godownEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -314,6 +317,18 @@ export default function CompanySettings() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to fetch stock units. Is Accounting Software running?')
     } finally { setSyncingUnits(false) }
+  }
+
+  const handleSyncDebtorBalances = async () => {
+    if (!companyId) return
+    setSyncingDebtors(true)
+    try {
+      const { balances } = await fetchDebtorBalances(getTallyUrl(companyId, company?.port), companyName || undefined)
+      await saveDebtorBalancesToDb(companyId, balances)
+      toast.success(`${balances.length} debtor balances synced and saved`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch debtor balances. Is Accounting Software running?')
+    } finally { setSyncingDebtors(false) }
   }
 
   const handleSyncGodowns = async () => {
@@ -528,6 +543,7 @@ export default function CompanySettings() {
                 <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}    lastSync={company?.syncTimestamps?.stockItems}  onSync={handleSyncStockItems} />
                 <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups}   lastSync={company?.syncTimestamps?.stockGroups} onSync={handleSyncStockGroups} />
                 <SyncRow label="Stock Units"  count={storedStockUnits.length}  loading={syncingUnits}    lastSync={company?.syncTimestamps?.stockUnits}  onSync={handleSyncStockUnits} />
+                <SyncRow label="Debtor Balances" count={storedDebtorBalances.length} loading={syncingDebtors} lastSync={company?.syncTimestamps?.debtorBalances} onSync={handleSyncDebtorBalances} />
                 {godownEnabled && (
                   <SyncRow label="Godowns" count={storedGodowns.length} loading={syncingGodowns} lastSync={company?.syncTimestamps?.godowns} onSync={handleSyncGodowns} />
                 )}

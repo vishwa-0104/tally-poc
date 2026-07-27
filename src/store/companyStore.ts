@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Company, CompanyFeature, LedgerMapping, TallyGodown, TallyLedger, TallyStockItem, TallyStockGroup, TallyStockUnit, StockItemAlias } from '@/types'
+import type { DebtorBalance } from '@/services/tallyService'
 import { api } from '@/lib/api'
 
 interface CompanyStore {
@@ -10,6 +11,7 @@ interface CompanyStore {
   stockItems: Record<string, TallyStockItem[]>
   stockGroups: Record<string, TallyStockGroup[]>
   stockUnits: Record<string, TallyStockUnit[]>
+  debtorBalances: Record<string, DebtorBalance[]>
   stockItemAliases: Record<string, StockItemAlias[]>
   godowns: Record<string, TallyGodown[]>
   fetchCompanies: () => Promise<void>
@@ -35,6 +37,9 @@ interface CompanyStore {
   getStockUnits: (companyId: string) => TallyStockUnit[]
   fetchStockUnitsFromDb: (companyId: string) => Promise<void>
   saveStockUnitsToDb: (companyId: string, units: TallyStockUnit[]) => Promise<void>
+  getDebtorBalances: (companyId: string) => DebtorBalance[]
+  fetchDebtorBalancesFromDb: (companyId: string) => Promise<void>
+  saveDebtorBalancesToDb: (companyId: string, balances: DebtorBalance[]) => Promise<void>
   fetchAliases: (companyId: string) => Promise<void>
   saveAliases: (companyId: string, aliases: StockItemAlias[]) => Promise<void>
   getGodowns: (companyId: string) => TallyGodown[]
@@ -63,6 +68,7 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
   stockItems: {},
   stockGroups: {},
   stockUnits: {},
+  debtorBalances: {},
   stockItemAliases: {},
   godowns: {},
   voucherTypes: {},
@@ -162,6 +168,23 @@ export const useCompanyStore = create<CompanyStore>((set, get) => ({
       stockUnits: { ...s.stockUnits, [companyId]: units },
       companies: s.companies.map((c) => c.id === companyId
         ? { ...c, syncTimestamps: { ...c.syncTimestamps, stockUnits: data.syncedAt } }
+        : c),
+    }))
+  },
+
+  getDebtorBalances: (companyId) => get().debtorBalances[companyId] ?? [],
+
+  fetchDebtorBalancesFromDb: async (companyId) => {
+    const { data } = await api.get<DebtorBalance[]>(`/companies/${companyId}/debtor-balances`)
+    set((s) => ({ debtorBalances: { ...s.debtorBalances, [companyId]: data } }))
+  },
+
+  saveDebtorBalancesToDb: async (companyId, balances) => {
+    const { data } = await api.put<{ saved: number; syncedAt: string }>(`/companies/${companyId}/debtor-balances`, balances)
+    set((s) => ({
+      debtorBalances: { ...s.debtorBalances, [companyId]: balances },
+      companies: s.companies.map((c) => c.id === companyId
+        ? { ...c, syncTimestamps: { ...c.syncTimestamps, debtorBalances: data.syncedAt } }
         : c),
     }))
   },

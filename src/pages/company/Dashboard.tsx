@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import {
   TrendingUp, AlertCircle,
-  Lightbulb, AlertTriangle,
-  RefreshCw, Download, Zap,
+  AlertTriangle,
+  RefreshCw, Download, Zap, ArrowUp,
   CalendarDays, Package, Clock, Scale, LineChart, Landmark,
 } from 'lucide-react'
 import { useAuthStore, useCompanyStore, useDaybookSyncStore } from '@/store'
@@ -11,13 +11,17 @@ import { fetchDaybook, fetchSlowMovingStock, fetchLedgerBalances, fetchGroupBala
 import {
   fetchSalesTargets, fetchDashboardSettings,
   fetchCachedVouchers, saveVouchers, fetchDashboardSnapshot, saveDashboardSnapshot,
-  fetchCfoSuggestions, type DashboardSnapshotPatch, type CfoReport, type CfoKpis,
+  fetchCfoSuggestions, type DashboardSnapshotPatch, type DashboardSnapshotData, type CfoReport, type CfoKpis,
+  type CostSavingReport, type WorkingCapitalReport,
 } from '@/lib/api'
+import { Select } from '@/components/ui/Select'
+import { Badge } from '@/components/ui/Badge'
 import type { DashboardSettings } from '@/types'
 import { getTallyUrl } from './CompanySettings'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useExtensionStatus } from '@/hooks/useExtension'
 import { classifyVouchers, computeCreditSalesTotal } from '@/lib/voucherClassification'
+import { Card } from '@/shadcn/components/ui/card'
 import { SalesWidget } from '@/shadcn/components/dashboard/sales-widget'
 import { SalesChartWidget } from '@/shadcn/components/dashboard/sales-chart-widget'
 import { CashWidget } from '@/shadcn/components/dashboard/cash-widget'
@@ -237,6 +241,15 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'performance', label: 'Performance'     },
   { key: 'analysis',    label: 'KPI Analytics'     },
   { key: 'cfo',         label: 'CFO Suggestions' },
+]
+
+// The 4 fixed prompts on the CFO Suggestions tab — no freeform input, by
+// design (see the "CFO Suggestions redesign" plan).
+const CFO_PROMPTS: { id: 1 | 2 | 3 | 4; label: string }[] = [
+  { id: 1, label: 'Generate an executive summary of these financial statements, highlighting key performance metrics, significant trends, strengths, weaknesses, and important observations' },
+  { id: 2, label: 'What is the current outstanding balance for [Debtor Name]?' },
+  { id: 3, label: 'What are the top 5 cost-saving opportunities for this month?' },
+  { id: 4, label: 'How can we improve our working capital cycle?' },
 ]
 
 // 'ytd' (monthly view) and 'custom' tabs are hidden for now — keep the
@@ -522,7 +535,7 @@ function renderActionItem(item: string) {
 
 export default function Dashboard() {
   const { activeCompanyId } = useAuthStore()
-  const { getCompany }       = useCompanyStore()
+  const { getCompany, getDebtorBalances, fetchDebtorBalancesFromDb } = useCompanyStore()
   const { connected }        = useExtensionStatus()
 
   const companyId    = activeCompanyId ?? ''
@@ -598,6 +611,25 @@ export default function Dashboard() {
   const [cfoLoading,     setCfoLoading]     = useState(false)
   const [cfoError,       setCfoError]       = useState(false)
   const [cfoGeneratedAt, setCfoGeneratedAt] = useState<Date | null>(null)
+
+  // Prompt-driven CFO Suggestions UI — 4 fixed prompts, each with its own
+  // report/loading/error/generated-at state, same fingerprint-cache
+  // convention as cfoReport/cfoInputsHash above (see CFO_PROMPTS below).
+  // promptDraft is the dropdown's current selection (not yet submitted);
+  // activeCfoPrompt is the submitted prompt whose result is shown below.
+  // Both start unset — nothing is generated or displayed until the user
+  // picks a prompt and clicks the submit (arrow) button.
+  const [promptDraft, setPromptDraft] = useState<1 | 2 | 3 | 4 | null>(null)
+  const [activeCfoPrompt, setActiveCfoPrompt] = useState<1 | 2 | 3 | 4 | null>(null)
+  const [selectedDebtorName, setSelectedDebtorName] = useState('')
+  const [costSavingReport,      setCostSavingReport]      = useState<CostSavingReport | null>(null)
+  const [costSavingLoading,     setCostSavingLoading]     = useState(false)
+  const [costSavingError,       setCostSavingError]       = useState(false)
+  const [costSavingGeneratedAt, setCostSavingGeneratedAt] = useState<Date | null>(null)
+  const [workingCapitalReport,      setWorkingCapitalReport]      = useState<WorkingCapitalReport | null>(null)
+  const [workingCapitalLoading,     setWorkingCapitalLoading]     = useState(false)
+  const [workingCapitalError,       setWorkingCapitalError]       = useState(false)
+  const [workingCapitalGeneratedAt, setWorkingCapitalGeneratedAt] = useState<Date | null>(null)
 
   // Sales-card trend chart. YTD buckets the already-fetched `all` vouchers by
   // month — no extra call. Today needs history beyond the single day already
@@ -964,7 +996,7 @@ export default function Dashboard() {
   // one-time backfill are the only paths that go live (see fetchData above).
   //
   // Also returns every KPI it computes (not just fetchedDates) — needed by
-  // generateCfoSuggestions, which calls this with 'ytd' and must read the
+  // loadCfoKpisAndRatios, which calls this with 'ytd' and must read the
   // freshly-computed values in the SAME invocation. Reading component state
   // instead would be stale: setXxx(...) queues an update for the next
   // render, but this function's own local closure doesn't see it.
@@ -1646,112 +1678,180 @@ export default function Dashboard() {
     fetchAnalysisData(analysisFilterPreset, analysisCustomFrom, analysisCustomTo)
   }
 
-  // AI-generated CFO Suggestions — ALWAYS computed from a fresh YTD read,
-  // regardless of whatever period is currently selected on the Performance/
-  // Analysis tabs. Reuses loadFromDb/loadAnalysisFromDb (already-proven DB-
-  // cache reads) rather than a parallel fetch path — accepted trade-off:
-  // this also updates what those tabs show if visited afterward, since it's
-  // the same shared component state.
-  //
-  // The AI call itself is cached server-side (DashboardSnapshot.cfoReport +
-  // cfoInputsHash): every visit recomputes the fresh kpis/ratios and
-  // fingerprints them, but only calls the AI when that fingerprint differs
-  // from the one that produced the last stored report — otherwise the
-  // stored report is reused with no AI call. `force` (the Regenerate
-  // button) always calls the AI regardless of the fingerprint.
-  const generateCfoSuggestions = useCallback(async (force = false) => {
-    if (!companyId) return
-    setCfoLoading(true)
-    setCfoError(false)
-    try {
-      const [perf, analysis, snapshot] = await Promise.all([
-        loadFromDb('ytd', '', ''),
-        loadAnalysisFromDb('ytd', '', ''),
-        fetchDashboardSnapshot(companyId),
-      ])
-      const cfoYtdDays = daysSinceFyStart(todayStr())
-      const ratios = computeRatios(analysis.data, {
-        dso: (dashboardSettings.ytd?.dsoDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
-        dio: (dashboardSettings.ytd?.dioDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
-        dpo: (dashboardSettings.ytd?.dpoDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
-      })
-      const kpis: CfoKpis = {
-        totalSales:     perf.data.total,
-        monthlySales:   perf.data.salesTrend,
-        grossMargin:    perf.data.grossMargin,
-        grossMarginPct: perf.data.grossMarginPct,
-        ebitda:         perf.data.ebitda,
-        ebitdaPct:      perf.data.ebitdaPct,
-        netProfit:      perf.data.netProfit,
-        netProfitPct:   perf.data.netProfitPct,
-        cashInHand:     perf.data.cashInHand,
-        bankBalance:    perf.data.bankBalance,
-        cashInflow:     perf.data.cashInflow,
-        cashOutflow:    perf.data.cashOutflow,
-        bankInflow:     perf.data.bankInflow,
-        bankOutflow:    perf.data.bankOutflow,
-        receivables:    perf.data.receivables,
-        payables:       perf.data.payables,
-        topItems:       perf.data.topItems,
-        topDebtors:     perf.data.topDebtors,
-        slowStock:      perf.data.slowStock,
-        debtorBalances: perf.data.debtorBalances,
-      }
-      setCfoKpis(kpis)
-      setCfoRatios(ratios)
-
-      const fingerprint = JSON.stringify({ kpis, ratios })
-      if (!force && snapshot?.cfoReport && snapshot.cfoInputsHash === fingerprint) {
-        setCfoReport(snapshot.cfoReport as CfoReport)
-        setCfoGeneratedAt(new Date())
-        return
-      }
-
-      const report = await fetchCfoSuggestions(companyId, ratios, kpis)
-      setCfoReport(report)
-      setCfoGeneratedAt(new Date())
-      void saveDashboardSnapshot(companyId, { cfoReport: report, cfoInputsHash: fingerprint })
-    } catch (err) {
-      console.error('[CfoSuggestions] failed:', err)
-      setCfoError(true)
-    } finally {
-      setCfoLoading(false)
+  // CFO Suggestions KPIs — ALWAYS computed from a fresh YTD read, regardless
+  // of whatever period is currently selected on the Performance/Analysis
+  // tabs. Reuses loadFromDb/loadAnalysisFromDb (already-proven DB-cache
+  // reads) rather than a parallel fetch path — accepted trade-off: this also
+  // updates what those tabs show if visited afterward, since it's the same
+  // shared component state. Shared by all 4 prompts (prompt 2's debtor
+  // dropdown reads cfoKpis.debtorBalances directly, no AI call needed).
+  const loadCfoKpisAndRatios = useCallback(async () => {
+    if (!companyId) return null
+    const [perf, analysis, snapshot] = await Promise.all([
+      loadFromDb('ytd', '', ''),
+      loadAnalysisFromDb('ytd', '', ''),
+      fetchDashboardSnapshot(companyId),
+    ])
+    const cfoYtdDays = daysSinceFyStart(todayStr())
+    const ratios = computeRatios(analysis.data, {
+      dso: (dashboardSettings.ytd?.dsoDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
+      dio: (dashboardSettings.ytd?.dioDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
+      dpo: (dashboardSettings.ytd?.dpoDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
+    })
+    const kpis: CfoKpis = {
+      totalSales:     perf.data.total,
+      monthlySales:   perf.data.salesTrend,
+      grossMargin:    perf.data.grossMargin,
+      grossMarginPct: perf.data.grossMarginPct,
+      ebitda:         perf.data.ebitda,
+      ebitdaPct:      perf.data.ebitdaPct,
+      netProfit:      perf.data.netProfit,
+      netProfitPct:   perf.data.netProfitPct,
+      cashInHand:     perf.data.cashInHand,
+      bankBalance:    perf.data.bankBalance,
+      cashInflow:     perf.data.cashInflow,
+      cashOutflow:    perf.data.cashOutflow,
+      bankInflow:     perf.data.bankInflow,
+      bankOutflow:    perf.data.bankOutflow,
+      receivables:    perf.data.receivables,
+      payables:       perf.data.payables,
+      topItems:       perf.data.topItems,
+      topDebtors:     perf.data.topDebtors,
+      slowStock:      perf.data.slowStock,
+      debtorBalances: perf.data.debtorBalances,
     }
+    setCfoKpis(kpis)
+    setCfoRatios(ratios)
+    return { kpis, ratios, snapshot }
   }, [companyId, dashboardSettings, loadFromDb, loadAnalysisFromDb])
 
-  // Re-checks every time the user switches INTO the CFO tab (not merely
-  // because the component re-rendered while already on it) — the ref
-  // detects the transition so this doesn't loop. generateCfoSuggestions
-  // itself decides whether that means a real AI call or an instant cache
-  // hit, based on the data fingerprint.
+  // Each of the 3 AI-backed prompts (executive/costSaving/workingCapital)
+  // follows the same fingerprint-cache convention: the AI call is cached
+  // server-side (DashboardSnapshot.<x>Report + <x>InputsHash) — every visit
+  // fingerprints the fresh kpis/ratios and only calls the AI when that
+  // fingerprint differs from the one that produced the last stored report,
+  // otherwise the stored report is reused with no AI call. `force` (the
+  // Regenerate button) always calls the AI regardless of the fingerprint.
+  // Each generate* function assumes fresh kpis/ratios/snapshot are already
+  // in hand (from loadCfoKpisAndRatios) and just does the fingerprint check
+  // + AI call + persist — loading/error state and the surrounding try/catch
+  // live in runCfoPrompt below, which is the only caller.
+  const generateExecutiveReport = useCallback(async (
+    kpis: CfoKpis, ratios: RatioResults, snapshot: DashboardSnapshotData | null, force: boolean,
+  ) => {
+    if (!companyId) return
+    const fingerprint = JSON.stringify({ kpis, ratios })
+    if (!force && snapshot?.cfoReport && snapshot.cfoInputsHash === fingerprint) {
+      setCfoReport(snapshot.cfoReport as CfoReport)
+      setCfoGeneratedAt(new Date())
+      return
+    }
+    const report = await fetchCfoSuggestions(companyId, ratios, kpis, 'executive')
+    setCfoReport(report)
+    setCfoGeneratedAt(new Date())
+    void saveDashboardSnapshot(companyId, { cfoReport: report, cfoInputsHash: fingerprint })
+  }, [companyId])
+
+  const generateCostSavingReport = useCallback(async (
+    kpis: CfoKpis, ratios: RatioResults, snapshot: DashboardSnapshotData | null, force: boolean,
+  ) => {
+    if (!companyId) return
+    const fingerprint = JSON.stringify({ kpis, ratios })
+    if (!force && snapshot?.costSavingReport && snapshot.costSavingInputsHash === fingerprint) {
+      setCostSavingReport(snapshot.costSavingReport as CostSavingReport)
+      setCostSavingGeneratedAt(new Date())
+      return
+    }
+    const report = await fetchCfoSuggestions(companyId, ratios, kpis, 'costSaving')
+    setCostSavingReport(report)
+    setCostSavingGeneratedAt(new Date())
+    void saveDashboardSnapshot(companyId, { costSavingReport: report, costSavingInputsHash: fingerprint })
+  }, [companyId])
+
+  const generateWorkingCapitalReport = useCallback(async (
+    kpis: CfoKpis, ratios: RatioResults, snapshot: DashboardSnapshotData | null, force: boolean,
+  ) => {
+    if (!companyId) return
+    const fingerprint = JSON.stringify({ kpis, ratios })
+    if (!force && snapshot?.workingCapitalReport && snapshot.workingCapitalInputsHash === fingerprint) {
+      setWorkingCapitalReport(snapshot.workingCapitalReport as WorkingCapitalReport)
+      setWorkingCapitalGeneratedAt(new Date())
+      return
+    }
+    const report = await fetchCfoSuggestions(companyId, ratios, kpis, 'workingCapital')
+    setWorkingCapitalReport(report)
+    setWorkingCapitalGeneratedAt(new Date())
+    void saveDashboardSnapshot(companyId, { workingCapitalReport: report, workingCapitalInputsHash: fingerprint })
+  }, [companyId])
+
+  // Single entry point for "produce the report for prompt N from fresh
+  // data" — used both on tab entry and by the Regenerate button. Owns the
+  // loading/error state for whichever prompt is being generated, spanning
+  // both the KPI reload and the AI call. Prompt 2 (debtor balance) isn't
+  // AI-backed, so it only needs the KPI reload, no loading/error state.
+  const runCfoPrompt = useCallback(async (prompt: 1 | 2 | 3 | 4, force = false) => {
+    if (prompt === 2) { await loadCfoKpisAndRatios(); return }
+    const setLoading = prompt === 1 ? setCfoLoading : prompt === 3 ? setCostSavingLoading : setWorkingCapitalLoading
+    const setError   = prompt === 1 ? setCfoError   : prompt === 3 ? setCostSavingError   : setWorkingCapitalError
+    setLoading(true)
+    setError(false)
+    try {
+      const loaded = await loadCfoKpisAndRatios()
+      if (!loaded) return
+      const { kpis, ratios, snapshot } = loaded
+      if (prompt === 1) await generateExecutiveReport(kpis, ratios, snapshot, force)
+      else if (prompt === 3) await generateCostSavingReport(kpis, ratios, snapshot, force)
+      else await generateWorkingCapitalReport(kpis, ratios, snapshot, force)
+    } catch (err) {
+      console.error(`[CfoSuggestions] prompt ${prompt} failed:`, err)
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [loadCfoKpisAndRatios, generateExecutiveReport, generateCostSavingReport, generateWorkingCapitalReport])
+
+  // Silently prefetches KPIs/ratios the moment the user switches INTO the
+  // CFO tab (not merely because the component re-rendered while already on
+  // it — the ref detects the transition so this doesn't loop), so the
+  // debtor dropdown and the first submit both have fresh data ready. This
+  // deliberately does NOT generate any report — nothing should appear until
+  // the user picks a prompt and hits submit. Debtor balances are synced
+  // (and persisted) from Settings → Data Sync now, not from here — this
+  // just hydrates whatever's already been synced, same as CompanySettings.tsx.
   const prevTabRef = useRef<Tab | null>(null)
   useEffect(() => {
     const enteredCfo = activeTab === 'cfo' && prevTabRef.current !== 'cfo'
     prevTabRef.current = activeTab
     if (!enteredCfo || !companyId) return
-    generateCfoSuggestions()
-  }, [activeTab, companyId, generateCfoSuggestions])
+    void loadCfoKpisAndRatios()
+    fetchDebtorBalancesFromDb(companyId).catch(() => {})
+  }, [activeTab, companyId, loadCfoKpisAndRatios, fetchDebtorBalancesFromDb])
+
+  // Submitting (the arrow button) is the only thing that shows a result —
+  // picking a prompt in the dropdown just updates the draft. Switches the
+  // view instantly if that prompt's report is already loaded (or it's
+  // prompt 2, which has no report to load); otherwise triggers runCfoPrompt.
+  const handleCfoSubmit = () => {
+    if (!promptDraft) return
+    if (promptDraft === 2 && !selectedDebtorName) {
+      toast.error('Select a debtor first')
+      return
+    }
+    setActiveCfoPrompt(promptDraft)
+    const alreadyLoaded =
+      (promptDraft === 1 && !!cfoReport) ||
+      (promptDraft === 3 && !!costSavingReport) ||
+      (promptDraft === 4 && !!workingCapitalReport) ||
+      promptDraft === 2
+    if (!alreadyLoaded) void runCfoPrompt(promptDraft)
+  }
 
   // Browsers suggest document.title as the default "Save as PDF" filename,
   // so swap it to the company name for the duration of the print dialog and
   // restore it once the dialog closes (afterprint fires on both Save and
-  // Cancel).
-  const printCfoReport = () => {
-    const originalTitle = document.title
-    const safeName = (company?.name ?? 'Company').replace(/[\\/:*?"<>|]/g, '').trim()
-    document.title = `${safeName} - CFO Report${activePeriod ? ` - ${activePeriod.from}_${activePeriod.to}` : ''}`
-    const restoreTitle = () => {
-      document.title = originalTitle
-      window.removeEventListener('afterprint', restoreTitle)
-    }
-    window.addEventListener('afterprint', restoreTitle)
-    toast('In the print dialog, open "More settings" and uncheck "Headers and footers" for a clean PDF.', { duration: 6000, icon: '💡' })
-    window.print()
-  }
-
-  // Shared PDF export for the Performance / KPI Analytics tabs — same
-  // window.print() + document.title-swap trick as printCfoReport, generalized
-  // with a label and period so each tab's file gets a sensible default name.
+  // Cancel). Shared by every dashboard report PDF export (Performance / KPI
+  // Analytics tabs, and all 4 CFO Suggestions prompt views) — label and
+  // period give each one a sensible default filename.
   const printDashboardReport = (label: string, period: { from: string; to: string } | null) => {
     const originalTitle = document.title
     const safeName = (company?.name ?? 'Company').replace(/[\\/:*?"<>|]/g, '').trim()
@@ -2374,232 +2474,618 @@ export default function Dashboard() {
         {/* ══════════════════ CFO SUGGESTIONS TAB ══════════════════ */}
         {activeTab === 'cfo' && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 mb-1">
-              <Lightbulb className="w-4 h-4 text-amber-500" />
-              <p className="text-sm font-semibold text-foreground">AI-Powered Analysis on YTD Basis</p>
-              {cfoLoading ? (
-                <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <RefreshCw className="w-3 h-3 animate-spin" /> Generating…
-                </span>
-              ) : (
-                <div className="ml-auto flex items-center gap-3">
-                  {cfoReport && (
-                    <button
-                      onClick={printCfoReport}
-                      title="Generate a PDF of this report (opens the print dialog — choose Save as PDF)"
-                      className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-                    >
-                      <Download className="w-3 h-3" /> Generate PDF
-                    </button>
+            {/* Prompt bar — 4 fixed prompts via a real dropdown/select box,
+                no freeform typing, nothing generated until submit. Ported
+                verbatim (structure + widget-card wash-through trick) from
+                the dashboard-main reference widget — see widget-card in
+                src/index.css. */}
+            <Card className="widget-card relative w-full max-w-2xl mx-auto p-4 sm:p-8">
+              <div className="pointer-events-none absolute -inset-4 -z-10 overflow-hidden rounded-[min(var(--radius-4xl),24px)] opacity-40">
+                <div className="absolute -left-20 -top-20 size-60 rounded-full bg-blue-500 blur-2xl" />
+                <div className="absolute -right-20 bottom-10 size-60 rounded-full bg-pink-500 blur-2xl" />
+                <div className="absolute left-1/2 top-1/2 size-60 -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500 blur-3xl" />
+              </div>
+
+              <h2 className="mb-2 text-center text-2xl font-semibold text-foreground">CFO Suggestions</h2>
+              <p className="mb-6 text-center text-sm text-muted-foreground">Ask anything about your business finances</p>
+
+              <div className="relative flex items-center">
+                <select
+                  value={promptDraft ?? ''}
+                  onChange={(e) => setPromptDraft(e.target.value ? (Number(e.target.value) as 1 | 2 | 3 | 4) : null)}
+                  className="h-14 w-full appearance-none rounded-2xl border border-transparent bg-input/50 ps-5 pe-14 text-sm text-foreground cursor-pointer focus:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+                >
+                  <option value="" disabled>Select a prompt…</option>
+                  {CFO_PROMPTS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleCfoSubmit}
+                  disabled={!promptDraft || (promptDraft === 2 && !selectedDebtorName)}
+                  title="Ask"
+                  className="absolute right-2 flex items-center justify-center size-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/80 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  <ArrowUp className="size-5" />
+                </button>
+              </div>
+
+              {promptDraft === 2 && (
+                <div className="mt-3">
+                  <Select
+                    label="Debtor Name"
+                    placeholder="Select a debtor…"
+                    value={selectedDebtorName}
+                    onChange={(e) => setSelectedDebtorName(e.target.value)}
+                    options={[...(companyId ? getDebtorBalances(companyId) : [])]
+                      .sort((a, b) => b.balance - a.balance)
+                      .map((d) => ({ value: d.name, label: `${d.name} — ${formatCurrency(d.balance)}` }))}
+                  />
+                  {(companyId ? getDebtorBalances(companyId).length : 0) === 0 && (
+                    <div className="-mt-2 rounded-lg border border-dashed border-border bg-muted/50 px-3 py-2">
+                      <p className="text-xs text-muted-foreground">
+                        No debtor balances synced yet — go to Settings → Connection → Data Sync to sync them.
+                      </p>
+                    </div>
                   )}
-                  <button
-                    onClick={() => generateCfoSuggestions(true)}
-                    title="Regenerate the report from the latest YTD data"
-                    className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700"
-                  >
-                    <RefreshCw className="w-3 h-3" /> Regenerate
-                  </button>
                 </div>
               )}
-            </div>
 
-            {cfoLoading && !cfoReport ? (
-              <div className="h-40 flex flex-col items-center justify-center gap-2 text-muted-foreground border border-dashed border-border rounded-xl">
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                <p className="text-sm">Generating your YTD report…</p>
-              </div>
-            ) : !cfoReport ? (
-              <div className="h-40 flex flex-col items-center justify-center gap-1 text-muted-foreground border border-dashed border-border rounded-xl">
-                <p className="text-sm font-medium">{cfoError ? "Couldn't generate the report" : 'No report yet'}</p>
-                <p className="text-xs">Click Regenerate to try again.</p>
-              </div>
-            ) : (
-              <div className="space-y-4 print-cfo-report">
-                {cfoError && (
-                  <p className="text-xs text-red-500 print:hidden">Last regenerate attempt failed — showing the previous report.</p>
-                )}
-
-                {/* Report Header */}
-                <div className="bg-card border border-border rounded-xl p-5">
-                  <p className="text-lg font-bold text-foreground">{company?.name ?? 'Company'}</p>
-                  <p className="text-sm text-muted-foreground mt-0.5">Financial Performance Summary on YTD Basis</p>
-                  <div className="flex items-center justify-between gap-4 mt-1">
-                    <p className="text-xs text-muted-foreground">
-                      Reporting Period: {activePeriod ? `${formatDate(activePeriod.from)} – ${formatDate(activePeriod.to)}` : '—'}
-                    </p>
-                    {cfoGeneratedAt && (
-                      <p className="text-xs text-muted-foreground shrink-0">
-                        {cfoGeneratedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    )}
+              {activeCfoPrompt && (() => {
+                const activePromptLabel = CFO_PROMPTS.find((p) => p.id === activeCfoPrompt)?.label ?? ''
+                const queryText = activeCfoPrompt === 2 && selectedDebtorName
+                  ? activePromptLabel.replace('[Debtor Name]', selectedDebtorName)
+                  : activePromptLabel
+                return (
+                  <div className="mt-6 animate-fade-up rounded-2xl border border-border bg-muted/50 p-5">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">Your query:</p>
+                    <p className="text-sm text-foreground">{queryText}</p>
                   </div>
-                  <div className="border-t-2 border-brand-600 mt-3" />
-                </div>
+                )
+              })()}
+            </Card>
 
-                {/* Key Financial Metrics */}
-                <div>
-                  <ReportSectionHeading n={1} title="Key Financial Metrics" />
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <ReportStatCard label="Total Sales" value={formatCurrency(cfoKpis?.totalSales ?? 0)} sub="YTD Turnover" tone="blue" />
-                    <ReportStatCard
-                      label="Gross Margin"
-                      value={cfoKpis?.grossMargin != null ? formatCurrency(cfoKpis.grossMargin) : '—'}
-                      sub={cfoKpis?.grossMarginPct != null ? `${cfoKpis.grossMarginPct.toFixed(1)}% Margin` : 'No data available'}
-                      tone="blue"
-                    />
-                    <ReportStatCard
-                      label="EBITDA"
-                      value={cfoKpis?.ebitda != null ? formatCurrency(cfoKpis.ebitda) : '—'}
-                      sub={cfoKpis?.ebitdaPct != null ? `${cfoKpis.ebitdaPct.toFixed(1)}% Margin` : 'No data available'}
-                      tone="blue"
-                    />
-                    <ReportStatCard
-                      label="Net Profit"
-                      value={cfoKpis?.netProfit != null ? formatCurrency(cfoKpis.netProfit) : '—'}
-                      sub={cfoKpis?.netProfitPct != null ? `${cfoKpis.netProfitPct.toFixed(1)}% Margin` : 'No data available'}
-                      tone={(cfoKpis?.netProfit ?? 0) < 0 ? 'danger' : 'blue'}
-                    />
-                  </div>
-                  <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50 p-4">
-                    <p className="text-sm text-foreground leading-relaxed">
-                      <span className="font-bold text-brand-700">Critical Margin Structural Anomaly: </span>
-                      {cfoKpis?.grossMarginPct == null || cfoKpis?.netProfitPct == null ? (
-                        <span>No data available — Gross Margin and/or Net Profit could not be computed for this period.</span>
-                      ) : hasMarginAnomaly(cfoKpis.grossMarginPct, cfoKpis.netProfitPct) ? (
-                        <>
-                          The core operating Gross Margin stands at an extremely thin{' '}
-                          <span className="font-semibold">{cfoKpis.grossMarginPct.toFixed(1)}%</span> (Sales minus Purchases), whereas the Net Profit margin is higher at{' '}
-                          <span className="font-semibold">{cfoKpis.netProfitPct.toFixed(1)}%</span>. This indicates that core trading operations are under-performing, and profitability is driven by substantial{' '}
-                          <span className="font-semibold">Indirect Income</span> or non-operating revenue.
-                        </>
-                      ) : (
-                        <span>
-                          None detected — Net Profit margin ({cfoKpis.netProfitPct.toFixed(1)}%) is at or below Gross Margin ({cfoKpis.grossMarginPct.toFixed(1)}%), consistent with a structurally healthy core trading business.
-                        </span>
+            {/* ── Prompt 1: Executive Summary — unchanged from the original report ── */}
+            {activeCfoPrompt === 1 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  {cfoLoading ? (
+                    <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> Generating…
+                    </span>
+                  ) : (
+                    <div className="ml-auto flex items-center gap-3">
+                      {cfoReport && (
+                        <button
+                          onClick={() => printDashboardReport('Executive Summary', activePeriod)}
+                          title="Generate a PDF of this report (opens the print dialog — choose Save as PDF)"
+                          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          <Download className="w-3 h-3" /> Generate PDF
+                        </button>
                       )}
-                    </p>
-                  </div>
+                      <button
+                        onClick={() => runCfoPrompt(1, true)}
+                        title="Regenerate the report from the latest YTD data"
+                        className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Regenerate
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Cash & Bank Liquidity Analysis */}
-                <div>
-                  <ReportSectionHeading n={2} title="Cash & Bank Liquidity Analysis" />
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                    <ReportStatCard
-                      label="Cash in Hand"
-                      value={cfoKpis?.cashInHand != null ? formatCurrency(cfoKpis.cashInHand) : '—'}
-                      sub={flowNote(cfoKpis?.cashInflow ?? null, cfoKpis?.cashOutflow ?? null)}
-                      tone="green"
-                    />
-                    <ReportStatCard
-                      label="Bank Balance"
-                      value={cfoKpis?.bankBalance != null ? `${formatCurrency(cfoKpis.bankBalance)}${cfoKpis.bankBalance < 0 ? ' (OD)' : ''}` : '—'}
-                      sub={flowNote(cfoKpis?.bankInflow ?? null, cfoKpis?.bankOutflow ?? null)}
-                      tone={(cfoKpis?.bankBalance ?? 0) < 0 ? 'danger' : 'blue'}
-                    />
-                    <ReportStatCard
-                      label="Current Ratio"
-                      value={cfoRatios?.currentRatio != null ? cfoRatios.currentRatio.toFixed(2) : '—'}
-                      sub="Benchmark: 1.5 - 2.0"
-                      tone={cfoRatios?.currentRatio != null && cfoRatios.currentRatio < 1.5 ? 'danger' : 'blue'}
-                    />
-                    <ReportStatCard
-                      label="Quick Ratio"
-                      value={cfoRatios?.quickRatio != null ? cfoRatios.quickRatio.toFixed(2) : '—'}
-                      sub={quickRatioNote(cfoRatios?.quickRatio ?? null)}
-                      tone={cfoRatios?.quickRatio != null && cfoRatios.quickRatio < 1.0 ? 'danger' : 'blue'}
-                    />
+                {cfoLoading && !cfoReport ? (
+                  <div className="h-40 flex flex-col items-center justify-center gap-2 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <p className="text-sm">Generating your YTD report…</p>
                   </div>
-                  {(() => {
-                    const hasData = cfoKpis && (cfoKpis.cashInHand != null || cfoKpis.bankBalance != null)
-                    const cash = cfoKpis?.cashInHand ?? 0
-                    const bank = cfoKpis?.bankBalance ?? 0
-                    const maxAbs = Math.max(Math.abs(cash), Math.abs(bank), 1)
-                    const rows = [
-                      { label: 'Cash In Hand', value: cash, color: 'bg-emerald-600' },
-                      { label: 'Bank Balance', value: bank, color: bank < 0 ? 'bg-red-500' : 'bg-emerald-600' },
-                    ]
-                    return (
-                      <div className="bg-muted border border-border rounded-xl p-4">
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Bank &amp; Cash Liquidity Comparison</p>
-                        {hasData ? (
-                          <div className="space-y-3">
-                            {rows.map((row, i) => (
-                              <div key={i} className="flex items-center gap-3">
-                                <span className="w-24 shrink-0 text-xs text-muted-foreground">{row.label}</span>
-                                <div className="flex-1 flex items-center gap-2">
-                                  <div className="flex-1 max-w-md">
-                                    <div className={`h-6 rounded ${row.color}`} style={{ width: `${Math.max((Math.abs(row.value) / maxAbs) * 100, 3)}%` }} />
-                                  </div>
-                                  <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-                                    {formatCompactLakhs(row.value)}{row.value < 0 ? ' (OD)' : ''}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic">No data available.</p>
+                ) : !cfoReport ? (
+                  <div className="h-40 flex flex-col items-center justify-center gap-1 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <p className="text-sm font-medium">{cfoError ? "Couldn't generate the report" : 'No report yet'}</p>
+                    <p className="text-xs">Click Regenerate to try again.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 print-cfo-report">
+                    {cfoError && (
+                      <p className="text-xs text-red-500 print:hidden">Last regenerate attempt failed — showing the previous report.</p>
+                    )}
+
+                    {/* Report Header */}
+                    <div className="bg-card border border-border rounded-xl p-5">
+                      <p className="text-lg font-bold text-foreground">{company?.name ?? 'Company'}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5">Financial Performance Summary on YTD Basis</p>
+                      <div className="flex items-center justify-between gap-4 mt-1">
+                        <p className="text-xs text-muted-foreground">
+                          Reporting Period: {activePeriod ? `${formatDate(activePeriod.from)} – ${formatDate(activePeriod.to)}` : '—'}
+                        </p>
+                        {cfoGeneratedAt && (
+                          <p className="text-xs text-muted-foreground shrink-0">
+                            {cfoGeneratedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
                         )}
                       </div>
-                    )
-                  })()}
+                      <div className="border-t-2 border-brand-600 mt-3" />
+                    </div>
+
+                    {/* Key Financial Metrics */}
+                    <div>
+                      <ReportSectionHeading n={1} title="Key Financial Metrics" />
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <ReportStatCard label="Total Sales" value={formatCurrency(cfoKpis?.totalSales ?? 0)} sub="YTD Turnover" tone="blue" />
+                        <ReportStatCard
+                          label="Gross Margin"
+                          value={cfoKpis?.grossMargin != null ? formatCurrency(cfoKpis.grossMargin) : '—'}
+                          sub={cfoKpis?.grossMarginPct != null ? `${cfoKpis.grossMarginPct.toFixed(1)}% Margin` : 'No data available'}
+                          tone="blue"
+                        />
+                        <ReportStatCard
+                          label="EBITDA"
+                          value={cfoKpis?.ebitda != null ? formatCurrency(cfoKpis.ebitda) : '—'}
+                          sub={cfoKpis?.ebitdaPct != null ? `${cfoKpis.ebitdaPct.toFixed(1)}% Margin` : 'No data available'}
+                          tone="blue"
+                        />
+                        <ReportStatCard
+                          label="Net Profit"
+                          value={cfoKpis?.netProfit != null ? formatCurrency(cfoKpis.netProfit) : '—'}
+                          sub={cfoKpis?.netProfitPct != null ? `${cfoKpis.netProfitPct.toFixed(1)}% Margin` : 'No data available'}
+                          tone={(cfoKpis?.netProfit ?? 0) < 0 ? 'danger' : 'blue'}
+                        />
+                      </div>
+                      <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50 p-4">
+                        <p className="text-sm text-foreground leading-relaxed">
+                          <span className="font-bold text-brand-700">Critical Margin Structural Anomaly: </span>
+                          {cfoKpis?.grossMarginPct == null || cfoKpis?.netProfitPct == null ? (
+                            <span>No data available — Gross Margin and/or Net Profit could not be computed for this period.</span>
+                          ) : hasMarginAnomaly(cfoKpis.grossMarginPct, cfoKpis.netProfitPct) ? (
+                            <>
+                              The core operating Gross Margin stands at an extremely thin{' '}
+                              <span className="font-semibold">{cfoKpis.grossMarginPct.toFixed(1)}%</span> (Sales minus Purchases), whereas the Net Profit margin is higher at{' '}
+                              <span className="font-semibold">{cfoKpis.netProfitPct.toFixed(1)}%</span>. This indicates that core trading operations are under-performing, and profitability is driven by substantial{' '}
+                              <span className="font-semibold">Indirect Income</span> or non-operating revenue.
+                            </>
+                          ) : (
+                            <span>
+                              None detected — Net Profit margin ({cfoKpis.netProfitPct.toFixed(1)}%) is at or below Gross Margin ({cfoKpis.grossMarginPct.toFixed(1)}%), consistent with a structurally healthy core trading business.
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Cash & Bank Liquidity Analysis */}
+                    <div>
+                      <ReportSectionHeading n={2} title="Cash & Bank Liquidity Analysis" />
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                        <ReportStatCard
+                          label="Cash in Hand"
+                          value={cfoKpis?.cashInHand != null ? formatCurrency(cfoKpis.cashInHand) : '—'}
+                          sub={flowNote(cfoKpis?.cashInflow ?? null, cfoKpis?.cashOutflow ?? null)}
+                          tone="green"
+                        />
+                        <ReportStatCard
+                          label="Bank Balance"
+                          value={cfoKpis?.bankBalance != null ? `${formatCurrency(cfoKpis.bankBalance)}${cfoKpis.bankBalance < 0 ? ' (OD)' : ''}` : '—'}
+                          sub={flowNote(cfoKpis?.bankInflow ?? null, cfoKpis?.bankOutflow ?? null)}
+                          tone={(cfoKpis?.bankBalance ?? 0) < 0 ? 'danger' : 'blue'}
+                        />
+                        <ReportStatCard
+                          label="Current Ratio"
+                          value={cfoRatios?.currentRatio != null ? cfoRatios.currentRatio.toFixed(2) : '—'}
+                          sub="Benchmark: 1.5 - 2.0"
+                          tone={cfoRatios?.currentRatio != null && cfoRatios.currentRatio < 1.5 ? 'danger' : 'blue'}
+                        />
+                        <ReportStatCard
+                          label="Quick Ratio"
+                          value={cfoRatios?.quickRatio != null ? cfoRatios.quickRatio.toFixed(2) : '—'}
+                          sub={quickRatioNote(cfoRatios?.quickRatio ?? null)}
+                          tone={cfoRatios?.quickRatio != null && cfoRatios.quickRatio < 1.0 ? 'danger' : 'blue'}
+                        />
+                      </div>
+                      {(() => {
+                        const hasData = cfoKpis && (cfoKpis.cashInHand != null || cfoKpis.bankBalance != null)
+                        const cash = cfoKpis?.cashInHand ?? 0
+                        const bank = cfoKpis?.bankBalance ?? 0
+                        const maxAbs = Math.max(Math.abs(cash), Math.abs(bank), 1)
+                        const rows = [
+                          { label: 'Cash In Hand', value: cash, color: 'bg-emerald-600' },
+                          { label: 'Bank Balance', value: bank, color: bank < 0 ? 'bg-red-500' : 'bg-emerald-600' },
+                        ]
+                        return (
+                          <div className="bg-muted border border-border rounded-xl p-4">
+                            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Bank &amp; Cash Liquidity Comparison</p>
+                            {hasData ? (
+                              <div className="space-y-3">
+                                {rows.map((row, i) => (
+                                  <div key={i} className="flex items-center gap-3">
+                                    <span className="w-24 shrink-0 text-xs text-muted-foreground">{row.label}</span>
+                                    <div className="flex-1 flex items-center gap-2">
+                                      <div className="flex-1 max-w-md">
+                                        <div className={`h-6 rounded ${row.color}`} style={{ width: `${Math.max((Math.abs(row.value) / maxAbs) * 100, 3)}%` }} />
+                                      </div>
+                                      <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+                                        {formatCompactLakhs(row.value)}{row.value < 0 ? ' (OD)' : ''}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground italic">No data available.</p>
+                            )}
+                          </div>
+                        )
+                      })()}
+                    </div>
+
+                    {/* Working Capital & Efficiency Ratios */}
+                    <div>
+                      <ReportSectionHeading n={3} title="Working Capital & Efficiency Ratios" />
+                      <div className="border border-border rounded-xl overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-brand-600">
+                              <th className="py-2.5 px-3 text-left font-semibold text-white">Efficiency Parameter</th>
+                              <th className="py-2.5 px-3 text-center font-semibold text-white w-24">Value (Days / %)</th>
+                              <th className="py-2.5 px-3 text-left font-semibold text-white">Strategic Assessment</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {([
+                              { label: 'Days Sales Outstanding (DSO)',    value: cfoRatios?.dso  ?? null, suffix: ' Days', assess: dsoAssessment(cfoRatios?.dso ?? null),   badge: null as string | null },
+                              { label: 'Days Inventory Outstanding (DIO)', value: cfoRatios?.dio  ?? null, suffix: ' Days', assess: dioAssessment(cfoRatios?.dio ?? null),   badge: null },
+                              { label: 'Days Payables Outstanding (DPO)',  value: cfoRatios?.dpo  ?? null, suffix: ' Days', assess: dpoAssessment(cfoRatios?.dpo ?? null),   badge: null },
+                              { label: 'Cash Conversion Cycle (CCC)',      value: cfoRatios?.ccc  ?? null, suffix: ' Days', assess: cccAssessment(cfoRatios?.ccc ?? null),
+                                badge: cfoRatios?.ccc != null && cfoRatios.ccc <= 0 ? 'NEGATIVE' : null },
+                              { label: 'Return on Capital Employed (ROCE)', value: cfoRatios?.roce ?? null, suffix: '%',     assess: roceAssessment(cfoRatios?.roce ?? null), badge: null },
+                              { label: 'Return on Equity (ROE)',           value: cfoRatios?.roe  ?? null, suffix: '%',     assess: roeAssessment(cfoRatios?.roe ?? null),   badge: null },
+                            ]).map((row, i) => (
+                              <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : 'bg-card'}>
+                                <td className="py-2.5 px-3 text-foreground font-semibold align-top">{row.label}</td>
+                                <td className="py-2.5 px-3 text-center text-brand-700 font-bold whitespace-nowrap align-top">
+                                  {row.value != null ? `${row.value.toFixed(1)}${row.suffix}` : '—'}
+                                </td>
+                                <td className="py-2.5 px-3 text-muted-foreground leading-relaxed align-top">
+                                  {row.badge && (
+                                    <span className="inline-block mr-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 align-middle">{row.badge}</span>
+                                  )}
+                                  {row.assess}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Strategic Actions for Management */}
+                    <div>
+                      <ReportSectionHeading n={4} title="Strategic Actions for Management" />
+                      <div className="bg-card border border-border rounded-xl p-4">
+                        <ul className="space-y-3">
+                          {cfoReport.keyActionItems.map((item, i) => (
+                            <li key={i} className="flex gap-2 text-sm text-foreground leading-relaxed">
+                              <span className="text-brand-600 shrink-0">•</span>
+                              <span>{renderActionItem(item)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Prompt 2: Debtor Balance — client-only, no AI call ── */}
+            {activeCfoPrompt === 2 && (
+              !selectedDebtorName ? (
+                <div className="h-40 flex flex-col items-center justify-center gap-1 text-muted-foreground border border-dashed border-border rounded-xl">
+                  <p className="text-sm font-medium">No debtor selected</p>
+                  <p className="text-xs">Choose a debtor from the dropdown above to see their outstanding balance.</p>
+                </div>
+              ) : (() => {
+                const debtors = companyId ? getDebtorBalances(companyId) : []
+                const sorted = [...debtors].sort((a, b) => b.balance - a.balance)
+                const debtor = sorted.find((d) => d.name === selectedDebtorName)
+                if (!debtor) {
+                  return (
+                    <div className="h-40 flex flex-col items-center justify-center gap-1 text-muted-foreground border border-dashed border-border rounded-xl">
+                      <p className="text-sm font-medium">Debtor not found</p>
+                      <p className="text-xs">This debtor may no longer be in the synced ledger list.</p>
+                    </div>
+                  )
+                }
+                const rank = sorted.findIndex((d) => d.name === selectedDebtorName) + 1
+                const totalOutstanding = debtors.reduce((s, d) => s + d.balance, 0)
+                const pctOfTotal = totalOutstanding > 0 ? (debtor.balance / totalOutstanding) * 100 : 0
+                return (
+                  <div className="space-y-4 print-cfo-report">
+                    <div className="bg-card border border-border rounded-xl p-5">
+                      <p className="text-lg font-bold text-foreground">{company?.name ?? 'Company'}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5">Debtor Account Statement</p>
+                      <div className="border-t-2 border-brand-600 mt-3" />
+                    </div>
+
+                    <div>
+                      <ReportSectionHeading n={1} title="Debtor Ledger Summary" />
+                      <div className="border border-border rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <tbody>
+                            <tr className="bg-slate-50">
+                              <td className="py-2.5 px-3 font-semibold text-foreground w-1/3">Debtor / Customer Name</td>
+                              <td className="py-2.5 px-3 text-foreground">{debtor.name}</td>
+                            </tr>
+                            <tr className="bg-card">
+                              <td className="py-2.5 px-3 font-semibold text-foreground">Parent Group</td>
+                              <td className="py-2.5 px-3 text-muted-foreground">Sundry Debtors</td>
+                            </tr>
+                            <tr className="bg-slate-50">
+                              <td className="py-2.5 px-3 font-semibold text-foreground">Current Closing Balance</td>
+                              <td className={`py-2.5 px-3 font-bold ${debtor.balance < 0 ? 'text-emerald-600' : 'text-brand-700'}`}>
+                                {formatCurrency(Math.abs(debtor.balance))} {debtor.balance < 0 ? 'Cr' : 'Dr'}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
+                      <p className="text-sm text-foreground leading-relaxed">
+                        This debtor ranks <span className="font-semibold">#{rank}</span> of {sorted.length} by outstanding balance, representing{' '}
+                        <span className="font-semibold">{pctOfTotal.toFixed(1)}%</span> of total receivables ({formatCurrency(totalOutstanding)}) currently synced from Tally.
+                      </p>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground italic print:hidden">
+                      Itemized transaction history (vouchers, ageing) isn&apos;t synced by the Chrome extension yet — this shows the current closing balance only.
+                    </p>
+                  </div>
+                )
+              })()
+            )}
+
+            {/* ── Prompt 3: Top 5 Cost-Saving Opportunities ── */}
+            {activeCfoPrompt === 3 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  {costSavingLoading ? (
+                    <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> Generating…
+                    </span>
+                  ) : (
+                    <div className="ml-auto flex items-center gap-3">
+                      {costSavingReport && (
+                        <button
+                          onClick={() => printDashboardReport('Cost-Saving Opportunities', activePeriod)}
+                          title="Generate a PDF of this report (opens the print dialog — choose Save as PDF)"
+                          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          <Download className="w-3 h-3" /> Generate PDF
+                        </button>
+                      )}
+                      <button
+                        onClick={() => runCfoPrompt(3, true)}
+                        title="Regenerate from the latest YTD data"
+                        className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Regenerate
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Working Capital & Efficiency Ratios */}
-                <div>
-                  <ReportSectionHeading n={3} title="Working Capital & Efficiency Ratios" />
-                  <div className="border border-border rounded-xl overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-brand-600">
-                          <th className="py-2.5 px-3 text-left font-semibold text-white">Efficiency Parameter</th>
-                          <th className="py-2.5 px-3 text-center font-semibold text-white w-24">Value (Days / %)</th>
-                          <th className="py-2.5 px-3 text-left font-semibold text-white">Strategic Assessment</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {([
-                          { label: 'Days Sales Outstanding (DSO)',    value: cfoRatios?.dso  ?? null, suffix: ' Days', assess: dsoAssessment(cfoRatios?.dso ?? null),   badge: null as string | null },
-                          { label: 'Days Inventory Outstanding (DIO)', value: cfoRatios?.dio  ?? null, suffix: ' Days', assess: dioAssessment(cfoRatios?.dio ?? null),   badge: null },
-                          { label: 'Days Payables Outstanding (DPO)',  value: cfoRatios?.dpo  ?? null, suffix: ' Days', assess: dpoAssessment(cfoRatios?.dpo ?? null),   badge: null },
-                          { label: 'Cash Conversion Cycle (CCC)',      value: cfoRatios?.ccc  ?? null, suffix: ' Days', assess: cccAssessment(cfoRatios?.ccc ?? null),
-                            badge: cfoRatios?.ccc != null && cfoRatios.ccc <= 0 ? 'NEGATIVE' : null },
-                          { label: 'Return on Capital Employed (ROCE)', value: cfoRatios?.roce ?? null, suffix: '%',     assess: roceAssessment(cfoRatios?.roce ?? null), badge: null },
-                          { label: 'Return on Equity (ROE)',           value: cfoRatios?.roe  ?? null, suffix: '%',     assess: roeAssessment(cfoRatios?.roe ?? null),   badge: null },
-                        ]).map((row, i) => (
-                          <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : 'bg-card'}>
-                            <td className="py-2.5 px-3 text-foreground font-semibold align-top">{row.label}</td>
-                            <td className="py-2.5 px-3 text-center text-brand-700 font-bold whitespace-nowrap align-top">
-                              {row.value != null ? `${row.value.toFixed(1)}${row.suffix}` : '—'}
-                            </td>
-                            <td className="py-2.5 px-3 text-muted-foreground leading-relaxed align-top">
-                              {row.badge && (
-                                <span className="inline-block mr-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 align-middle">{row.badge}</span>
-                              )}
-                              {row.assess}
-                            </td>
-                          </tr>
+                {costSavingLoading && !costSavingReport ? (
+                  <div className="h-40 flex flex-col items-center justify-center gap-2 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <p className="text-sm">Identifying cost-saving opportunities…</p>
+                  </div>
+                ) : !costSavingReport ? (
+                  <div className="h-40 flex flex-col items-center justify-center gap-1 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <p className="text-sm font-medium">{costSavingError ? "Couldn't generate the report" : 'No report yet'}</p>
+                    <p className="text-xs">Click Regenerate to try again.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 print-cfo-report">
+                    {costSavingError && (
+                      <p className="text-xs text-red-500 print:hidden">Last regenerate attempt failed — showing the previous report.</p>
+                    )}
+
+                    <div className="bg-card border border-border rounded-xl p-5">
+                      <p className="text-lg font-bold text-foreground">{company?.name ?? 'Company'}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5">Cost Optimization &amp; Capital Efficiency Assessment</p>
+                      <div className="flex items-center justify-between gap-4 mt-1">
+                        <p className="text-xs text-muted-foreground">
+                          Reporting Period: {activePeriod ? `${formatDate(activePeriod.from)} – ${formatDate(activePeriod.to)}` : '—'}
+                        </p>
+                        {costSavingGeneratedAt && (
+                          <p className="text-xs text-muted-foreground shrink-0">
+                            {costSavingGeneratedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
+                      </div>
+                      <div className="border-t-2 border-brand-600 mt-3" />
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <p className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider mb-1">Identified Cost-Saving Potential</p>
+                      <p className="text-2xl font-bold text-emerald-700">{costSavingReport.totalEstimatedSavingLabel}</p>
+                      <p className="text-sm text-emerald-800 mt-1.5 leading-relaxed">{costSavingReport.totalEstimatedSavingNote}</p>
+                    </div>
+
+                    <div>
+                      <ReportSectionHeading n={1} title="Top 5 Cost-Saving Opportunities This Month" />
+                      <div className="space-y-3">
+                        {costSavingReport.opportunities.map((o, i) => (
+                          <div key={i} className="bg-card border border-border rounded-xl p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                                <p className="text-sm font-bold text-foreground">{o.title}</p>
+                              </div>
+                              <p className="text-sm font-bold text-emerald-600 shrink-0 whitespace-nowrap">{o.estimatedSavingLabel}</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                              <span className="font-semibold text-foreground">Current Situation: </span>{o.currentSituation}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                              <span className="font-semibold text-foreground">Actionable Strategy: </span>{o.actionableStrategy}
+                            </p>
+                            <div className="mt-2"><Badge variant="blue">{o.tag}</Badge></div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                    </div>
+
+                    <div>
+                      <ReportSectionHeading n={2} title="Cost Savings Impact Summary Matrix" />
+                      <div className="border border-border rounded-xl overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-brand-600">
+                              <th className="py-2.5 px-3 text-left font-semibold text-white">Opportunity</th>
+                              <th className="py-2.5 px-3 text-left font-semibold text-white">Ease of Implementation</th>
+                              <th className="py-2.5 px-3 text-right font-semibold text-white">Est. Savings</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {costSavingReport.opportunities.map((o, i) => (
+                              <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : 'bg-card'}>
+                                <td className="py-2.5 px-3 text-foreground font-semibold align-top">{i + 1}. {o.title}</td>
+                                <td className="py-2.5 px-3 text-muted-foreground align-top">{o.easeOfImplementation}</td>
+                                <td className="py-2.5 px-3 text-right text-emerald-600 font-bold whitespace-nowrap align-top">{o.estimatedSavingLabel}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Prompt 4: Working Capital Cycle Optimization ── */}
+            {activeCfoPrompt === 4 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  {workingCapitalLoading ? (
+                    <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> Generating…
+                    </span>
+                  ) : (
+                    <div className="ml-auto flex items-center gap-3">
+                      {workingCapitalReport && (
+                        <button
+                          onClick={() => printDashboardReport('Working Capital Optimization', activePeriod)}
+                          title="Generate a PDF of this report (opens the print dialog — choose Save as PDF)"
+                          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          <Download className="w-3 h-3" /> Generate PDF
+                        </button>
+                      )}
+                      <button
+                        onClick={() => runCfoPrompt(4, true)}
+                        title="Regenerate from the latest YTD data"
+                        className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Regenerate
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Strategic Actions for Management */}
-                <div>
-                  <ReportSectionHeading n={4} title="Strategic Actions for Management" />
-                  <div className="bg-card border border-border rounded-xl p-4">
-                    <ul className="space-y-3">
-                      {cfoReport.keyActionItems.map((item, i) => (
-                        <li key={i} className="flex gap-2 text-sm text-foreground leading-relaxed">
-                          <span className="text-brand-600 shrink-0">•</span>
-                          <span>{renderActionItem(item)}</span>
-                        </li>
-                      ))}
-                    </ul>
+                {workingCapitalLoading && !workingCapitalReport ? (
+                  <div className="h-40 flex flex-col items-center justify-center gap-2 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <p className="text-sm">Building your working-capital plan…</p>
                   </div>
-                </div>
+                ) : !workingCapitalReport ? (
+                  <div className="h-40 flex flex-col items-center justify-center gap-1 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <p className="text-sm font-medium">{workingCapitalError ? "Couldn't generate the report" : 'No report yet'}</p>
+                    <p className="text-xs">Click Regenerate to try again.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 print-cfo-report">
+                    {workingCapitalError && (
+                      <p className="text-xs text-red-500 print:hidden">Last regenerate attempt failed — showing the previous report.</p>
+                    )}
+
+                    <div className="bg-card border border-border rounded-xl p-5">
+                      <p className="text-lg font-bold text-foreground">{company?.name ?? 'Company'}</p>
+                      <p className="text-sm text-muted-foreground mt-0.5">Working Capital Cycle Optimization</p>
+                      <div className="flex items-center justify-between gap-4 mt-1">
+                        <p className="text-xs text-muted-foreground">
+                          Reporting Period: {activePeriod ? `${formatDate(activePeriod.from)} – ${formatDate(activePeriod.to)}` : '—'}
+                        </p>
+                        {workingCapitalGeneratedAt && (
+                          <p className="text-xs text-muted-foreground shrink-0">
+                            {workingCapitalGeneratedAt.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
+                      </div>
+                      <div className="border-t-2 border-brand-600 mt-3" />
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <ReportStatCard label="Core Formula" value="DIO + DSO − DPO" sub="Cash Conversion Target" tone="blue" />
+                      <ReportStatCard label="Receivables (DSO)" value="Accelerate" sub="Collect Cash Faster" tone="blue" />
+                      <ReportStatCard label="Inventory (DIO)" value="Optimize" sub="Reduce Holding Time" tone="blue" />
+                      <ReportStatCard label="Payables (DPO)" value="Extend" sub="Preserve Cash Balance" tone="blue" />
+                    </div>
+
+                    <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
+                      <p className="text-sm text-foreground leading-relaxed">{workingCapitalReport.cccSummary}</p>
+                    </div>
+
+                    {workingCapitalReport.levers.map((lever, i) => (
+                      <div key={i}>
+                        <ReportSectionHeading n={i + 1} title={`${lever.category}: ${lever.title}`} />
+                        <div className="bg-card border border-border rounded-xl p-4">
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <Badge variant="blue">{lever.category}</Badge>
+                            <p className="text-xs font-bold text-emerald-600">{lever.impactLabel}</p>
+                          </div>
+                          <ul className="space-y-1.5">
+                            {lever.actionItems.map((item, j) => (
+                              <li key={j} className="flex gap-2 text-sm text-foreground leading-relaxed">
+                                <span className="text-brand-600 shrink-0">•</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div>
+                      <ReportSectionHeading n={workingCapitalReport.levers.length + 1} title="Working Capital Action Matrix" />
+                      <div className="border border-border rounded-xl overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-brand-600">
+                              <th className="py-2.5 px-3 text-left font-semibold text-white">Lever</th>
+                              <th className="py-2.5 px-3 text-left font-semibold text-white">Strategic Action Item</th>
+                              <th className="py-2.5 px-3 text-left font-semibold text-white">Implementation Horizon</th>
+                              <th className="py-2.5 px-3 text-left font-semibold text-white">Expected Outcome</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {workingCapitalReport.levers.map((lever, i) => (
+                              <tr key={i} className={i % 2 === 1 ? 'bg-slate-50' : 'bg-card'}>
+                                <td className="py-2.5 px-3 text-foreground font-semibold align-top">{lever.category}</td>
+                                <td className="py-2.5 px-3 text-muted-foreground align-top">{lever.title}</td>
+                                <td className="py-2.5 px-3 text-muted-foreground align-top">{lever.implementationHorizon}</td>
+                                <td className="py-2.5 px-3 text-muted-foreground align-top">{lever.expectedOutcome}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

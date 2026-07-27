@@ -698,6 +698,7 @@ ${missing + extra === 0 ? 'Books are fully reconciled.' : missing + extra <= 5 ?
 // avoid the model drifting/hallucinating on anything tabular.
 const cfoSuggestionsBody = z.object({
   companyId: z.string().optional(),
+  reportType: z.enum(['executive', 'costSaving', 'workingCapital']).default('executive'),
   ratios: z.object({
     dso:          z.number().nullable(),
     dio:          z.number().nullable(),
@@ -720,6 +721,8 @@ const cfoSuggestionsBody = z.object({
     netProfitPct:   z.number().nullable(),
     cashInHand:     z.number().nullable(),
     bankBalance:    z.number().nullable(),
+    cashInflow:     z.number().nullable().optional(),
+    cashOutflow:    z.number().nullable().optional(),
     receivables:    z.number().nullable(),
     payables:       z.number().nullable(),
     topItems:       z.array(z.object({ name: z.string(), qty: z.number(), unit: z.string(), amount: z.number() })),
@@ -747,10 +750,45 @@ const cfoReportSchema = z.object({
   })).min(1).max(3),
 })
 
+// Cost-Saving Opportunities report — same "AI produces narrative, we derive
+// tables client-side" convention as cfoReportSchema above. The summary matrix
+// shown under the 5 opportunity cards is built client-side from this same
+// `opportunities` array (not duplicated here) so the two views can't drift.
+const costSavingReportSchema = z.object({
+  totalEstimatedSavingLabel: z.string(),
+  totalEstimatedSavingNote:  z.string(),
+  opportunities: z.array(z.object({
+    title:                z.string(),
+    tag:                  z.string(),
+    estimatedSavingLabel: z.string(),
+    currentSituation:     z.string(),
+    actionableStrategy:   z.string(),
+    easeOfImplementation: z.string(),
+  })).length(5),
+})
+
+// Working Capital Optimization report — one lever per DSO/DIO/DPO/Treasury
+// focus area. The action matrix table is derived client-side from `levers`.
+const workingCapitalReportSchema = z.object({
+  cccSummary: z.string(),
+  levers: z.array(z.object({
+    category:              z.enum(['Receivables', 'Inventory', 'Payables', 'Treasury']),
+    title:                 z.string(),
+    impactLabel:           z.string(),
+    actionItems:           z.array(z.string()).min(2).max(4),
+    implementationHorizon: z.string(),
+    expectedOutcome:       z.string(),
+  })).length(4),
+})
+
 billsRouter.post('/cfo-suggestions', async (req, res) => {
   const parsed = cfoSuggestionsBody.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const { ratios, kpis } = parsed.data
+  const { ratios, kpis, reportType } = parsed.data
+  const mockReport = () =>
+    reportType === 'costSaving' ? MOCK_COST_SAVING_REPORT() :
+    reportType === 'workingCapital' ? MOCK_WORKING_CAPITAL_REPORT() :
+    MOCK_CFO_REPORT()
 
   let companyId: string | null = parsed.data.companyId || null
   if (!companyId && req.auth.role !== 'ADMIN') {
@@ -768,7 +806,7 @@ billsRouter.post('/cfo-suggestions', async (req, res) => {
   const anthropicKey = process.env.ANTHROPIC_API_KEY
 
   if (!geminiKey && !anthropicKey) {
-    res.json(MOCK_CFO_REPORT())
+    res.json(mockReport())
     return
   }
 
@@ -810,7 +848,62 @@ billsRouter.post('/cfo-suggestions', async (req, res) => {
     ? slowStock90.slice(0, 15).map(s => `  - ${s.name}: ${s.daysSince} days since last sale`).join('\n')
     : '  (none over 90 days)'
 
-  const promptText = `You are a CFO advisor reviewing a company's Year-to-Date (YTD) financial data. Based ONLY on the data below, produce a structured executive report. Do NOT restate the tables verbatim (they're already shown to the reader separately) — your job is to interpret them: trends, causes, comparisons, and what to do next. Reference specific numbers only when making a point, formatted in Indian units (₹3.2L, ₹1.2Cr).
+  const costSavingPromptText = `You are a CFO advisor identifying cost-saving opportunities from a company's Year-to-Date (YTD) financial data. Based ONLY on the data below, identify exactly 5 concrete cost-saving or cash-efficiency opportunities, ranked by financial impact (largest first). Reference specific numbers only when making a point, formatted in Indian units (₹3.2L, ₹1.2Cr).
+
+CASH POSITION:
+- Cash in Hand: ${fmt(kpis.cashInHand)}
+- Bank Balance: ${fmt(kpis.bankBalance)}${(kpis.bankBalance ?? 0) < 0 ? ' (overdraft)' : ''}
+- Cash Inflow (period): ${fmt(kpis.cashInflow)}
+- Cash Outflow (period): ${fmt(kpis.cashOutflow)}
+
+SALES & MARGIN (YTD):
+- Total Sales: ${fmt(kpis.totalSales)}
+- Gross Margin: ${fmt(kpis.grossMargin)} (${fmt(kpis.grossMarginPct, '%')})
+- Payables: ${fmt(kpis.payables)}
+- DPO (Days Payables Outstanding): ${fmt(ratios.dpo, ' days')}
+
+Consider angles such as: eliminating bank overdraft interest by deploying idle cash, improving gross margin via procurement/pricing, capturing early-payment vendor discounts given the current DPO, parking idle cash in interest-bearing instruments, and reducing cash-handling overhead — but only include opportunities the data above actually supports; skip any that don't apply (e.g. no overdraft, or no idle cash) and replace them with the next most relevant one so you still return exactly 5.
+
+Respond with JSON ONLY (no markdown fences, no commentary) matching exactly this shape:
+{
+  "totalEstimatedSavingLabel": "e.g. '₹38,00,000+ (Est. Impact)' — sum of the 5 opportunities' estimates, monthly or annualized, your choice, labeled accordingly",
+  "totalEstimatedSavingNote": "1-2 sentence summary of where the savings come from",
+  "opportunities": [{
+    "title": "short action title",
+    "tag": "short category label, e.g. 'IMMEDIATE IMPACT (DAY 1)', 'HIGH FINANCIAL VALUE', 'WORKING CAPITAL DRIVEN', 'TREASURY MANAGEMENT', 'PROCESS OPTIMIZATION'",
+    "estimatedSavingLabel": "e.g. '~₹25,000 – ₹35,000 / month'",
+    "currentSituation": "1-2 sentences describing the specific issue, citing the real figures above",
+    "actionableStrategy": "1-2 sentences: the concrete action to take",
+    "easeOfImplementation": "e.g. 'Immediate (1 Day)', 'Quick (1 Week)', 'Medium (2-4 Weeks)'"
+  }] — exactly 5 items, ranked by financial impact descending
+}`
+
+  const workingCapitalPromptText = `You are a CFO advisor producing a working-capital-cycle improvement plan from a company's Year-to-Date (YTD) financial data. Based ONLY on the data below, produce exactly 4 levers — one each for Receivables (reduce DSO), Inventory (reduce DIO), Payables (extend DPO), and Treasury (cash deployment) — reflecting the company's actual current position. Reference specific numbers only when making a point, formatted in Indian units (₹3.2L, ₹1.2Cr).
+
+RATIOS (YTD):
+- DSO (Days Sales Outstanding): ${fmt(ratios.dso, ' days')}
+- DIO (Days Inventory Outstanding): ${fmt(ratios.dio, ' days')}
+- DPO (Days Payables Outstanding): ${fmt(ratios.dpo, ' days')}
+- CCC (Cash Conversion Cycle, = DSO + DIO - DPO): ${fmt(ratios.ccc, ' days')}
+
+CASH POSITION:
+- Cash in Hand: ${fmt(kpis.cashInHand)}
+- Bank Balance: ${fmt(kpis.bankBalance)}${(kpis.bankBalance ?? 0) < 0 ? ' (overdraft)' : ''}
+
+Respond with JSON ONLY (no markdown fences, no commentary) matching exactly this shape:
+{
+  "cccSummary": "1-3 sentences on the current CCC and whether it is healthy, tight, or a risk given the DSO/DIO/DPO breakdown",
+  "levers": [{
+    "category": "Receivables" | "Inventory" | "Payables" | "Treasury",
+    "title": "short strategy title",
+    "impactLabel": "e.g. 'Reduces DSO by 10-15 Days', 'Frees up 15-20% Locked Capital', 'Extends Cash Retention', 'Eliminates Interest & Loss'",
+    "actionItems": ["2-4 short concrete action bullets"],
+    "implementationHorizon": "e.g. 'Quick (1-2 Wks)', 'Medium (2-4 Wks)', 'Immediate (1 Day)'",
+    "expectedOutcome": "short phrase, e.g. 'Faster cash inflows, lower overdue balances'"
+  }] — exactly 4 items, one per category listed above, in that order
+}`
+
+  const executivePromptText = `You are a CFO advisor reviewing a company's Year-to-Date (YTD) financial data. Based ONLY on the data below, produce a structured executive report. Do NOT restate the tables verbatim (they're already shown to the reader separately) — your job is to interpret them: trends, causes, comparisons, and what to do next. Reference specific numbers only when making a point, formatted in Indian units (₹3.2L, ₹1.2Cr).
 
 RATIOS (YTD):
 - DSO (Days Sales Outstanding): ${fmt(ratios.dso, ' days')}
@@ -866,6 +959,16 @@ Respond with JSON ONLY (no markdown fences, no commentary) matching exactly this
 }
 If a section's underlying data is "not available" or empty, say so briefly rather than guessing a number.`
 
+  const promptText =
+    reportType === 'costSaving' ? costSavingPromptText :
+    reportType === 'workingCapital' ? workingCapitalPromptText :
+    executivePromptText
+
+  const responseSchema =
+    reportType === 'costSaving' ? costSavingReportSchema :
+    reportType === 'workingCapital' ? workingCapitalReportSchema :
+    cfoReportSchema
+
   interface ParsedUsage { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
   let text: string
   let usage: ParsedUsage
@@ -911,7 +1014,7 @@ If a section's underlying data is "not available" or empty, say so briefly rathe
     }
 
     const cleaned = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '')
-    const report = cfoReportSchema.parse(JSON.parse(cleaned))
+    const report = responseSchema.parse(JSON.parse(cleaned))
 
     if (companyId) {
       prisma.parseUsageLog.create({
@@ -935,7 +1038,7 @@ If a section's underlying data is "not available" or empty, say so briefly rathe
         data: { companyId, model, inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0, success: false },
       }).catch((err) => console.error('[CfoSuggestions] usage log error:', err))
     }
-    res.json(MOCK_CFO_REPORT())
+    res.json(mockReport())
   }
 })
 
@@ -959,6 +1062,32 @@ function MOCK_CFO_REPORT() {
       { title: 'Receivables Aging Risk', body: 'Outstanding receivables above 60 days have increased, tying up working capital.', severity: 'High' as const },
       { title: 'Inventory Overstocking', body: 'Several stock items have not moved in 90+ days.', severity: 'Medium' as const },
       { title: 'Customer Concentration', body: 'A large share of sales comes from a small number of customers.', severity: 'Medium' as const },
+    ],
+  }
+}
+
+function MOCK_COST_SAVING_REPORT() {
+  return {
+    totalEstimatedSavingLabel: '₹0 (Demo)',
+    totalEstimatedSavingNote: 'Demo data — configure GEMINI_API_KEY or ANTHROPIC_API_KEY to get real cost-saving opportunities from your actual YTD figures.',
+    opportunities: [
+      { title: 'Eliminate Bank Overdraft Interest & Penalties', tag: 'IMMEDIATE IMPACT (DAY 1)', estimatedSavingLabel: '~₹0 / month', currentSituation: 'Demo: configure an AI key to see your real bank/cash position analyzed here.', actionableStrategy: 'Demo placeholder action.', easeOfImplementation: 'Immediate (1 Day)' },
+      { title: 'Renegotiate Procurement Rates & COGS Structure', tag: 'HIGH FINANCIAL VALUE', estimatedSavingLabel: '~₹0 / month', currentSituation: 'Demo: configure an AI key to see your real gross margin analyzed here.', actionableStrategy: 'Demo placeholder action.', easeOfImplementation: 'Medium (2-4 Weeks)' },
+      { title: 'Early Settlement Vendor Discounts', tag: 'WORKING CAPITAL DRIVEN', estimatedSavingLabel: '~₹0 / month', currentSituation: 'Demo: configure an AI key to see your real DPO analyzed here.', actionableStrategy: 'Demo placeholder action.', easeOfImplementation: 'Quick (1 Week)' },
+      { title: 'Deposit Idle Cash into Interest-Bearing Instruments', tag: 'TREASURY MANAGEMENT', estimatedSavingLabel: '~₹0 / month', currentSituation: 'Demo: configure an AI key to see your real idle-cash position analyzed here.', actionableStrategy: 'Demo placeholder action.', easeOfImplementation: 'Quick (2 Days)' },
+      { title: 'Optimize Cash Handling & Transit Overhead', tag: 'PROCESS OPTIMIZATION', estimatedSavingLabel: '~₹0 / month', currentSituation: 'Demo: configure an AI key to see your real cash flow analyzed here.', actionableStrategy: 'Demo placeholder action.', easeOfImplementation: 'Medium (2 Weeks)' },
+    ],
+  }
+}
+
+function MOCK_WORKING_CAPITAL_REPORT() {
+  return {
+    cccSummary: 'Demo data — configure GEMINI_API_KEY or ANTHROPIC_API_KEY to get a real working-capital analysis from your actual DSO/DIO/DPO figures.',
+    levers: [
+      { category: 'Receivables' as const, title: 'Automate Invoicing & Enforce Strict Credit Terms', impactLabel: 'Reduces DSO by 10-15 Days', actionItems: ['Same-day digital invoicing on dispatch.', 'Early payment discounts for prompt settlement.', 'Automated collection reminders.'], implementationHorizon: 'Quick (1-2 Wks)', expectedOutcome: 'Faster cash inflows, lower overdue balances' },
+      { category: 'Inventory' as const, title: 'Implement ABC/FSN Inventory Analysis', impactLabel: 'Frees up 15-20% Locked Capital', actionItems: ['Classify stock into fast/slow/non-moving.', 'Liquidate dead stock over 90 days.', 'Automate reorder levels.'], implementationHorizon: 'Medium (2-4 Wks)', expectedOutcome: 'Reduced carrying costs & freed-up cash' },
+      { category: 'Payables' as const, title: 'Negotiate Extended Credit Terms', impactLabel: 'Extends Cash Retention', actionItems: ['Renegotiate payment terms with key suppliers.', 'Consolidate payment runs into fixed batches.'], implementationHorizon: 'Medium (3-6 Wks)', expectedOutcome: 'Longer cash retention without vendor friction' },
+      { category: 'Treasury' as const, title: 'Deploy Idle Cash & Digitalize Cash Flow', impactLabel: 'Eliminates Interest & Loss', actionItems: ['Clear overdraft deficits with idle cash.', 'Auto-sweep surplus into liquid instruments.', 'Shift collections/payouts to digital channels.'], implementationHorizon: 'Immediate (1 Day)', expectedOutcome: 'Zero penal interest & maximized interest yield' },
     ],
   }
 }
