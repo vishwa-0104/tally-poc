@@ -327,7 +327,7 @@ export default function CompanySettings() {
       await saveDebtorBalancesToDb(companyId, balances)
       toast.success(`${balances.length} debtor balances synced and saved`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to fetch debtor balances. Is Accounting Software running?')
+      toast.error(err instanceof Error ? err.message : 'Failed to fetch debtors. Is Accounting Software running?')
     } finally { setSyncingDebtors(false) }
   }
 
@@ -543,7 +543,7 @@ export default function CompanySettings() {
                 <SyncRow label="Stock Items"  count={storedStockItems.length}  loading={syncingItems}    lastSync={company?.syncTimestamps?.stockItems}  onSync={handleSyncStockItems} />
                 <SyncRow label="Stock Groups" count={storedStockGroups.length} loading={syncingGroups}   lastSync={company?.syncTimestamps?.stockGroups} onSync={handleSyncStockGroups} />
                 <SyncRow label="Stock Units"  count={storedStockUnits.length}  loading={syncingUnits}    lastSync={company?.syncTimestamps?.stockUnits}  onSync={handleSyncStockUnits} />
-                <SyncRow label="Debtor Balances" count={storedDebtorBalances.length} loading={syncingDebtors} lastSync={company?.syncTimestamps?.debtorBalances} onSync={handleSyncDebtorBalances} />
+                <SyncRow label="Debtors" count={storedDebtorBalances.length} loading={syncingDebtors} lastSync={company?.syncTimestamps?.debtorBalances} onSync={handleSyncDebtorBalances} />
                 {godownEnabled && (
                   <SyncRow label="Godowns" count={storedGodowns.length} loading={syncingGodowns} lastSync={company?.syncTimestamps?.godowns} onSync={handleSyncGodowns} />
                 )}

@@ -620,6 +620,8 @@ export default function Dashboard() {
   // Both start unset — nothing is generated or displayed until the user
   // picks a prompt and clicks the submit (arrow) button.
   const [promptDraft, setPromptDraft] = useState<1 | 2 | 3 | 4 | null>(null)
+  const [promptListOpen, setPromptListOpen] = useState(false)
+  const promptDropdownRef = useRef<HTMLDivElement>(null)
   const [activeCfoPrompt, setActiveCfoPrompt] = useState<1 | 2 | 3 | 4 | null>(null)
   const [selectedDebtorName, setSelectedDebtorName] = useState('')
   const [costSavingReport,      setCostSavingReport]      = useState<CostSavingReport | null>(null)
@@ -663,7 +665,7 @@ export default function Dashboard() {
   const fetchData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string, settingsOverride?: DashboardSettings) => {
     const settings = settingsOverride ?? dashboardSettings
     if (!connected) {
-      toast.error('Tally not connected. Please ensure the extension is installed and Tally is open.')
+      toast.error('Account Software not connected. Please ensure the extension is installed and Account Software is open.')
       return
     }
     const { from, to } = getFilterDates(preset, cfrom, cto)
@@ -775,8 +777,8 @@ export default function Dashboard() {
       setCashOutflow(daybookCashFlow.outflow)
       setBankInflow(daybookBankFlow.inflow)
       setBankOutflow(daybookBankFlow.outflow)
-      console.log('[CashFlow from Tally] inflow:', daybookCashFlow.inflow, '| outflow:', daybookCashFlow.outflow)
-      console.log('[BankFlow from Tally] inflow:', daybookBankFlow.inflow, '| outflow:', daybookBankFlow.outflow)
+      console.log('[CashFlow from Account Software] inflow:', daybookCashFlow.inflow, '| outflow:', daybookCashFlow.outflow)
+      console.log('[BankFlow from Account Software] inflow:', daybookBankFlow.inflow, '| outflow:', daybookBankFlow.outflow)
 
       // ── XLS-ready voucher dump ──
       const vTsvHeader = 'Date\tVoucher No\tType\tParty\tAmount\tTaxable Amount\tLedger'
@@ -985,7 +987,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error('[Dashboard] fetchData failed:', err)
       setError('no-data')
-      toast.error('No data found. Please check that Tally is open and try again.')
+      toast.error('No data found. Please check that Account Software is open and try again.')
     } finally {
       setLoading(false)
     }
@@ -1387,7 +1389,7 @@ export default function Dashboard() {
   // ── Analysis tab — live Tally fetch + persist, mirrors fetchData above.
   const fetchAnalysisData = useCallback(async (preset: FilterPreset, cfrom: string, cto: string) => {
     if (!connected) {
-      toast.error('Tally not connected. Please ensure the extension is installed and Tally is open.')
+      toast.error('Account Software not connected. Please ensure the extension is installed and Account Software is open.')
       return
     }
     const { from, to } = getFilterDates(preset, cfrom, cto)
@@ -1641,7 +1643,7 @@ export default function Dashboard() {
         .catch((err: unknown) => console.error('[Analysis] Failed to persist snapshot:', err))
     } catch (err) {
       console.error('[Dashboard] fetchAnalysisData failed:', err)
-      toast.error('No data found. Please check that Tally is open and try again.')
+      toast.error('No data found. Please check that Accounting Software is open and try again.')
     } finally {
       setAnalysisLoading(false)
     }
@@ -1826,6 +1828,17 @@ export default function Dashboard() {
     void loadCfoKpisAndRatios()
     fetchDebtorBalancesFromDb(companyId).catch(() => {})
   }, [activeTab, companyId, loadCfoKpisAndRatios, fetchDebtorBalancesFromDb])
+
+  // Closes the custom prompt listbox on an outside click — same pattern as
+  // CompanyHeaderMenu's dropdown (src/shadcn/components/company-header-menu.tsx).
+  useEffect(() => {
+    if (!promptListOpen) return
+    const handler = (e: MouseEvent) => {
+      if (promptDropdownRef.current && !promptDropdownRef.current.contains(e.target as Node)) setPromptListOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [promptListOpen])
 
   // Submitting (the arrow button) is the only thing that shows a result —
   // picking a prompt in the dropdown just updates the draft. Switches the
@@ -2036,7 +2049,7 @@ export default function Dashboard() {
       ]
       downloadXls(rows, 'slow_moving_stock')
     } catch {
-      toast.error('Could not fetch current stock qty/value from Tally.')
+      toast.error('Could not fetch current stock qty/value from Accounting Software.')
     } finally {
       setExportingSlowStock(false)
     }
@@ -2130,7 +2143,7 @@ export default function Dashboard() {
               <button
                 onClick={handleFetchLive}
                 disabled={loading}
-                title="Fetch the latest data from Tally and save it to the database"
+                title="Fetch the latest data from Accounting Software and save it to the database"
                 className="flex items-center gap-1 px-3 py-1.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
               >
                 <Zap className="w-3 h-3" />
@@ -2321,7 +2334,7 @@ export default function Dashboard() {
             {error && (
               <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 dark:bg-red-950/30 dark:border-red-900">
                 <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                <p className="text-xs text-red-600 dark:text-red-400">No data available. Please ensure Tally is open and click Refresh.</p>
+                <p className="text-xs text-red-600 dark:text-red-400">No data available. Please ensure Accounting Software is open and click Refresh.</p>
               </div>
             )}
 
@@ -2329,7 +2342,7 @@ export default function Dashboard() {
             {!error && !loading && fetched && uncachedRange && (
               <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 dark:bg-amber-950/30 dark:border-amber-900">
                 <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                <p className="text-xs text-amber-700 dark:text-amber-400">No cached data for this range yet — click Fetch Live to pull it from Tally.</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">No cached data for this range yet — click Fetch Live to pull it from Accounting Software.</p>
               </div>
             )}
 
@@ -2384,7 +2397,7 @@ export default function Dashboard() {
               <button
                 onClick={handleAnalysisFetchLive}
                 disabled={analysisLoading}
-                title="Fetch the latest data from Tally and save it to the database"
+                title="Fetch the latest data from Accounting Software and save it to the database"
                 className="flex items-center gap-1 px-3 py-1.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-lg hover:bg-muted disabled:opacity-50 transition-colors"
               >
                 <Zap className="w-3 h-3" />
@@ -2413,7 +2426,7 @@ export default function Dashboard() {
             {!analysisLoading && analysisFetched && analysisUncachedRange && (
               <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <p className="text-xs text-amber-700">No cached data for this range yet — click Fetch Live to pull it from Tally.</p>
+                <p className="text-xs text-amber-700">No cached data for this range yet — click Fetch Live to pull it from Accounting Software.</p>
               </div>
             )}
 
@@ -2479,7 +2492,7 @@ export default function Dashboard() {
                 verbatim (structure + widget-card wash-through trick) from
                 the dashboard-main reference widget — see widget-card in
                 src/index.css. */}
-            <Card className="widget-card relative w-full max-w-2xl mx-auto p-4 sm:p-8">
+            <Card className="widget-card relative w-full max-w-2xl mx-auto p-4 sm:p-8 !overflow-visible">
               <div className="pointer-events-none absolute -inset-4 -z-10 overflow-hidden rounded-[min(var(--radius-4xl),24px)] opacity-40">
                 <div className="absolute -left-20 -top-20 size-60 rounded-full bg-blue-500 blur-2xl" />
                 <div className="absolute -right-20 bottom-10 size-60 rounded-full bg-pink-500 blur-2xl" />
@@ -2489,17 +2502,21 @@ export default function Dashboard() {
               <h2 className="mb-2 text-center text-2xl font-semibold text-foreground">CFO Suggestions</h2>
               <p className="mb-6 text-center text-sm text-muted-foreground">Ask anything about your business finances</p>
 
-              <div className="relative flex items-center">
-                <select
-                  value={promptDraft ?? ''}
-                  onChange={(e) => setPromptDraft(e.target.value ? (Number(e.target.value) as 1 | 2 | 3 | 4) : null)}
-                  className="h-14 w-full appearance-none rounded-2xl border border-transparent bg-input/50 ps-5 pe-14 text-sm text-foreground cursor-pointer focus:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+              {/* Custom listbox instead of a native <select> — the browser's
+                  native option popup ignores our rounded card and can render
+                  wider than the trigger (spilling past the card edge) since
+                  it's an OS-level layer, not a styleable DOM element. This
+                  div-based panel is fully constrained to the trigger's width. */}
+              <div ref={promptDropdownRef} className="relative flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setPromptListOpen((v) => !v)}
+                  className="h-14 w-full truncate rounded-2xl border border-transparent bg-input/50 ps-5 pe-14 text-left text-sm text-foreground cursor-pointer focus:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
                 >
-                  <option value="" disabled>Select a prompt…</option>
-                  {CFO_PROMPTS.map((p) => (
-                    <option key={p.id} value={p.id}>{p.label}</option>
-                  ))}
-                </select>
+                  <span className={promptDraft ? 'text-foreground' : 'text-muted-foreground'}>
+                    {promptDraft ? CFO_PROMPTS.find((p) => p.id === promptDraft)?.label : 'Select a prompt…'}
+                  </span>
+                </button>
                 <button
                   onClick={handleCfoSubmit}
                   disabled={!promptDraft || (promptDraft === 2 && !selectedDebtorName)}
@@ -2508,6 +2525,21 @@ export default function Dashboard() {
                 >
                   <ArrowUp className="size-5" />
                 </button>
+
+                {promptListOpen && (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-2 space-y-1 rounded-2xl border border-border bg-card p-3 shadow-lg">
+                    {CFO_PROMPTS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => { setPromptDraft(p.id); setPromptListOpen(false) }}
+                        className="w-full rounded-xl px-4 py-2.5 text-left text-sm transition-colors hover:bg-muted"
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {promptDraft === 2 && (
@@ -2519,7 +2551,7 @@ export default function Dashboard() {
                     onChange={(e) => setSelectedDebtorName(e.target.value)}
                     options={[...(companyId ? getDebtorBalances(companyId) : [])]
                       .sort((a, b) => b.balance - a.balance)
-                      .map((d) => ({ value: d.name, label: `${d.name} — ${formatCurrency(d.balance)}` }))}
+                      .map((d) => ({ value: d.name, label: `${d.name}` }))}
                   />
                   {(companyId ? getDebtorBalances(companyId).length : 0) === 0 && (
                     <div className="-mt-2 rounded-lg border border-dashed border-border bg-muted/50 px-3 py-2">
@@ -2530,19 +2562,6 @@ export default function Dashboard() {
                   )}
                 </div>
               )}
-
-              {activeCfoPrompt && (() => {
-                const activePromptLabel = CFO_PROMPTS.find((p) => p.id === activeCfoPrompt)?.label ?? ''
-                const queryText = activeCfoPrompt === 2 && selectedDebtorName
-                  ? activePromptLabel.replace('[Debtor Name]', selectedDebtorName)
-                  : activePromptLabel
-                return (
-                  <div className="mt-6 animate-fade-up rounded-2xl border border-border bg-muted/50 p-5">
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">Your query:</p>
-                    <p className="text-sm text-foreground">{queryText}</p>
-                  </div>
-                )
-              })()}
             </Card>
 
             {/* ── Prompt 1: Executive Summary — unchanged from the original report ── */}
@@ -2834,7 +2853,7 @@ export default function Dashboard() {
                     <div className="rounded-xl border border-brand-100 bg-brand-50 p-4">
                       <p className="text-sm text-foreground leading-relaxed">
                         This debtor ranks <span className="font-semibold">#{rank}</span> of {sorted.length} by outstanding balance, representing{' '}
-                        <span className="font-semibold">{pctOfTotal.toFixed(1)}%</span> of total receivables ({formatCurrency(totalOutstanding)}) currently synced from Tally.
+                        <span className="font-semibold">{pctOfTotal.toFixed(1)}%</span> of total receivables ({formatCurrency(totalOutstanding)}) currently synced from Account Software.
                       </p>
                     </div>
 
