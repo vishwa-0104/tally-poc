@@ -1040,6 +1040,19 @@ export default function Dashboard() {
         fetchDashboardSnapshot(companyId),
       ])
 
+      // Hydrates "Last fetched" from the DB so it survives a page reload —
+      // fetchData's live-fetch path always touches DashboardSnapshot.fetchedAt
+      // (see saveDashboardSnapshot calls there), so this is a reliable proxy
+      // for "when did a live Fetch Live last actually run for this company".
+      // Guarded to only move forward, never backward: an in-flight Fetch
+      // Live's optimistic setLastFetchedAt(new Date()) (handleFetchLive)
+      // shouldn't get reverted by a loadFromDb snapshot read that raced
+      // ahead of that fetch's own (fire-and-forget) persist landing.
+      if (snapshot?.fetchedAt) {
+        const snapshotFetchedAt = new Date(snapshot.fetchedAt)
+        setLastFetchedAt((prev) => (!prev || snapshotFetchedAt > prev) ? snapshotFetchedAt : prev)
+      }
+
       const { cashFlow, bankFlow, topItems: fetchedTopItems, indExpTotal, indIncTotal, ebitdaAddback } = classifyVouchers(
         all,
         {

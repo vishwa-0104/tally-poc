@@ -109,6 +109,14 @@
   input, select, textarea, button {
     font-family: inherit;
   }
+
+  /* Tailwind's preflight resets <button> to the browser default cursor
+     (not pointer) — without this, every button app-wide (filter/tab
+     buttons, sync/regenerate actions, etc.) shows a plain text-select
+     cursor instead of signaling it's clickable. */
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 /* Tailwind v4 requires @apply-able custom classes to be declared via @utility
