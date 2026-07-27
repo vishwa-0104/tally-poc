@@ -169,6 +169,19 @@ export interface DashboardSettings {
     dsoDaysMode?: 'ytd' | '365'
     dioDaysMode?: 'ytd' | '365'
     dpoDaysMode?: 'ytd' | '365'
+    // Manual opening-balance override for DSO/DIO/DPO — Tally can't report a
+    // past-dated Sundry Debtors/Creditors balance (Group Collection always
+    // returns "as of now"), so these let the user type one in once. When set,
+    // the ratio averages it with the closing balance; otherwise closing-only
+    // (today's behavior) is used. DIO already gets a real opening stock from
+    // Tally, but this same override mechanism applies to it too for
+    // consistency with DSO/DPO — see computeRatios in Dashboard.tsx.
+    dsoUseManualOpeningDebtors?:   boolean
+    dsoManualOpeningDebtors?:      number
+    dioUseManualOpeningStock?:     boolean
+    dioManualOpeningStock?:        number
+    dpoUseManualOpeningCreditors?: boolean
+    dpoManualOpeningCreditors?:    number
     // Analysis tab's own Sales definition — deliberately separate from
     // today.salesAccounts/salesIncludeVouchers/salesExcludeVouchers so the
     // ratio KPIs (DSO, Net Profit) never silently depend on the Performance

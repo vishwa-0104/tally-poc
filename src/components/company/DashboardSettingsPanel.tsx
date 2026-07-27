@@ -278,6 +278,15 @@ export function DashboardSettingsPanel({ companyId }: Props) {
   const [dsoDaysMode, setDsoDaysMode] = useState<'ytd' | '365'>('ytd')
   const [dioDaysMode, setDioDaysMode] = useState<'ytd' | '365'>('ytd')
   const [dpoDaysMode, setDpoDaysMode] = useState<'ytd' | '365'>('ytd')
+  // Manual opening-balance override — see DashboardSettings.ytd in
+  // src/types/index.ts for why this exists (Tally can't date-scope
+  // debtors/creditors balances).
+  const [dsoUseManualOpeningDebtors,   setDsoUseManualOpeningDebtors]   = useState(false)
+  const [dsoManualOpeningDebtors,      setDsoManualOpeningDebtors]      = useState('')
+  const [dioUseManualOpeningStock,     setDioUseManualOpeningStock]     = useState(false)
+  const [dioManualOpeningStock,        setDioManualOpeningStock]        = useState('')
+  const [dpoUseManualOpeningCreditors, setDpoUseManualOpeningCreditors] = useState(false)
+  const [dpoManualOpeningCreditors,    setDpoManualOpeningCreditors]    = useState('')
   // Analysis tab's own Sales definition — deliberately separate from the
   // Today tab's Sales Accounts/Include/Exclude below.
   const [analysisSalesAccounts,        setAnalysisSalesAccounts]        = useState<string[]>([])
@@ -361,6 +370,12 @@ export function DashboardSettingsPanel({ companyId }: Props) {
         setDsoDaysMode(s.ytd?.dsoDaysMode ?? 'ytd')
         setDioDaysMode(s.ytd?.dioDaysMode ?? 'ytd')
         setDpoDaysMode(s.ytd?.dpoDaysMode ?? 'ytd')
+        setDsoUseManualOpeningDebtors(s.ytd?.dsoUseManualOpeningDebtors ?? false)
+        setDsoManualOpeningDebtors(s.ytd?.dsoManualOpeningDebtors != null ? String(s.ytd.dsoManualOpeningDebtors) : '')
+        setDioUseManualOpeningStock(s.ytd?.dioUseManualOpeningStock ?? false)
+        setDioManualOpeningStock(s.ytd?.dioManualOpeningStock != null ? String(s.ytd.dioManualOpeningStock) : '')
+        setDpoUseManualOpeningCreditors(s.ytd?.dpoUseManualOpeningCreditors ?? false)
+        setDpoManualOpeningCreditors(s.ytd?.dpoManualOpeningCreditors != null ? String(s.ytd.dpoManualOpeningCreditors) : '')
         setAnalysisSalesAccounts(s.ytd?.analysisSalesAccounts ?? [])
         setAnalysisSalesIncludeVouchers(s.ytd?.analysisSalesIncludeVouchers ?? [])
         setAnalysisSalesExcludeVouchers(s.ytd?.analysisSalesExcludeVouchers ?? [])
@@ -449,6 +464,10 @@ export function DashboardSettingsPanel({ companyId }: Props) {
         quickRatioAssetsGroups:        quickRatioAssetsGroups.length        > 0 ? quickRatioAssetsGroups        : undefined,
         quickRatioLiabilitiesGroups:   quickRatioLiabilitiesGroups.length   > 0 ? quickRatioLiabilitiesGroups   : undefined,
         dsoDaysMode, dioDaysMode, dpoDaysMode,
+        dsoUseManualOpeningDebtors, dioUseManualOpeningStock, dpoUseManualOpeningCreditors,
+        dsoManualOpeningDebtors:   dsoManualOpeningDebtors   ? (parseFloat(dsoManualOpeningDebtors)   || undefined) : undefined,
+        dioManualOpeningStock:     dioManualOpeningStock     ? (parseFloat(dioManualOpeningStock)     || undefined) : undefined,
+        dpoManualOpeningCreditors: dpoManualOpeningCreditors ? (parseFloat(dpoManualOpeningCreditors) || undefined) : undefined,
         analysisSalesAccounts:          analysisSalesAccounts.length          > 0 ? analysisSalesAccounts          : undefined,
         analysisSalesIncludeVouchers:   analysisSalesIncludeVouchers.length   > 0 ? analysisSalesIncludeVouchers   : undefined,
         analysisSalesExcludeVouchers:   analysisSalesExcludeVouchers.length   > 0 ? analysisSalesExcludeVouchers   : undefined,
@@ -856,9 +875,33 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground italic">
-                  DSO's Debtors figure uses Tally's standard Sundry Debtors closing balance — no
-                  setting needed for that half.
+                  DSO's Debtors figure uses Tally's standard Sundry Debtors closing balance by
+                  default — optionally enter an opening balance below to average the two instead.
                 </p>
+                <div className="border-t border-border pt-4">
+                  <div className="space-y-2.5">
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={true} disabled
+                        className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
+                      <span className="text-xs font-semibold text-foreground">Closing Balance</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={dsoUseManualOpeningDebtors} onChange={e => setDsoUseManualOpeningDebtors(e.target.checked)}
+                        className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
+                      <span className="text-xs font-semibold text-foreground">Opening Balance</span>
+                    </label>
+                  </div>
+                  {dsoUseManualOpeningDebtors && (
+                    <div className="w-48 mt-2.5">
+                      <input type="number" step="0.01" placeholder="e.g. 500000" value={dsoManualOpeningDebtors}
+                        onChange={e => setDsoManualOpeningDebtors(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs border border-border rounded-lg outline-none focus:border-blue-500 bg-card" />
+                      <p className="text-[11px] text-muted-foreground italic mt-1">
+                        Averaged with the closing balance for DSO. Leave unchecked to use closing balance only (default).
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
               <DaysModeRadio label="Days Multiplier" mode={dsoDaysMode} onChange={setDsoDaysMode} ytdDaysPreview={daysSinceFyStartToday()} />
             </div>
@@ -909,9 +952,34 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                   loading={loadingOpts}
                 />
                 <p className="text-[11px] text-muted-foreground italic">
-                  Opening/Closing Stock use Tally's standard Stock-in-Hand closing balance — no
-                  setting needed for those.
+                  Opening/Closing Stock use Tally's standard Stock-in-Hand closing balance by
+                  default (Tally can date-scope this one accurately) — optionally override the
+                  opening figure below if you'd rather average with your own value for DIO.
                 </p>
+                <div className="border-t border-border pt-4">
+                  <div className="space-y-2.5">
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={true} disabled
+                        className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
+                      <span className="text-xs font-semibold text-foreground">Closing Balance</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={dioUseManualOpeningStock} onChange={e => setDioUseManualOpeningStock(e.target.checked)}
+                        className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
+                      <span className="text-xs font-semibold text-foreground">Opening Balance</span>
+                    </label>
+                  </div>
+                  {dioUseManualOpeningStock && (
+                    <div className="w-48 mt-2.5">
+                      <input type="number" step="0.01" placeholder="e.g. 500000" value={dioManualOpeningStock}
+                        onChange={e => setDioManualOpeningStock(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs border border-border rounded-lg outline-none focus:border-blue-500 bg-card" />
+                      <p className="text-[11px] text-muted-foreground italic mt-1">
+                        Averaged with the closing balance for DIO. Leave unchecked to use closing balance only (default).
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
               <DaysModeRadio label="Days Multiplier" mode={dioDaysMode} onChange={setDioDaysMode} ytdDaysPreview={daysSinceFyStartToday()} />
             </div>
@@ -953,9 +1021,33 @@ export function DashboardSettingsPanel({ companyId }: Props) {
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground italic">
-                  Creditors uses Tally's standard Sundry Creditors closing balance — no setting
-                  needed for that half.
+                  Creditors uses Tally's standard Sundry Creditors closing balance by default —
+                  optionally enter an opening balance below to average the two instead.
                 </p>
+                <div className="border-t border-border pt-4">
+                  <div className="space-y-2.5">
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={true} disabled
+                        className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
+                      <span className="text-xs font-semibold text-foreground">Closing Balance</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input type="checkbox" checked={dpoUseManualOpeningCreditors} onChange={e => setDpoUseManualOpeningCreditors(e.target.checked)}
+                        className="accent-blue-600 w-3.5 h-3.5 shrink-0" />
+                      <span className="text-xs font-semibold text-foreground">Opening Balance</span>
+                    </label>
+                  </div>
+                  {dpoUseManualOpeningCreditors && (
+                    <div className="w-48 mt-2.5">
+                      <input type="number" step="0.01" placeholder="e.g. 500000" value={dpoManualOpeningCreditors}
+                        onChange={e => setDpoManualOpeningCreditors(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs border border-border rounded-lg outline-none focus:border-blue-500 bg-card" />
+                      <p className="text-[11px] text-muted-foreground italic mt-1">
+                        Averaged with the closing balance for DPO. Leave unchecked to use closing balance only (default).
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
               <DaysModeRadio label="Days Multiplier" mode={dpoDaysMode} onChange={setDpoDaysMode} ytdDaysPreview={daysSinceFyStartToday()} />
             </div>

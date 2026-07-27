@@ -339,17 +339,40 @@ interface RatioResults {
 // skews a different card. `days` is each ratio's own configurable
 // multiplier (YTD days elapsed by default, or a fixed 365 if configured) —
 // see daysSinceFyStart above and the render call site for how it's resolved.
-function computeRatios(i: AnalysisInputs, days: { dso: number; dio: number; dpo: number }): RatioResults {
-  const dso = i.debtors != null && i.creditSales
-    ? (i.debtors / i.creditSales) * days.dso : null
+// openingOverrides carries the user-entered manual opening balances from
+// DashboardSettings (see src/types/index.ts) — Tally can't date-scope
+// Sundry Debtors/Creditors (Group Collection always returns "as of now"),
+// so this is a manual workaround for DSO/DPO; DIO gets the same mechanism
+// for consistency even though its Tally-fetched opening stock (i.openingStock,
+// used in the COGS formula below) is already accurate. A value here
+// (non-null) makes the ratio average opening+closing instead of
+// closing-only; leaving it unset/unchecked reproduces today's exact
+// closing-only behavior.
+function computeRatios(
+  i: AnalysisInputs,
+  days: { dso: number; dio: number; dpo: number },
+  openingOverrides?: {
+    dsoManualOpeningDebtors?: number | null
+    dioManualOpeningStock?: number | null
+    dpoManualOpeningCreditors?: number | null
+  },
+): RatioResults {
+  const dsoDebtors = openingOverrides?.dsoManualOpeningDebtors != null && i.debtors != null
+    ? (openingOverrides.dsoManualOpeningDebtors + i.debtors) / 2 : i.debtors
+  const dso = dsoDebtors != null && i.creditSales
+    ? (dsoDebtors / i.creditSales) * days.dso : null
 
   const cogs = i.openingStock != null && i.dioPurchases != null && i.dioDirectExpenses != null && i.closingStock != null
     ? i.openingStock + i.dioPurchases + i.dioDirectExpenses - i.closingStock : null
-  const dio = i.closingStock != null && cogs
-    ? (i.closingStock / cogs) * days.dio : null
+  const dioStock = openingOverrides?.dioManualOpeningStock != null && i.closingStock != null
+    ? (openingOverrides.dioManualOpeningStock + i.closingStock) / 2 : i.closingStock
+  const dio = dioStock != null && cogs
+    ? (dioStock / cogs) * days.dio : null
 
-  const dpo = i.creditors != null && i.dpoPurchases
-    ? (i.creditors / i.dpoPurchases) * days.dpo : null
+  const dpoCreditors = openingOverrides?.dpoManualOpeningCreditors != null && i.creditors != null
+    ? (openingOverrides.dpoManualOpeningCreditors + i.creditors) / 2 : i.creditors
+  const dpo = dpoCreditors != null && i.dpoPurchases
+    ? (dpoCreditors / i.dpoPurchases) * days.dpo : null
 
   const ccc = dso != null && dio != null && dpo != null ? dso + dio - dpo : null
 
@@ -1712,6 +1735,10 @@ export default function Dashboard() {
       dso: (dashboardSettings.ytd?.dsoDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
       dio: (dashboardSettings.ytd?.dioDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
       dpo: (dashboardSettings.ytd?.dpoDaysMode ?? 'ytd') === '365' ? 365 : cfoYtdDays,
+    }, {
+      dsoManualOpeningDebtors:   dashboardSettings.ytd?.dsoUseManualOpeningDebtors   ? dashboardSettings.ytd?.dsoManualOpeningDebtors   ?? null : null,
+      dioManualOpeningStock:     dashboardSettings.ytd?.dioUseManualOpeningStock     ? dashboardSettings.ytd?.dioManualOpeningStock     ?? null : null,
+      dpoManualOpeningCreditors: dashboardSettings.ytd?.dpoUseManualOpeningCreditors ? dashboardSettings.ytd?.dpoManualOpeningCreditors ?? null : null,
     })
     const kpis: CfoKpis = {
       totalSales:     perf.data.total,
@@ -2476,7 +2503,12 @@ export default function Dashboard() {
                   dio: (dashboardSettings.ytd?.dioDaysMode ?? 'ytd') === '365' ? 365 : ytdDaysForRatios,
                   dpo: (dashboardSettings.ytd?.dpoDaysMode ?? 'ytd') === '365' ? 365 : ytdDaysForRatios,
                 }
-                const r = computeRatios(analysisInputs, dayMultipliers)
+                const openingOverrides = {
+                  dsoManualOpeningDebtors:   dashboardSettings.ytd?.dsoUseManualOpeningDebtors   ? dashboardSettings.ytd?.dsoManualOpeningDebtors   ?? null : null,
+                  dioManualOpeningStock:     dashboardSettings.ytd?.dioUseManualOpeningStock     ? dashboardSettings.ytd?.dioManualOpeningStock     ?? null : null,
+                  dpoManualOpeningCreditors: dashboardSettings.ytd?.dpoUseManualOpeningCreditors ? dashboardSettings.ytd?.dpoManualOpeningCreditors ?? null : null,
+                }
+                const r = computeRatios(analysisInputs, dayMultipliers, openingOverrides)
                 return (
                   <>
                     <RatioWidget title="DSO" subtitle="Days Sales Outstanding" icon={CalendarDays} value={r.dso} suffix=" days" />
