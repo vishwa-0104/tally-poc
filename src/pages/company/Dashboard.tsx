@@ -374,6 +374,34 @@ function computeRatios(
   const dpo = dpoCreditors != null && i.dpoPurchases
     ? (dpoCreditors / i.dpoPurchases) * days.dpo : null
 
+  console.log(
+    '[Ratios] DSO — Closing Debtors:', i.debtors,
+    '| Opening Debtors (manual):', openingOverrides?.dsoManualOpeningDebtors ?? '(not set)',
+    '| Debtors used in calc:', dsoDebtors,
+    '| Credit Sales:', i.creditSales,
+    '| Days multiplier:', days.dso,
+    '| DSO:', dso,
+  )
+  console.log(
+    '[Ratios] DIO — Closing Stock:', i.closingStock,
+    '| Opening Stock (Tally, used in COGS):', i.openingStock,
+    '| Opening Stock (manual override, used in ratio avg):', openingOverrides?.dioManualOpeningStock ?? '(not set)',
+    '| Stock used in calc:', dioStock,
+    '| DIO Purchases:', i.dioPurchases,
+    '| DIO Direct Expenses:', i.dioDirectExpenses,
+    '| COGS (opening + purchases + direct expenses - closing):', cogs,
+    '| Days multiplier:', days.dio,
+    '| DIO:', dio,
+  )
+  console.log(
+    '[Ratios] DPO — Closing Creditors:', i.creditors,
+    '| Opening Creditors (manual):', openingOverrides?.dpoManualOpeningCreditors ?? '(not set)',
+    '| Creditors used in calc:', dpoCreditors,
+    '| DPO Purchases:', i.dpoPurchases,
+    '| Days multiplier:', days.dpo,
+    '| DPO:', dpo,
+  )
+
   const ccc = dso != null && dio != null && dpo != null ? dso + dio - dpo : null
 
   // Current Ratio / Quick Ratio — both fully user-configured now (own
