@@ -1004,11 +1004,18 @@ export default function Dashboard() {
         setNetProfitPct(npPct)
       }
 
-      // Persist this live fetch to the DB — best-effort, fire-and-forget, never
-      // blocks the UI. Only include snapshot fields actually computed this run,
-      // so e.g. applying a past custom range doesn't clobber today's cached
-      // balances with nulls.
-      void saveVouchers(companyId, from, to, all)
+      // Persist this live fetch to the DB — AWAITED before the fetch is
+      // considered done (setLoading(false) below), not fire-and-forget.
+      // Previously these were `void`-fired and the spinner stopped as soon
+      // as the Tally data rendered, before the DB write actually landed —
+      // an immediate page reload would then re-mount, do a DB-only read
+      // (loadFromDb), and win the race against the still-in-flight save,
+      // showing stale data. Awaiting closes that window: "done" now means
+      // "safely in the DB", so a reload right after always sees the fresh
+      // fetch. Errors are still only logged, not rethrown, so a save
+      // failure surfaces as a console error rather than a misleading
+      // "No data found" toast from the outer catch below.
+      await saveVouchers(companyId, from, to, all)
         .then((r) => {
           if (r.failed > 0) {
             console.error(`[Dashboard] ${r.failed}/${all.length} voucher(s) failed to persist to DB — dashboard cache will be missing these until fixed:`, r.failures)
@@ -1027,14 +1034,17 @@ export default function Dashboard() {
         // debtorBalances is deliberately NOT included here — it's fetched
         // decoupled (see above) and persists its own snapshot patch once
         // its batched Tally requests finish, since it can resolve well
-        // after this main snapshot save already ran.
+        // after this main snapshot save already ran. That one stays
+        // fire-and-forget on purpose (documented above) since it's a
+        // separate, genuinely slow, best-effort background sync — not
+        // part of what "Fetch Live" is waiting on to call itself done.
       }
       if (preset === 'ytd' && stockResult.status === 'fulfilled' && stockResult.value) {
         snapshotPatch.openingStock       = stockResult.value.openingStock
         snapshotPatch.closingStock       = stockResult.value.closingStock
         snapshotPatch.directExpenseTotal = directExpResult.status === 'fulfilled' ? Math.abs(directExpResult.value ?? 0) : 0
       }
-      void saveDashboardSnapshot(companyId, snapshotPatch).catch((err: unknown) => console.error('[Dashboard] Failed to persist snapshot:', err))
+      await saveDashboardSnapshot(companyId, snapshotPatch).catch((err: unknown) => console.error('[Dashboard] Failed to persist snapshot:', err))
     } catch (err) {
       console.error('[Dashboard] fetchData failed:', err)
       setError('no-data')
@@ -1677,7 +1687,10 @@ export default function Dashboard() {
       setAnalysisActivePeriod({ from, to })
       setAnalysisFetched(true)
 
-      void saveVouchers(companyId, from, to, all)
+      // Awaited (not fire-and-forget) — see the matching comment in fetchData
+      // above: this closes the race where a reload right after a live fetch
+      // could read stale DB rows because the save hadn't landed yet.
+      await saveVouchers(companyId, from, to, all)
         .catch((err: unknown) => console.error('[Analysis] Failed to persist vouchers:', err))
 
       const snapshotPatch: DashboardSnapshotPatch = {
@@ -1703,7 +1716,7 @@ export default function Dashboard() {
       if (debtEquityBankTotal         != null) snapshotPatch.debtEquityBank              = debtEquityBankTotal
       if (debtEquityEquityTotal       != null) snapshotPatch.debtEquityEquity            = debtEquityEquityTotal
 
-      void saveDashboardSnapshot(companyId, snapshotPatch)
+      await saveDashboardSnapshot(companyId, snapshotPatch)
         .catch((err: unknown) => console.error('[Analysis] Failed to persist snapshot:', err))
     } catch (err) {
       console.error('[Dashboard] fetchAnalysisData failed:', err)
